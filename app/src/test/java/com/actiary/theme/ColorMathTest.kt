@@ -46,6 +46,7 @@ class ColorMathTest {
         val back = o.toArgb().toOklch()
         assertEquals(0.7, back.l, 0.02)
         val dh = abs(back.h - 150.0).let { minOf(it, 360 - it) }
+        assertTrue("chroma ${back.c}", back.c < 0.4)
         assertTrue("hue diff $dh", dh <= 3.0)
     }
 
