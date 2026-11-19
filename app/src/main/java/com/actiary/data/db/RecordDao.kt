@@ -17,6 +17,10 @@ interface RecordDao {
     @Query("SELECT * FROM daily_record WHERE epochDay = :epochDay")
     suspend fun get(epochDay: Long): DayWithDetails?
 
+    @Transaction
+    @Query("SELECT * FROM daily_record WHERE epochDay = :epochDay")
+    fun observeDay(epochDay: Long): Flow<DayWithDetails?>
+
     @Query("SELECT * FROM exercise_type WHERE archived = 0 ORDER BY sortOrder")
     fun observeTypes(): Flow<List<ExerciseTypeEntity>>
 
