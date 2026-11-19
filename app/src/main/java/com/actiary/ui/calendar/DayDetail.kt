@@ -53,7 +53,7 @@ fun DayDetail(
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         BasicText(title, style = TextStyle(primary, 18.sp, FontWeight.SemiBold))
         if (loading) return@Column
-        val entries = detail?.entries.orEmpty().mapNotNull { types[it.typeId] }
+        val entries = detail?.entries.orEmpty()
         when {
             detail == null -> BasicText(stringResource(R.string.day_unrecorded), style = TextStyle(secondary, 15.sp))
             detail.record.status == DayStatus.REST ->
@@ -61,7 +61,8 @@ fun DayDetail(
             entries.isEmpty() ->
                 BasicText(stringResource(R.string.day_checked_in), style = TextStyle(primary, 15.sp, FontWeight.Medium))
             else -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                entries.forEach { type ->
+                entries.forEach { entry ->
+                    val type = types[entry.typeId] ?: return@forEach // unknown type: render nothing, keep the state
                     Row(
                         Modifier.clip(RoundedCornerShape(50)).background(t.neutrals.surfaceMuted.asColor())
                             .padding(horizontal = 12.dp, vertical = 6.dp),

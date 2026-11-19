@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +77,10 @@ fun HomeScreen(
         firstVisibleMonth = YearMonth.from(selected),
         firstDayOfWeek = remember { firstDayOfWeekFromLocale() },
     )
+    LaunchedEffect(selected) {
+        val m = YearMonth.from(selected).coerceIn(thisMonth.minusYears(10), thisMonth.plusYears(1))
+        if (m != calendar.firstVisibleMonth.yearMonth) calendar.animateScrollToMonth(m)
+    }
     val visible = calendar.firstVisibleMonth.yearMonth
     // Keyed with their month/date so a stale value from the previous key never reads as "loaded".
     val month by remember(visible) { repository.observeMonth(visible).map { visible to it } }.collectAsStateWithLifecycle(null)
@@ -83,7 +88,7 @@ fun HomeScreen(
     val day by remember(selected) { repository.observeDay(selected).map { selected to it } }.collectAsStateWithLifecycle(null)
     val loading = day?.first != selected
     val detail = day?.second
-    val types by repository.types.collectAsStateWithLifecycle(emptyList())
+    val types by repository.allTypes.collectAsStateWithLifecycle(emptyList())
     val scope = rememberCoroutineScope()
     val canRecord = !isFuture(selected, today)
 

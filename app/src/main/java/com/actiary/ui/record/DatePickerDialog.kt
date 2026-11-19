@@ -24,7 +24,7 @@ import java.time.YearMonth
 fun DatePickerDialog(selected: LocalDate, onSelect: (LocalDate) -> Unit, onDismiss: () -> Unit) {
     val t = LocalThemeTokens.current
     val locale = LocalConfiguration.current.locales[0]
-    val today = remember { LocalDate.now() }
+    val today = LocalDate.now()
     val thisMonth = YearMonth.from(today)
     val state = rememberCalendarState(
         startMonth = thisMonth.minusYears(10),

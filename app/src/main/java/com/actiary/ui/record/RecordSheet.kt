@@ -135,26 +135,36 @@ fun RecordSheet(
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var viewing by rememberSaveable { mutableStateOf<Int?>(null) }
     val types by repository.types.collectAsState(emptyList())
+    val allTypes by repository.allTypes.collectAsState(emptyList())
 
     suspend fun load(d: LocalDate) {
-        val day = repository.observeDay(d).first()
-        original = DayDraft.from(d, day)
-        draft = original
-        existing = day != null
-        failed = false
+        try {
+            val day = repository.observeDay(d).first()
+            original = DayDraft.from(d, day)
+            draft = original
+            existing = day != null
+            failed = false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            failed = true // sheet stays open; nothing editable without a loaded draft
+        }
     }
     LaunchedEffect(Unit) { if (draft == null) load(date) }
 
     val current = draft
     val dirty = current != null && original?.let { current.isChangedFrom(it) } == true
     val dirtyNow by rememberUpdatedState(dirty)
-    fun requestClose() { if (dirty) showDiscard = true else onDismiss() }
+    val savingNow by rememberUpdatedState(saving)
+    fun requestClose() { if (saving) return; if (dirty) showDiscard = true else onDismiss() }
     fun update(f: (DayDraft) -> DayDraft) { draft = draft?.let(f) }
 
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { target ->
-            if (target == SheetValue.Hidden && dirtyNow) { showDiscard = true; false } else true
+            if (target != SheetValue.Hidden) true
+            else if (savingNow) false
+            else if (dirtyNow) { showDiscard = true; false } else true
         },
     )
 
@@ -274,7 +284,7 @@ fun RecordSheet(
                         }
                     }
                     current.entries.forEach { entry ->
-                        val type = types.firstOrNull { it.id == entry.typeId } ?: return@forEach
+                        val type = allTypes.firstOrNull { it.id == entry.typeId } ?: return@forEach
                         EntryFields(current.date, type, entry) { e ->
                             update { d -> d.copy(entries = d.entries.map { if (it.typeId == e.typeId) e else it }) }
                         }

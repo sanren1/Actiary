@@ -37,6 +37,8 @@ class RecordRepository(
 
     val types: Flow<List<ExerciseTypeEntity>> get() = dao.observeTypes()
 
+    val allTypes: Flow<List<ExerciseTypeEntity>> get() = dao.observeAllTypes()
+
     suspend fun save(draft: DayDraft) = withContext(io) {
         val epochDay = draft.date.toEpochDay()
         val original = dao.get(epochDay)
@@ -67,9 +69,7 @@ class RecordRepository(
     }
 
     suspend fun quickCheckIn(date: LocalDate) {
-        val epochDay = date.toEpochDay()
-        if (dao.get(epochDay) != null) return
-        dao.replaceDay(DailyRecordEntity(epochDay, DayStatus.EXERCISED, "", clock()), emptyList(), emptyList())
+        dao.insertRecordIfAbsent(DailyRecordEntity(date.toEpochDay(), DayStatus.EXERCISED, "", clock()))
     }
 
     suspend fun clearDay(date: LocalDate) = withContext(io) {

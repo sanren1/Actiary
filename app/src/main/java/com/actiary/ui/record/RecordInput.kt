@@ -3,7 +3,8 @@ package com.actiary.ui.record
 private const val MAX_MINUTES = 100_000
 private const val MAX_KM_TENTHS = 100_000 // 10,000 km
 
-fun sanitizeMinutes(text: String): String = text.filter { it in '0'..'9' }.take(6)
+fun sanitizeMinutes(text: String): String =
+    text.filter { it in '0'..'9' }.take(6).let { s -> s.takeIf { (it.toIntOrNull() ?: 0) <= MAX_MINUTES } ?: s.dropLast(1) }
 
 /** Keeps digits and a single separator (normalised to '.') with at most one decimal digit. */
 fun sanitizeKm(text: String): String {
@@ -16,7 +17,10 @@ fun sanitizeKm(text: String): String {
             (c == '.' || c == ',') && !sep -> { sb.append('.'); sep = true }
         }
     }
-    return sb.toString()
+    var r = sb.toString()
+    // Cap like the parser so a displayed value never silently saves as null.
+    while (r.isNotEmpty() && r != "." && parseKmToMeters(r) == null) r = r.dropLast(1)
+    return r
 }
 
 fun parseMinutes(text: String): Int? =

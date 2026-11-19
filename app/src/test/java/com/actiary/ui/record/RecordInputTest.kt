@@ -36,6 +36,13 @@ class RecordInputTest {
         assertEquals("5.2", sanitizeKm("5.2.3"))
         assertEquals("12", sanitizeKm("1a2"))
         assertEquals("45", sanitizeMinutes("4x5"))
+        assertEquals("100000", sanitizeMinutes("100000"))
+        assertEquals("99999", sanitizeMinutes("999999"))
+        assertEquals("10000.0", sanitizeKm("10000.0"))
+        assertEquals("1000", sanitizeKm("10001"))
+        assertEquals("10000", sanitizeKm("10000.5").substringBefore('.'))
+        assertEquals("5.", sanitizeKm("5."))
+        assertEquals(".", sanitizeKm("."))
     }
 
     @Test fun format() {

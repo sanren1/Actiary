@@ -39,6 +39,10 @@ private class FakeDao : RecordDao {
     override suspend fun get(epochDay: Long) = rows.value[epochDay]
     override fun observeDay(epochDay: Long) = rows.map { it[epochDay] }
     override fun observeTypes(): Flow<List<ExerciseTypeEntity>> = MutableStateFlow(emptyList())
+    override fun observeAllTypes(): Flow<List<ExerciseTypeEntity>> = MutableStateFlow(emptyList())
+    override suspend fun insertRecordIfAbsent(record: DailyRecordEntity) {
+        if (record.epochDay !in rows.value) rows.value = rows.value + (record.epochDay to DayWithDetails(record, emptyList(), emptyList()))
+    }
     override suspend fun upsertRecord(record: DailyRecordEntity) = error("unused")
     override suspend fun deleteEntries(epochDay: Long) = error("unused")
     override suspend fun deletePhotos(epochDay: Long) = error("unused")
@@ -128,8 +132,10 @@ class RecordRepositoryTest {
 
     @Test fun observeMonthRange() = runBlocking {
         seed()
+        val rest = date.plusDays(2)
+        dao.replaceDay(DailyRecordEntity(rest.toEpochDay(), DayStatus.REST, "", 1), emptyList(), emptyList())
         val m = repo().observeMonth(YearMonth.of(2024, 2)).first()
-        assertEquals(mapOf(date to DayState.EXERCISED), m)
+        assertEquals(mapOf(date to DayState.EXERCISED, rest to DayState.REST), m)
         assertEquals(LocalDate.of(2024, 2, 1).toEpochDay() to LocalDate.of(2024, 2, 29).toEpochDay(), dao.lastRange)
     }
 }
