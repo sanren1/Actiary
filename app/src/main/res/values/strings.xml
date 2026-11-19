@@ -16,4 +16,23 @@
     <string name="sample_tag">跑步</string>
     <string name="sample_body">今天进行了跑步训练。</string>
     <string name="sample_secondary">11 月 18 日</string>
+    <string name="home_title">运动记录</string>
+    <string name="home_log">记录运动</string>
+    <string name="home_edit">编辑</string>
+    <string name="home_quick_check_in">快速打卡</string>
+    <string name="day_checked_in">已打卡</string>
+    <string name="day_rest">休息日</string>
+    <string name="day_unrecorded">未记录</string>
+    <string name="home_prev_month">上一月</string>
+    <string name="home_next_month">下一月</string>
+    <string name="home_month_pattern">yyyy 年 M 月</string>
+    <string name="day_title_pattern">M 月 d 日（E）</string>
+    <string name="day_more_photos">+%d</string>
+    <string name="type_running">跑步</string>
+    <string name="type_strength">力量训练</string>
+    <string name="type_cycling">骑行</string>
+    <string name="type_swimming">游泳</string>
+    <string name="type_yoga">瑜伽</string>
+    <string name="type_hiking">徒步</string>
+    <string name="type_ball">球类</string>
 </resources>

@@ -16,4 +16,23 @@
     <string name="sample_tag">Running</string>
     <string name="sample_body">Went for a run today.</string>
     <string name="sample_secondary">Nov 18</string>
+    <string name="home_title">Workouts</string>
+    <string name="home_log">Log workout</string>
+    <string name="home_edit">Edit</string>
+    <string name="home_quick_check_in">Quick check-in</string>
+    <string name="day_checked_in">Checked in</string>
+    <string name="day_rest">Rest day</string>
+    <string name="day_unrecorded">No record</string>
+    <string name="home_prev_month">Previous month</string>
+    <string name="home_next_month">Next month</string>
+    <string name="home_month_pattern">MMM yyyy</string>
+    <string name="day_title_pattern">EEE, MMM d</string>
+    <string name="day_more_photos">+%d</string>
+    <string name="type_running">Running</string>
+    <string name="type_strength">Strength</string>
+    <string name="type_cycling">Cycling</string>
+    <string name="type_swimming">Swimming</string>
+    <string name="type_yoga">Yoga</string>
+    <string name="type_hiking">Hiking</string>
+    <string name="type_ball">Ball sports</string>
 </resources>
