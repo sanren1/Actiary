@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -42,6 +43,7 @@ import com.actiary.data.appearance.AppearanceSettings
 import com.actiary.data.appearance.ThemeMode
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
+import com.actiary.theme.contrast
 import com.actiary.theme.seed
 
 private val presets = AccentPreset.entries.filter { it != AccentPreset.CUSTOM }
@@ -95,6 +97,7 @@ fun AppearanceScreen(
                         .background(if (sel) n.surface.asColor() else Color.Transparent, RoundedCornerShape(9.dp))
                         .semantics { selected = sel }
                         .clickable(role = Role.Button) { onThemeMode(mode) }
+                        .heightIn(min = 48.dp)
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -126,13 +129,15 @@ fun AppearanceScreen(
                         Modifier.size(40.dp).background((p.seed() ?: 0).asColor(), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
+                        val seed = p.seed() ?: 0
+                        val checkColor = if (contrast(seed, 0xFFFFFFFF.toInt()) >= contrast(seed, 0xFF000000.toInt())) Color.White else Color.Black
                         if (sel) Canvas(Modifier.size(20.dp)) {
                             val path = Path().apply {
                                 moveTo(size.width * 0.15f, size.height * 0.55f)
                                 lineTo(size.width * 0.4f, size.height * 0.8f)
                                 lineTo(size.width * 0.85f, size.height * 0.25f)
                             }
-                            drawPath(path, Color.White, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+                            drawPath(path, checkColor, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
                         }
                     }
                     BasicText(
