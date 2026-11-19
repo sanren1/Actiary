@@ -38,6 +38,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.actiary.R
 import com.actiary.data.RecordRepository
@@ -46,6 +47,7 @@ import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
@@ -55,23 +57,32 @@ import java.time.format.DateTimeFormatter
 fun HomeScreen(
     repository: RecordRepository,
     photoStore: PhotoStore,
+    selected: LocalDate,
+    onSelect: (LocalDate) -> Unit,
     onOpenAppearance: () -> Unit,
     onEdit: (LocalDate) -> Unit,
 ) {
     val t = LocalThemeTokens.current
     val locale = LocalConfiguration.current.locales[0]
-    val today = remember { LocalDate.now() }
-    var selected by rememberSaveable { mutableStateOf(today) }
+    var today by remember { mutableStateOf(LocalDate.now()) }
+    LifecycleResumeEffect(Unit) {
+        today = LocalDate.now()
+        onPauseOrDispose {}
+    }
     val thisMonth = YearMonth.from(today)
     val calendar = rememberCalendarState(
         startMonth = thisMonth.minusYears(10),
         endMonth = thisMonth.plusYears(1),
-        firstVisibleMonth = thisMonth,
+        firstVisibleMonth = YearMonth.from(selected),
         firstDayOfWeek = remember { firstDayOfWeekFromLocale() },
     )
     val visible = calendar.firstVisibleMonth.yearMonth
-    val monthStates by remember(visible) { repository.observeMonth(visible) }.collectAsStateWithLifecycle(emptyMap())
-    val detail by remember(selected) { repository.observeDay(selected) }.collectAsStateWithLifecycle(null)
+    // Keyed with their month/date so a stale value from the previous key never reads as "loaded".
+    val month by remember(visible) { repository.observeMonth(visible).map { visible to it } }.collectAsStateWithLifecycle(null)
+    val monthStates = month?.takeIf { it.first == visible }?.second.orEmpty()
+    val day by remember(selected) { repository.observeDay(selected).map { selected to it } }.collectAsStateWithLifecycle(null)
+    val loading = day?.first != selected
+    val detail = day?.second
     val types by repository.types.collectAsStateWithLifecycle(emptyList())
     val scope = rememberCoroutineScope()
     val canRecord = !isFuture(selected, today)
@@ -92,15 +103,16 @@ fun HomeScreen(
                     Icon(Icons.Outlined.MoreHoriz, stringResource(R.string.appearance_title), tint = t.neutrals.textPrimary.asColor())
                 }
             }
-            MonthCalendar(calendar, monthStates, selected, today, locale) { selected = it }
+            MonthCalendar(calendar, monthStates, selected, today, locale, onSelect)
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 16.dp, bottom = 96.dp)) {
                 DayDetail(
                     title = selected.format(DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)),
                     detail = detail,
                     types = types.associateBy { it.id },
                     photoStore = photoStore,
+                    loading = loading,
                 )
-                if (canRecord && detail == null) {
+                if (canRecord && !loading && detail == null) {
                     BasicText(
                         stringResource(R.string.home_quick_check_in),
                         Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
@@ -111,7 +123,7 @@ fun HomeScreen(
                 }
             }
         }
-        if (canRecord) {
+        if (canRecord && !loading) {
             Row(
                 Modifier.align(Alignment.BottomEnd).padding(16.dp).heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(50)).background(t.accent.accentAction.asColor())

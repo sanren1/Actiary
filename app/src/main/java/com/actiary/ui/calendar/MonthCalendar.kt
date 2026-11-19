@@ -25,7 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -109,9 +113,21 @@ private fun NavButton(icon: ImageVector, description: String, enabled: Boolean, 
 @Composable
 private fun DayCell(date: LocalDate, state: DayState, selected: Boolean, today: Boolean, onSelect: (LocalDate) -> Unit) {
     val t = LocalThemeTokens.current
+    val locale = LocalConfiguration.current.locales[0]
+    val stateText = stringResource(when (state) {
+        DayState.EXERCISED -> R.string.day_state_logged
+        DayState.REST -> R.string.day_rest
+        DayState.UNRECORDED -> R.string.day_unrecorded
+    })
+    val description = listOfNotNull(
+        date.format(DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)),
+        stateText,
+        if (today) stringResource(R.string.day_today) else null,
+    ).joinToString(", ")
     val mark = if (selected) t.accent.onAccentAction.asColor() else t.accent.accentAction.asColor()
     Column(
-        Modifier.fillMaxWidth().height(CELL_HEIGHT).clickable(role = Role.Button) { onSelect(date) },
+        Modifier.fillMaxWidth().height(CELL_HEIGHT).clickable(role = Role.Button) { onSelect(date) }
+            .semantics(mergeDescendants = true) { contentDescription = description; this.selected = selected },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

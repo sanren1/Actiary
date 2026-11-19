@@ -45,12 +45,14 @@ fun DayDetail(
     types: Map<Long, ExerciseTypeEntity>,
     photoStore: PhotoStore,
     modifier: Modifier = Modifier,
+    loading: Boolean = false,
 ) {
     val t = LocalThemeTokens.current
     val primary = t.neutrals.textPrimary.asColor()
     val secondary = t.neutrals.textSecondary.asColor()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         BasicText(title, style = TextStyle(primary, 18.sp, FontWeight.SemiBold))
+        if (loading) return@Column
         val entries = detail?.entries.orEmpty().mapNotNull { types[it.typeId] }
         when {
             detail == null -> BasicText(stringResource(R.string.day_unrecorded), style = TextStyle(secondary, 15.sp))
@@ -80,7 +82,7 @@ fun DayDetail(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 photos.take(MAX_THUMBS).forEachIndexed { i, p ->
                     Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(t.neutrals.surfaceMuted.asColor())) {
-                        AsyncImage(photoStore.file(p.fileName), null, Modifier.size(96.dp), contentScale = ContentScale.Crop)
+                        AsyncImage(photoStore.file(p.fileName), stringResource(R.string.day_photo, i + 1), Modifier.size(96.dp), contentScale = ContentScale.Crop)
                         if (i == MAX_THUMBS - 1 && photos.size > MAX_THUMBS) {
                             Box(Modifier.size(96.dp).background(t.neutrals.background.asColor().copy(alpha = 0.6f)), Alignment.Center) {
                                 BasicText(

@@ -35,4 +35,7 @@
     <string name="type_yoga">瑜伽</string>
     <string name="type_hiking">徒步</string>
     <string name="type_ball">球类</string>
+    <string name="day_state_logged">已锻炼</string>
+    <string name="day_today">今天</string>
+    <string name="day_photo">照片 %d</string>
 </resources>

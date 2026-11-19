@@ -24,6 +24,7 @@ import com.actiary.ui.settings.AppearanceScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.time.LocalDate
 
 private enum class Screen { HOME, APPEARANCE }
 
@@ -46,12 +47,15 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
             AppTheme(tokens) {
+                var selected by rememberSaveable { mutableStateOf(LocalDate.now()) }
                 var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
                 BackHandler(enabled = screen == Screen.APPEARANCE) { screen = Screen.HOME }
                 when (screen) {
                     Screen.HOME -> HomeScreen(
                         repository = container.recordRepository,
                         photoStore = container.photoStore,
+                        selected = selected,
+                        onSelect = { selected = it },
                         onOpenAppearance = { screen = Screen.APPEARANCE },
                         onEdit = { }, // Task 4: record sheet
                     )

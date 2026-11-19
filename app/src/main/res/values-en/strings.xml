@@ -35,4 +35,7 @@
     <string name="type_yoga">Yoga</string>
     <string name="type_hiking">Hiking</string>
     <string name="type_ball">Ball sports</string>
+    <string name="day_state_logged">Workout logged</string>
+    <string name="day_today">Today</string>
+    <string name="day_photo">Photo %d</string>
 </resources>
