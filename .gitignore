@@ -1,0 +1,23 @@
+# 本地规划、执行记录与资料（不提交）
+/docs/superpowers/
+/.superpowers/
+/local/
+
+# Android / Gradle
+.gradle/
+build/
+/local.properties
+/captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# IDE / OS
+.idea/
+*.iml
+.kotlin/
+.DS_Store
+Thumbs.db
