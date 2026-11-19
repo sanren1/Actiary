@@ -35,4 +35,7 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.activity.compose)
+    implementation(libs.datastore.preferences)
+    implementation(libs.lifecycle.runtime.compose)
+    testImplementation(libs.junit)
 }
