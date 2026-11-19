@@ -2,16 +2,21 @@ package com.actiary.data.appearance
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.actiary.theme.parseHex
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-val Context.appearanceDataStore: DataStore<Preferences> by preferencesDataStore(name = "appearance")
+val Context.appearanceDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "appearance",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
 
 private val THEME_MODE = stringPreferencesKey("theme_mode")
 private val ACCENT_PRESET = stringPreferencesKey("accent_preset")
