@@ -38,4 +38,25 @@
     <string name="day_state_logged">Workout logged</string>
     <string name="day_today">Today</string>
     <string name="day_photo">Photo %d</string>
+    <string name="record_title">Log workout</string>
+    <string name="record_cancel">Cancel</string>
+    <string name="record_save">Save</string>
+    <string name="record_date">Date</string>
+    <string name="record_activities">Activities</string>
+    <string name="record_status_workout">Workout</string>
+    <string name="record_status_rest">Rest day</string>
+    <string name="record_duration">Duration (min)</string>
+    <string name="record_distance">Distance (km)</string>
+    <string name="record_note">Note</string>
+    <string name="record_photos">Photos</string>
+    <string name="record_add_photos">Add photos</string>
+    <string name="record_remove_photo">Remove photo</string>
+    <string name="record_clear">Clear this day</string>
+    <string name="record_clear_confirm">Clear this day? Photos will be deleted too.</string>
+    <string name="record_rest_confirm">Selected activities will be cleared. Note and photos stay.</string>
+    <string name="record_discard_title">Discard unsaved changes?</string>
+    <string name="record_discard">Discard</string>
+    <string name="record_keep_editing">Keep editing</string>
+    <string name="record_save_failed">Couldn’t save. Try again.</string>
+    <string name="record_counter">%1$d/%2$d</string>
 </resources>

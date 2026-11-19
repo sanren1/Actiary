@@ -38,4 +38,25 @@
     <string name="day_state_logged">已锻炼</string>
     <string name="day_today">今天</string>
     <string name="day_photo">照片 %d</string>
+    <string name="record_title">记录运动</string>
+    <string name="record_cancel">取消</string>
+    <string name="record_save">保存</string>
+    <string name="record_date">日期</string>
+    <string name="record_activities">运动类型（可多选）</string>
+    <string name="record_status_workout">运动</string>
+    <string name="record_status_rest">休息日</string>
+    <string name="record_duration">时长（分钟）</string>
+    <string name="record_distance">距离（公里）</string>
+    <string name="record_note">备注</string>
+    <string name="record_photos">照片</string>
+    <string name="record_add_photos">添加照片</string>
+    <string name="record_remove_photo">移除照片</string>
+    <string name="record_clear">清除这天的记录</string>
+    <string name="record_clear_confirm">确定清除？照片也会删除。</string>
+    <string name="record_rest_confirm">将清除已选运动，备注和照片会保留。</string>
+    <string name="record_discard_title">放弃未保存的修改？</string>
+    <string name="record_discard">放弃</string>
+    <string name="record_keep_editing">继续编辑</string>
+    <string name="record_save_failed">保存失败，请重试</string>
+    <string name="record_counter">%1$d/%2$d</string>
 </resources>

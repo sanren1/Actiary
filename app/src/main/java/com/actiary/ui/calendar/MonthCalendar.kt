@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -60,6 +61,7 @@ fun MonthCalendar(
     today: LocalDate,
     locale: Locale,
     onSelect: (LocalDate) -> Unit,
+    isEnabled: (LocalDate) -> Boolean = { true },
 ) {
     val t = LocalThemeTokens.current
     val scope = rememberCoroutineScope()
@@ -81,7 +83,7 @@ fun MonthCalendar(
             state = state,
             dayContent = { day ->
                 if (day.position == DayPosition.MonthDate) {
-                    DayCell(day.date, states[day.date] ?: DayState.UNRECORDED, day.date == selected, day.date == today, onSelect)
+                    DayCell(day.date, states[day.date] ?: DayState.UNRECORDED, day.date == selected, day.date == today, onSelect, isEnabled(day.date))
                 } else Box(Modifier.height(CELL_HEIGHT))
             },
             monthHeader = {
@@ -111,7 +113,7 @@ private fun NavButton(icon: ImageVector, description: String, enabled: Boolean, 
 }
 
 @Composable
-private fun DayCell(date: LocalDate, state: DayState, selected: Boolean, today: Boolean, onSelect: (LocalDate) -> Unit) {
+private fun DayCell(date: LocalDate, state: DayState, selected: Boolean, today: Boolean, onSelect: (LocalDate) -> Unit, enabled: Boolean) {
     val t = LocalThemeTokens.current
     val locale = LocalConfiguration.current.locales[0]
     val stateText = stringResource(when (state) {
@@ -126,7 +128,8 @@ private fun DayCell(date: LocalDate, state: DayState, selected: Boolean, today: 
     ).joinToString(", ")
     val mark = if (selected) t.accent.onAccentAction.asColor() else t.accent.accentAction.asColor()
     Column(
-        Modifier.fillMaxWidth().height(CELL_HEIGHT).clickable(role = Role.Button) { onSelect(date) }
+        Modifier.fillMaxWidth().height(CELL_HEIGHT).alpha(if (enabled) 1f else 0.35f)
+            .clickable(enabled = enabled, role = Role.Button) { onSelect(date) }
             .semantics(mergeDescendants = true) { contentDescription = description; this.selected = selected },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,

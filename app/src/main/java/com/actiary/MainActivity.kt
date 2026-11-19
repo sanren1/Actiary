@@ -20,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import com.actiary.theme.AppTheme
 import com.actiary.theme.resolveTheme
 import com.actiary.ui.calendar.HomeScreen
+import com.actiary.ui.record.RecordSheet
 import com.actiary.ui.settings.AppearanceScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -48,6 +49,7 @@ class MainActivity : ComponentActivity() {
             }
             AppTheme(tokens) {
                 var selected by rememberSaveable { mutableStateOf(LocalDate.now()) }
+                var editing by rememberSaveable { mutableStateOf<Long?>(null) }
                 var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
                 BackHandler(enabled = screen == Screen.APPEARANCE) { screen = Screen.HOME }
                 when (screen) {
@@ -57,12 +59,21 @@ class MainActivity : ComponentActivity() {
                         selected = selected,
                         onSelect = { selected = it },
                         onOpenAppearance = { screen = Screen.APPEARANCE },
-                        onEdit = { }, // Task 4: record sheet
+                        onEdit = { editing = it.toEpochDay() },
                     )
                     Screen.APPEARANCE -> AppearanceScreen(
                         settings = settings,
                         onThemeMode = { lifecycleScope.launch { repository.setThemeMode(it) } },
                         onPreset = { lifecycleScope.launch { repository.setAccentPreset(it) } },
+                    )
+                }
+                editing?.let { day ->
+                    RecordSheet(
+                        date = LocalDate.ofEpochDay(day),
+                        repository = container.recordRepository,
+                        photoStore = container.photoStore,
+                        onDismiss = { editing = null },
+                        onSaved = { selected = it },
                     )
                 }
             }
