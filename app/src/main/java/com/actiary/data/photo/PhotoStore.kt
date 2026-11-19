@@ -9,6 +9,7 @@ class PhotoStore(private val dir: File) {
         val name = "${UUID.randomUUID()}.jpg"
         val target = file(name)
         try {
+            dir.mkdirs()
             open().use { input -> target.outputStream().use { input.copyTo(it) } }
         } catch (e: Throwable) {
             target.delete()

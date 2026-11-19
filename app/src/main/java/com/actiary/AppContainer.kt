@@ -14,7 +14,7 @@ import java.io.FileNotFoundException
 class AppContainer(private val context: Context) {
     val database: ActiaryDatabase by lazy { ActiaryDatabase.build(context) }
     val appearanceRepository = AppearanceRepository(context.applicationContext.appearanceDataStore)
-    val photoStore = PhotoStore(File(context.filesDir, "photos").apply { mkdirs() })
+    val photoStore = PhotoStore(File(context.filesDir, "photos"))
     val recordRepository: RecordRepository by lazy {
         RecordRepository(
             database.recordDao(),

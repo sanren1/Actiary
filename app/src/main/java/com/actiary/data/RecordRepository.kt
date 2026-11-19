@@ -12,8 +12,11 @@ import com.actiary.domain.DayDraft
 import com.actiary.domain.DayState
 import com.actiary.domain.DraftPhoto
 import com.actiary.domain.toDayState
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.time.LocalDate
 import java.time.YearMonth
@@ -23,6 +26,7 @@ class RecordRepository(
     private val photos: PhotoStore,
     private val openUri: (String) -> InputStream,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     fun observeMonth(month: YearMonth): Flow<Map<LocalDate, DayState>> =
         dao.observeRange(month.atDay(1).toEpochDay(), month.atEndOfMonth().toEpochDay()).map { days ->
@@ -33,7 +37,7 @@ class RecordRepository(
 
     val types: Flow<List<ExerciseTypeEntity>> get() = dao.observeTypes()
 
-    suspend fun save(draft: DayDraft) {
+    suspend fun save(draft: DayDraft) = withContext(io) {
         val epochDay = draft.date.toEpochDay()
         val original = dao.get(epochDay)
         val copied = mutableListOf<String>()
@@ -68,7 +72,7 @@ class RecordRepository(
         dao.replaceDay(DailyRecordEntity(epochDay, DayStatus.EXERCISED, "", clock()), emptyList(), emptyList())
     }
 
-    suspend fun clearDay(date: LocalDate) {
+    suspend fun clearDay(date: LocalDate) = withContext(io) {
         val epochDay = date.toEpochDay()
         val files = dao.get(epochDay)?.photos.orEmpty()
         dao.deleteDay(epochDay)
