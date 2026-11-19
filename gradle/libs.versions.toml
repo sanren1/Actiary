@@ -6,6 +6,13 @@ activityCompose = "1.10.1"
 datastore = "1.1.7"
 lifecycle = "2.8.7"
 junit = "4.13.2"
+ksp = "2.1.21-2.0.1"
+room = "2.7.1"
+calendar = "2.6.2"
+coil = "3.2.0"
+materialIcons = "1.7.8"
+androidxTestExt = "1.2.1"
+androidxTestRunner = "1.6.2"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -15,8 +22,18 @@ activity-compose = { module = "androidx.activity:activity-compose", version.ref 
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 junit = { module = "junit:junit", version.ref = "junit" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "materialIcons" }
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+calendar-compose = { module = "com.kizitonwose.calendar:compose", version.ref = "calendar" }
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExt" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
