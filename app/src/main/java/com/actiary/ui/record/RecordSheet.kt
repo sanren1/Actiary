@@ -42,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
@@ -74,6 +75,8 @@ import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -123,7 +126,7 @@ fun RecordSheet(
     var draft by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<DayDraft?>(null) }
     var original by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<DayDraft?>(null) }
     var existing by rememberSaveable { mutableStateOf(false) }
-    var saving by rememberSaveable { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) } // not saved: the coroutine does not survive recreation
     var failed by rememberSaveable { mutableStateOf(false) }
     var showDiscard by rememberSaveable { mutableStateOf(false) }
     var pendingDate by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -165,12 +168,14 @@ fun RecordSheet(
     }
     val imageOnly = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
 
-    fun launchOp(block: suspend () -> Unit) {
+    fun launchOp(work: suspend () -> Unit, after: () -> Unit) {
         saving = true
         failed = false
         scope.launch {
             try {
-                block()
+                // copy -> commit -> delete must finish even if the activity is recreated.
+                withContext(NonCancellable) { work() }
+                after()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -209,8 +214,7 @@ fun RecordSheet(
                         .background(t.accent.accentAction.asColor())
                         .clickable(enabled = canSave, role = Role.Button) {
                             current?.let { d ->
-                                launchOp {
-                                    repository.save(d)
+                                launchOp({ repository.save(d) }) {
                                     onSaved(d.date)
                                     onDismiss()
                                 }
@@ -351,8 +355,7 @@ fun RecordSheet(
             onConfirm = {
                 showClear = false
                 val d = current?.date ?: date
-                launchOp {
-                    repository.clearDay(d)
+                launchOp({ repository.clearDay(d) }) {
                     onSaved(d)
                     onDismiss()
                 }
