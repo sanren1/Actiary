@@ -13,8 +13,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.actiary.data.appearance.AppearanceRepository
-import com.actiary.data.appearance.appearanceDataStore
 import com.actiary.theme.AppTheme
 import com.actiary.theme.resolveTheme
 import com.actiary.ui.settings.AppearanceScreen
@@ -25,7 +23,7 @@ import kotlinx.coroutines.runBlocking
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val repository = AppearanceRepository(applicationContext.appearanceDataStore)
+        val repository = (application as ActiaryApp).container.appearanceRepository
         // Tiny local DataStore file: a blocking first read at startup avoids a light-theme flash.
         val initial = runBlocking { repository.settings.first() }
         val systemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
