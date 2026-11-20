@@ -11,11 +11,11 @@ class PressDragMathTest {
 
     @Test fun deformScaleClamps() {
         val (x, y) = deformScale(100f)
-        assertEquals(1f / 0.8f, x, 1e-5f)
-        assertEquals(0.8f, y, 1e-5f)
+        assertEquals(1f / (1f - DEFORM_LIMIT), x, 1e-5f)
+        assertEquals(1f - DEFORM_LIMIT, y, 1e-5f)
         val (nx, ny) = deformScale(-100f)
-        assertEquals(1f / 1.2f, nx, 1e-5f)
-        assertEquals(1.2f, ny, 1e-5f)
+        assertEquals(1f / (1f + DEFORM_LIMIT), nx, 1e-5f)
+        assertEquals(1f + DEFORM_LIMIT, ny, 1e-5f)
     }
 
     @Test fun deformScaleSmallVelocityIsProportional() {

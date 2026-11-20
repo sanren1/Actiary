@@ -17,10 +17,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-/** Velocity deformation factors (x, y) for an already normalised velocity; each deviation is capped at 20%. */
+// Feel constants (user-visible): tune here.
+/** Max velocity stretch / squash while dragging (fraction, each axis). */
+internal const val DEFORM_LIMIT = 0.1f
+/** Tap slide spring: fast and nearly critically damped (~150-200 ms), no press bounce. */
+internal const val TAP_DAMPING = 0.95f
+internal const val TAP_STIFFNESS = 2000f
+
+/** Velocity deformation factors (x, y) for an already normalised velocity; each deviation is capped at [DEFORM_LIMIT]. */
 fun deformScale(velocity: Float): Pair<Float, Float> {
-    val x = 1f - (velocity * 0.75f).coerceIn(-0.2f, 0.2f)
-    val y = 1f - (velocity * 0.25f).coerceIn(-0.2f, 0.2f)
+    val x = 1f - (velocity * 0.75f).coerceIn(-DEFORM_LIMIT, DEFORM_LIMIT)
+    val y = 1f - (velocity * 0.25f).coerceIn(-DEFORM_LIMIT, DEFORM_LIMIT)
     return 1f / x to y
 }
 
@@ -45,6 +52,7 @@ class PressDragState(
 ) {
     private val valueSpec = spring<Float>(1f, 1000f, VALUE_THRESHOLD)
     private val velocitySpec = spring<Float>(0.5f, 300f, VALUE_THRESHOLD * 10f)
+    private val tapSpec = spring<Float>(TAP_DAMPING, TAP_STIFFNESS, VALUE_THRESHOLD)
     private val pressSpec = spring<Float>(1f, 1000f, 0.001f)
     private val scaleXSpec = spring<Float>(0.6f, 250f, 0.001f)
     private val scaleYSpec = spring<Float>(0.7f, 250f, 0.001f)
@@ -105,6 +113,17 @@ class PressDragState(
                 if (velocity != 0f) launch { velocityAnim.animateTo(0f, velocitySpec) }
             }
             release()
+        }
+    }
+
+    /** Plain fast slide for a tap or an outside selection change: no press, no glass. */
+    suspend fun tapTo(v: Float) {
+        mutex.mutate {
+            coroutineScope {
+                launch { valueAnim.animateTo(v.coerceIn(range), tapSpec) { trackVelocity() } }
+                if (velocity != 0f) launch { velocityAnim.animateTo(0f, velocitySpec) }
+            }
+            release() // relaxes a press that a preempted animateToValue left behind
         }
     }
 

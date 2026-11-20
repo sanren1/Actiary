@@ -56,15 +56,12 @@ import com.actiary.theme.asColor
 import kotlinx.coroutines.launch
 import com.kyant.backdrop.isRuntimeShaderSupported
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.draw.drawBehind
@@ -158,6 +155,12 @@ fun GlassFloatingAction(text: String, icon: ImageVector, onClick: () -> Unit, mo
     }
 }
 
+// Feel constants (user-visible): tune here.
+private const val BAR_THUMB_SCALE = 1.12f
+private const val PICKER_THUMB_SCALE = 1.08f
+private const val BAR_LABEL_GROW = 0.08f
+private val BAR_PANEL_GROW = 6.dp
+
 /** Height of [GlassBottomBar]; MainActivity derives page insets from it. */
 val GlassBottomBarHeight = 64.dp
 
@@ -188,7 +191,7 @@ private fun rememberThumbState(selected: Int, count: Int, pressedScale: Float, s
     LaunchedEffect(selected, still) {
         val target = selected.toFloat()
         if (state.targetValue != target) {
-            if (still) state.snapTo(target) else state.animateToValue(target)
+            if (still) state.snapTo(target) else state.tapTo(target)
         }
     }
     return state
@@ -201,7 +204,7 @@ private fun GraphicsLayerScope.applyThumbScale(state: PressDragState) {
     scaleY = state.scaleY * dy
 }
 
-/** Glass node (only while [glassOn]) plus the solid resting thumb: surface, accent stroke, light shadow; fades out as p -> 1. */
+/** Glass node (only while [glassOn]) plus the solid resting thumb: surface, light shadow; fades out as p -> 1. */
 private fun Modifier.thumbSurface(
     state: PressDragState,
     glassOn: Boolean,
@@ -210,20 +213,14 @@ private fun Modifier.thumbSurface(
     profile: GlassProfile,
     dark: Boolean,
     surface: Color,
-    stroke: Color,
     enhanced: () -> Boolean,
 ): Modifier = then(if (glassOn) Modifier.glass(backdrop, shape, profile, dark, press = { state.pressProgress }) else Modifier)
     .drawBehind {
         // glass() supplies the pressed look; this is the solid resting thumb.
         val a = 1f - if (enhanced()) state.pressProgress else 0f
         val r = CornerRadius(size.height / 2f)
-        val sw = 1.5.dp.toPx()
         drawRoundRect(Color.Black, Offset(0f, 1.5.dp.toPx()), size, r, alpha = 0.10f * a)
         drawRoundRect(surface, cornerRadius = r, alpha = a)
-        drawRoundRect(
-            stroke, Offset(sw / 2f, sw / 2f), Size(size.width - sw, size.height - sw),
-            CornerRadius(r.x - sw / 2f), Stroke(sw), alpha = a,
-        )
     }
 
 /** Thumb x offset (px) at fractional [index] over items of [widths]; linear between neighbouring items. */
@@ -254,7 +251,7 @@ internal fun hitsThumb(x: Float, value: Float, widths: List<Float>, ltr: Boolean
 
 /**
  * Adapted from Kyant0/AndroidLiquidGlass catalog (components/LiquidBottomTabs.kt, LiquidBottomTab.kt),
- * Apache-2.0, Copyright 2025 Kyant. Modified for Actiary: solid selected thumb with accent stroke at rest,
+ * Apache-2.0, Copyright 2025 Kyant. Modified for Actiary: solid selected thumb (no stroke) at rest,
  * ThemeTokens colours, selectable tabs, no elastic panel offset or interactive highlight, tint copy drawn
  * on a plain surface instead of a second glass node.
  *
@@ -273,7 +270,7 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
     val scope = rememberCoroutineScope()
     val count = tabs.size
     val shape = RoundedCornerShape(50)
-    val state = rememberThumbState(selected, count, 78f / 56f, still)
+    val state = rememberThumbState(selected, count, BAR_THUMB_SCALE, still)
     // Flips only at the ends of the press animation, so recomposition is rare; at rest only the panel is a drawBackdrop node.
     val interactive by remember(state) { derivedStateOf { isInteracting(state.pressProgress, state.scaleX, state.scaleY) } }
     val glassOn = enhance && interactive
@@ -284,11 +281,10 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
     val enhanceNow by rememberUpdatedState(enhance)
     val ltrNow by rememberUpdatedState(ltr)
     val tabsBackdrop = rememberLayerBackdrop()
-    val thumbBackdrop = if (refract) rememberCombinedBackdrop(layers.content, tabsBackdrop) else layers.content
-    val tabScale = { 1f + 0.2f * state.pressProgress }
+    val thumbBackdrop = if (refract) tabsBackdrop else layers.content
+    val tabScale = { 1f + BAR_LABEL_GROW * state.pressProgress }
     var dragging by remember { mutableStateOf(false) }
     val surface = t.neutrals.surface.asColor()
-    val stroke = t.accent.accentStroke.asColor()
 
     BoxWithConstraints(modifier.fillMaxWidth().height(GlassBottomBarHeight), contentAlignment = Alignment.CenterStart) {
         val tabW = (maxWidth - 8.dp) / count
@@ -302,7 +298,7 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
                 .glass(
                     layers.content, shape, profile, t.dark,
                     layerBlock = if (enhance) ({
-                        val s = panelScale(state.pressProgress, size.width, 16.dp.toPx())
+                        val s = panelScale(state.pressProgress, size.width, BAR_PANEL_GROW.toPx())
                         scaleX = s
                         scaleY = s
                     }) else null,
@@ -317,7 +313,7 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
                     .alpha(0f)
                     .layerBackdrop(tabsBackdrop)
                     .fillMaxSize()
-                    .background(Color(profile.surfaceColor), shape)
+                    .background(surface, shape)
                     .padding(4.dp),
             ) {
                 tabs.forEachIndexed { i, tab ->
@@ -336,7 +332,7 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
                     translationX = thumbOffsetPx(state.value, tabWpxNow, ltrNow)
                     applyThumbScale(state)
                 }
-                .thumbSurface(state, glassOn, thumbBackdrop, shape, profile, t.dark, surface, stroke) { enhanceNow }
+                .thumbSurface(state, glassOn, thumbBackdrop, shape, profile, t.dark, surface) { enhanceNow }
                 .width(tabW).height(56.dp),
         )
 
@@ -345,7 +341,7 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
                 .fillMaxSize()
                 .graphicsLayer {
                     if (enhance) {
-                        val sc = panelScale(state.pressProgress, size.width, 16.dp.toPx())
+                        val sc = panelScale(state.pressProgress, size.width, BAR_PANEL_GROW.toPx())
                         scaleX = sc
                         scaleY = sc
                     }
@@ -432,7 +428,7 @@ fun GlassTopBar(title: String, visible: Boolean, modifier: Modifier = Modifier, 
 
 /**
  * Segmented picker: solid surfaceMuted track and a sliding thumb with the same look and interaction as
- * [GlassBottomBar]'s thumb (solid + accent stroke at rest; grows into glass while pressed or dragged).
+ * [GlassBottomBar]'s thumb (solid at rest; grows into glass while pressed or dragged).
  *
  * Box order: invisible accent-tinted label copy recorded for refraction (only while the thumb is glass and the
  * runtime shader exists), the thumb, then the real labels. Labels sit above the thumb so the solid resting thumb
@@ -459,7 +455,7 @@ fun GlassSegmentedPicker(
     val scope = rememberCoroutineScope()
     val count = options.size
     val shape = RoundedCornerShape(50)
-    val state = rememberThumbState(selected, count, 1.15f, still)
+    val state = rememberThumbState(selected, count, PICKER_THUMB_SCALE, still)
     val interactive by remember(state) { derivedStateOf { isInteracting(state.pressProgress, state.scaleX, state.scaleY) } }
     val glassOn = enhance && interactive
     val refract = glassOn && isRuntimeShaderSupported()
@@ -469,7 +465,7 @@ fun GlassSegmentedPicker(
     val enhanceNow by rememberUpdatedState(enhance)
     val ltrNow by rememberUpdatedState(ltr)
     val copyBackdrop = rememberLayerBackdrop()
-    val thumbBackdrop = if (refract) rememberCombinedBackdrop(layers.background, copyBackdrop) else layers.background
+    val thumbBackdrop = if (refract) copyBackdrop else layers.background
     val muted = t.neutrals.surfaceMuted.asColor()
     val accent = t.accent.accentAction.asColor()
     val secondary = t.neutrals.textSecondary.asColor()
@@ -514,7 +510,7 @@ fun GlassSegmentedPicker(
                     }
                     .thumbSurface(
                         state, glassOn, thumbBackdrop, shape, profile, t.dark,
-                        t.neutrals.surface.asColor(), t.accent.accentStroke.asColor(),
+                        t.neutrals.surface.asColor(),
                     ) { enhanceNow }
                     .layout { m, c ->
                         val ok = rowHeight > 0 && widths.all { it > 0f }
