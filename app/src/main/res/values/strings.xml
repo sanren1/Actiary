@@ -125,7 +125,6 @@
     <string name="settings_reset_appearance_message">恢复默认外观？</string>
     <string name="settings_reset">恢复</string>
     <string name="settings_about_version">版本 %1$s</string>
-    <string name="settings_about_local">数据只保存在本机。</string>
     <string name="settings_licenses">第三方许可</string>
     <string name="settings_hide_licenses">收起第三方许可</string>
     <string name="custom_type_name">类型名称</string>

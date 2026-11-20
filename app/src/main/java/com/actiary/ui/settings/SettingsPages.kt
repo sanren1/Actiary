@@ -87,7 +87,6 @@ internal fun SettingsRow(
     label: String,
     icon: ImageVector,
     endIcon: ImageVector? = null,
-    summary: String? = null,
     onClick: () -> Unit,
 ) {
     val n = LocalThemeTokens.current.neutrals
@@ -101,10 +100,7 @@ internal fun SettingsRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(icon, null, tint = n.textPrimary.asColor())
-        Column(Modifier.weight(1f)) {
-            BasicText(label, style = TextStyle(n.textPrimary.asColor(), 16.sp))
-            if (summary != null) BasicText(summary, style = TextStyle(n.textSecondary.asColor(), 14.sp))
-        }
+        BasicText(label, Modifier.weight(1f), style = TextStyle(n.textPrimary.asColor(), 16.sp))
         if (endIcon != null) Icon(endIcon, null, tint = n.textSecondary.asColor())
     }
 }

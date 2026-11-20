@@ -3,8 +3,8 @@ package com.actiary.ui.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +36,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
@@ -64,6 +65,11 @@ import com.actiary.theme.resolveTheme
 import com.actiary.theme.toArgb
 import com.actiary.theme.toHsv
 import kotlin.math.roundToInt
+
+private val HsvSaver = Saver<Hsv, ArrayList<Double>>(
+    save = { arrayListOf(it.h, it.s, it.v) },
+    restore = { Hsv(it[0], it[1], it[2]) },
+)
 
 /** Encodes the draft as two strings so it survives rotation / process death. */
 private val ColorDraftSaver = Saver<ColorDraft, ArrayList<String>>(
@@ -95,7 +101,13 @@ internal fun ColorEditorScreen(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
-    val hsv = parseHex(draft.hex)!!.toHsv()
+    // Slider-owned HSV: hue survives S/V = 0; re-derived only when hex changes from elsewhere.
+    var hsvState by rememberSaveable(stateSaver = HsvSaver) { mutableStateOf(parseHex(initialHex)!!.toHsv()) }
+    val hsv = syncHsv(hsvState, draft.hex)
+    val setHsv = { new: Hsv ->
+        hsvState = new
+        draft = draft.withHsv(new)
+    }
     val valid = draft.canApply
     val invalidMessage = stringResource(R.string.color_hex_invalid)
 
@@ -144,7 +156,7 @@ internal fun ColorEditorScreen(
             brush = Brush.horizontalGradient(
                 listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red),
             ),
-            onValueChange = { draft = draft.withHsv(hsv.copy(h = it.toDouble())) },
+            onValueChange = { setHsv(hsv.copy(h = it.toDouble())) },
         )
         HsvSlider(
             label = stringResource(R.string.color_saturation),
@@ -154,7 +166,7 @@ internal fun ColorEditorScreen(
             brush = Brush.horizontalGradient(
                 listOf(Color(Hsv(hsv.h, 0.0, hsv.v).toArgb()), Color(Hsv(hsv.h, 1.0, hsv.v).toArgb())),
             ),
-            onValueChange = { draft = draft.withHsv(hsv.copy(s = (it / 100f).toDouble())) },
+            onValueChange = { setHsv(hsv.copy(s = (it / 100f).toDouble())) },
         )
         HsvSlider(
             label = stringResource(R.string.color_value),
@@ -164,7 +176,7 @@ internal fun ColorEditorScreen(
             brush = Brush.horizontalGradient(
                 listOf(Color(Hsv(hsv.h, hsv.s, 0.0).toArgb()), Color(Hsv(hsv.h, hsv.s, 1.0).toArgb())),
             ),
-            onValueChange = { draft = draft.withHsv(hsv.copy(v = (it / 100f).toDouble())) },
+            onValueChange = { setHsv(hsv.copy(v = (it / 100f).toDouble())) },
         )
 
         if (recent.isNotEmpty()) {
@@ -232,8 +244,18 @@ private fun HsvSlider(
                     fun setFromX(x: Float) {
                         currentOnChange((x / size.width).coerceIn(0f, 1f) * max)
                     }
-                    detectTapGestures { setFromX(it.x) }
-                    detectHorizontalDragGestures { change, _ -> setFromX(change.position.x) }
+                    // One gesture: value on press, then follow the finger until lift.
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        setFromX(down.position.x)
+                        down.consume()
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                            if (change.changedToUp() || !change.pressed) break
+                            setFromX(change.position.x)
+                            change.consume()
+                        }
+                    }
                 }
                 .drawBehind {
                     val trackHeight = 12.dp.toPx()

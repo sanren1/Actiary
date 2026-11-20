@@ -125,7 +125,6 @@
     <string name="settings_reset_appearance_message">Restore default appearance?</string>
     <string name="settings_reset">Restore</string>
     <string name="settings_about_version">Version %1$s</string>
-    <string name="settings_about_local">Data is stored only on this device.</string>
     <string name="settings_licenses">Third-party licenses</string>
     <string name="settings_hide_licenses">Hide third-party licenses</string>
     <string name="custom_type_name">Type name</string>

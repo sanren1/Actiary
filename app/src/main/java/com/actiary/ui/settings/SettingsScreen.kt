@@ -54,11 +54,9 @@ internal fun SettingsScreen(
                 Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingsRow(
                         stringResource(R.string.appearance_title), Icons.Outlined.Palette, chevron,
-                        summary = presetName(settings.accentPreset),
                     ) { onPage(SettingsPage.APPEARANCE) }
                     SettingsRow(
                         stringResource(R.string.settings_general), Icons.Outlined.Tune, chevron,
-                        summary = weekStartName(weekStart),
                     ) { onPage(SettingsPage.GENERAL) }
                     SettingsRow(
                         stringResource(R.string.settings_custom_types), Icons.Outlined.FitnessCenter, chevron,

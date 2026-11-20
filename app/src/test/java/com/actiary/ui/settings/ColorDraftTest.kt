@@ -57,6 +57,26 @@ class ColorDraftTest {
     }
 
     @Test
+    fun syncHsvKeepsHueWhenHexMatches() {
+        val gray = Hsv(200.0, 0.0, 0.5)
+        val hex = base.withHsv(gray).hex
+        assertEquals(gray, syncHsv(gray, hex))
+    }
+
+    @Test
+    fun syncHsvRecomputesWhenHexDiffers() {
+        val synced = syncHsv(Hsv(200.0, 0.0, 0.5), "#FF0000")
+        assertEquals("#FF0000", base.withHsv(synced).hex)
+        assertEquals(0.0, synced.h, 0.5)
+    }
+
+    @Test
+    fun syncHsvIgnoresInvalidHex() {
+        val current = Hsv(200.0, 0.3, 0.5)
+        assertEquals(current, syncHsv(current, "#12345"))
+    }
+
+    @Test
     fun inputRoundTripThroughHsv() {
         val viaInput = base.withInput(" ff0000 ")
         assertEquals("#FF0000", viaInput.hex)

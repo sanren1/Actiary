@@ -2,8 +2,10 @@ package com.actiary.ui.settings
 
 import com.actiary.theme.Hsv
 import com.actiary.theme.normalizeHex
+import com.actiary.theme.parseHex
 import com.actiary.theme.toArgb
 import com.actiary.theme.toHex
+import com.actiary.theme.toHsv
 
 /**
  * Editor draft state. [hex] is the last valid seed ('#RRGGBB'); [input] is the raw text in the
@@ -22,6 +24,12 @@ fun ColorDraft.withInput(text: String): ColorDraft =
 fun ColorDraft.withHsv(hsv: Hsv): ColorDraft {
     val hex = hsv.toArgb().toHex()
     return ColorDraft(hex = hex, input = hex)
+}
+
+/** Keeps [current] (and its hue at S/V = 0) when it already renders as [hex]; otherwise re-derives from [hex]. */
+fun syncHsv(current: Hsv, hex: String): Hsv {
+    val color = parseHex(hex) ?: return current
+    return if (current.toArgb().toHex() == normalizeHex(hex)) current else color.toHsv()
 }
 
 /** True only when the current field text is a valid HEX color. */

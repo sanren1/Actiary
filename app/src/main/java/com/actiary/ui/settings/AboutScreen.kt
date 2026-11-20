@@ -39,7 +39,6 @@ internal fun AboutScreen(onBack: () -> Unit) {
             style = TextStyle(n.textPrimary.asColor(), 22.sp, FontWeight.SemiBold),
         )
         BasicText(stringResource(R.string.settings_about_version, version), style = TextStyle(n.textSecondary.asColor(), 16.sp))
-        BasicText(stringResource(R.string.settings_about_local), style = TextStyle(n.textPrimary.asColor(), 16.sp))
         SettingsRow(
             stringResource(if (noticesVisible) R.string.settings_hide_licenses else R.string.settings_licenses),
             Icons.Outlined.Description,
