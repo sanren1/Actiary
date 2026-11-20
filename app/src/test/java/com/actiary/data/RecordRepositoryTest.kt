@@ -163,17 +163,18 @@ class RecordRepositoryTest {
 
     @Test fun addTypeAppendsSortedTrimsAndClearsBuiltinKey() = runBlocking {
         dao.insertType(ExerciseTypeEntity(builtinKey = "run", name = "跑步", sortOrder = 5))
-        val id = repo().addType("  瑜伽  ", false)
+        val id = repo().addType("  瑜伽  ", false, "stretch")
         val t = repo().allTypes.first().single { it.id == id }
         assertEquals("瑜伽", t.name)
         assertNull(t.builtinKey)
         assertFalse(t.archived)
         assertFalse(t.hasDistance)
+        assertEquals("stretch", t.iconKey)
         assertEquals(6, t.sortOrder)
     }
 
     @Test fun archiveTypeHidesFromTypesButKeepsInAll() = runBlocking {
-        val id = repo().addType("瑜伽", false)
+        val id = repo().addType("瑜伽", false, null)
         repo().archiveType(id)
         assertTrue(repo().types.first().none { it.id == id })
         assertTrue(repo().allTypes.first().any { it.id == id })

@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -24,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,7 +40,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
@@ -49,6 +54,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.actiary.R
 import com.actiary.data.RecordRepository
 import com.actiary.data.db.ExerciseTypeEntity
+import com.actiary.ui.common.CUSTOM_TYPE_ICONS
+import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
@@ -59,6 +66,7 @@ import kotlinx.coroutines.launch
  * create a type, and requests archive confirmation for custom types. All surfaces here are solid;
  * the archive confirmation GlassDialog is rendered by the host in the GlassHost overlay slot.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CustomTypesScreen(
     repository: RecordRepository,
@@ -72,6 +80,7 @@ fun CustomTypesScreen(
     val allTypes by repository.allTypes.collectAsStateWithLifecycle(emptyList())
     var name by rememberSaveable { mutableStateOf("") }
     var hasDistance by rememberSaveable { mutableStateOf(false) }
+    var iconKey by rememberSaveable { mutableStateOf(CUSTOM_TYPE_ICONS.first().key) }
     val canAdd = name.trim().isNotEmpty()
 
     Column(
@@ -113,6 +122,26 @@ fun CustomTypesScreen(
                     .padding(horizontal = 12.dp, vertical = 12.dp),
             )
 
+            BasicText(stringResource(R.string.custom_type_icon), style = TextStyle(n.textSecondary.asColor(), 13.sp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CUSTOM_TYPE_ICONS.forEach { icon ->
+                    val selected = icon.key == iconKey
+                    val label = stringResource(icon.label)
+                    val shape = RoundedCornerShape(12.dp)
+                    Box(
+                        Modifier.size(48.dp)
+                            .clip(shape)
+                            .background(if (selected) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
+                            .border(if (selected) 2.dp else 1.dp, if (selected) a.accentAction.asColor() else n.divider.asColor(), shape)
+                            .semantics { contentDescription = label; this.selected = selected }
+                            .clickable(role = Role.RadioButton) { iconKey = icon.key },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(icon.vector, null, Modifier.size(24.dp), tint = n.textPrimary.asColor())
+                    }
+                }
+            }
+
             val on = hasDistance
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -146,7 +175,7 @@ fun CustomTypesScreen(
                             val trimmed = name.trim()
                             if (trimmed.isNotEmpty()) {
                                 name = ""
-                                scope.launch { repository.addType(trimmed, hasDistance) }
+                                scope.launch { repository.addType(trimmed, hasDistance, iconKey) }
                             }
                         } else Modifier,
                     )
@@ -171,6 +200,7 @@ fun CustomTypesScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
+                Icon(exerciseTypeIcon(type), null, Modifier.padding(end = 12.dp).size(24.dp), tint = n.textPrimary.asColor())
                 Column(Modifier.weight(1f)) {
                     BasicText(
                         if (type.builtinKey != null) exerciseTypeLabel(type) else type.name.orEmpty(),

@@ -69,7 +69,7 @@ class RecordRepository(
         original?.photos?.forEach { if (it.fileName !in kept) photos.delete(it.fileName) }
     }
 
-    suspend fun addType(name: String, hasDistance: Boolean): Long = withContext(io) {
+    suspend fun addType(name: String, hasDistance: Boolean, iconKey: String?): Long = withContext(io) {
         val nextSortOrder = allTypes.first().maxOfOrNull { it.sortOrder }?.plus(1) ?: 0
         dao.insertType(
             ExerciseTypeEntity(
@@ -78,6 +78,7 @@ class RecordRepository(
                 sortOrder = nextSortOrder,
                 archived = false,
                 hasDistance = hasDistance,
+                iconKey = iconKey,
             ),
         )
     }

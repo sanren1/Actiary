@@ -43,10 +43,10 @@ class RecordDaoTest {
         db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { it.moveToFirst(); it.getInt(0) }
 
     @Test
-    fun seedsEightBuiltinTypesInOrder() = runBlocking {
+    fun seedsSixBuiltinTypesInOrder() = runBlocking {
         val types = dao.observeTypes().first()
         assertEquals(
-            listOf("running", "strength", "cycling", "swimming", "yoga", "hiking", "ball", "freeform"),
+            listOf("running", "cycling", "swimming", "hiking", "ball", "freeform"),
             types.map { it.builtinKey },
         )
         assertEquals(

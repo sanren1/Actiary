@@ -60,6 +60,39 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate2To3DropsUnusedStrengthYogaArchivesUsedOnesAndAddsIconKey() = runBlocking {
+        val db = helper.createDatabase(TEST_DB, 2)
+        listOf("running", "strength", "cycling", "swimming", "yoga", "hiking", "ball", "freeform")
+            .forEachIndexed { i, key ->
+                db.execSQL("INSERT INTO exercise_type (builtinKey, name, sortOrder, archived, hasDistance) VALUES ('$key', NULL, $i, 0, 0)")
+            }
+        db.execSQL("INSERT INTO daily_record (epochDay, status, note, updatedAt) VALUES (100, 'EXERCISED', '', 0)")
+        // strength has id 2 and is referenced; yoga (id 5) is not.
+        db.execSQL("INSERT INTO exercise_entry (epochDay, typeId, durationMinutes, distanceMeters, calories, avgHeartRate, sortOrder) VALUES (100, 2, 30, NULL, NULL, NULL, 0)")
+        db.close()
+
+        helper.runMigrationsAndValidate(TEST_DB, 3, true, ActiaryDatabase.MIGRATION_2_3).close()
+
+        val room = Room.databaseBuilder(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            ActiaryDatabase::class.java,
+            TEST_DB,
+        ).build()
+        try {
+            val types = room.recordDao().observeAllTypes().first()
+            assertEquals(
+                listOf("running", "strength", "cycling", "swimming", "hiking", "ball", "freeform"),
+                types.map { it.builtinKey },
+            )
+            assertEquals(listOf("strength"), types.filter { it.archived }.map { it.builtinKey })
+            assertEquals(30, room.recordDao().get(100)!!.entries.single().durationMinutes)
+            assertNull(types.first().iconKey)
+        } finally {
+            room.close()
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test"
     }

@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [DailyRecordEntity::class, ExerciseTypeEntity::class, ExerciseEntryEntity::class, PhotoAttachmentEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class ActiaryDatabase : RoomDatabase() {
@@ -17,7 +17,7 @@ abstract class ActiaryDatabase : RoomDatabase() {
 
     companion object {
         val BUILTIN_TYPE_KEYS = listOf(
-            "running", "strength", "cycling", "swimming", "yoga", "hiking", "ball", "freeform",
+            "running", "cycling", "swimming", "hiking", "ball", "freeform",
         )
         private val DISTANCE_TYPE_KEYS = setOf("running", "cycling", "swimming", "hiking")
 
@@ -29,6 +29,15 @@ abstract class ActiaryDatabase : RoomDatabase() {
                 val keys = DISTANCE_TYPE_KEYS.joinToString(",") { "'$it'" }
                 db.execSQL("UPDATE exercise_type SET hasDistance = 1 WHERE builtinKey IN ($keys)")
                 db.execSQL("INSERT INTO exercise_type (builtinKey, name, sortOrder, archived, hasDistance) VALUES ('freeform', NULL, 7, 0, 0)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE exercise_type ADD COLUMN iconKey TEXT")
+                // Entries reference types with RESTRICT: unused rows go, used ones are archived and keep their history.
+                db.execSQL("DELETE FROM exercise_type WHERE builtinKey IN ('strength','yoga') AND id NOT IN (SELECT typeId FROM exercise_entry)")
+                db.execSQL("UPDATE exercise_type SET archived = 1 WHERE builtinKey IN ('strength','yoga')")
             }
         }
 
@@ -46,5 +55,5 @@ fun ActiaryDatabase.Companion.build(context: Context): ActiaryDatabase =
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) = ActiaryDatabase.seedBuiltinTypes(db)
         })
-        .addMigrations(ActiaryDatabase.MIGRATION_1_2)
+        .addMigrations(ActiaryDatabase.MIGRATION_1_2, ActiaryDatabase.MIGRATION_2_3)
         .build()

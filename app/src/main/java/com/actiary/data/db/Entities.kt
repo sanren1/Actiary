@@ -25,6 +25,7 @@ data class ExerciseTypeEntity(
     val sortOrder: Int,
     val archived: Boolean = false,
     val hasDistance: Boolean = false,
+    val iconKey: String? = null,
 )
 
 @Entity(

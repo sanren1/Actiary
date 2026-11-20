@@ -172,7 +172,6 @@ fun GlassTopBar(title: String, visible: Boolean, modifier: Modifier = Modifier, 
         Row(
             Modifier
                 .fillMaxWidth()
-                .glassSurface(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp), GlassSampling.Content)
                 .statusBarsPadding()
                 .height(56.dp)
                 .padding(horizontal = 20.dp),

@@ -207,22 +207,6 @@ fun AppearanceScreen(
                 }
             }
         }
-
-        GlassPanel(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(
-                    Modifier.background(a.accentAction.asColor(), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                ) { BasicText(stringResource(R.string.sample_button), style = style(a.onAccentAction)) }
-                Box(
-                    Modifier.background(a.accentSubtle.asColor(), RoundedCornerShape(8.dp))
-                        .border(1.dp, a.accentStroke.asColor(), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                ) { BasicText(stringResource(R.string.sample_tag), style = style(n.textPrimary, 14)) }
-                BasicText(stringResource(R.string.sample_body), style = style(n.textPrimary))
-                BasicText(stringResource(R.string.sample_secondary), style = style(n.textSecondary, 14))
-            }
-        }
     }
 }
 
