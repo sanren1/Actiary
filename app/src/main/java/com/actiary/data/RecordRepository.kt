@@ -32,6 +32,9 @@ class RecordRepository(
             days.associate { LocalDate.ofEpochDay(it.record.epochDay) to it.record.toDayState() }
         }
 
+    fun observeRange(from: LocalDate, to: LocalDate): Flow<List<DayWithDetails>> =
+        dao.observeRange(from.toEpochDay(), to.toEpochDay())
+
     fun observeDay(date: LocalDate): Flow<DayWithDetails?> = dao.observeDay(date.toEpochDay())
 
     val types: Flow<List<ExerciseTypeEntity>> get() = dao.observeTypes()

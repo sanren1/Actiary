@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,8 +70,7 @@ fun GlassPreview(tokens: ThemeTokens, profile: GlassProfile, modifier: Modifier 
             GlassBottomBar(
                 listOf(
                     GlassTab(Icons.Outlined.CalendarMonth, stringResource(R.string.tab_calendar)),
-                    GlassTab(Icons.Outlined.PhotoLibrary, stringResource(R.string.tab_review)),
-                    GlassTab(Icons.Outlined.BarChart, stringResource(R.string.tab_stats)),
+                    GlassTab(Icons.Outlined.BarChart, stringResource(R.string.tab_records)),
                     GlassTab(Icons.Outlined.Settings, stringResource(R.string.tab_settings)),
                 ),
                 tab, { tab = it }, Modifier.align(Alignment.BottomCenter).padding(12.dp),

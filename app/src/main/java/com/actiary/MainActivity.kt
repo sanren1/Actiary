@@ -32,7 +32,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.DocumentScanner
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -76,11 +75,10 @@ import com.actiary.ui.common.LocalFloatingInsets
 import com.actiary.ui.common.CUSTOM_TYPE_ICONS
 import com.actiary.ui.record.DatePickerDialog
 import com.actiary.ui.record.RecordSheet
-import com.actiary.ui.review.ReviewPlaceholder
+import com.actiary.ui.records.RecordsScreen
 import com.actiary.ui.settings.CustomTypeIconPicker
 import com.actiary.ui.settings.CustomTypesScreen
 import com.actiary.ui.settings.SettingsScreen
-import com.actiary.ui.stats.StatsPlaceholder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -90,7 +88,7 @@ import java.time.YearMonth
 
 private val BarGap = 12.dp
 
-private enum class Tab { CALENDAR, REVIEW, STATS, SETTINGS }
+private enum class Tab { CALENDAR, RECORDS, SETTINGS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -161,8 +159,7 @@ class MainActivity : ComponentActivity() {
                 val hideBase = Modifier.semantics { if (modalOpen) hideFromAccessibility() }
                 val tabs = listOf(
                     GlassTab(Icons.Outlined.CalendarMonth, stringResource(R.string.tab_calendar)),
-                    GlassTab(Icons.Outlined.PhotoLibrary, stringResource(R.string.tab_review)),
-                    GlassTab(Icons.Outlined.BarChart, stringResource(R.string.tab_stats)),
+                    GlassTab(Icons.Outlined.BarChart, stringResource(R.string.tab_records)),
                     GlassTab(Icons.Outlined.Settings, stringResource(R.string.tab_settings)),
                 )
                 val onHome = tab == Tab.CALENDAR && !customTypes
@@ -268,8 +265,11 @@ class MainActivity : ComponentActivity() {
                                 onChrome = { chrome = it },
                                 onEdit = { editing = it.toEpochDay() },
                             )
-                            Tab.REVIEW -> ReviewPlaceholder()
-                            Tab.STATS -> StatsPlaceholder()
+                            Tab.RECORDS -> RecordsScreen(
+                                repository = container.recordRepository,
+                                photoStore = container.photoStore,
+                                onEdit = { editing = it.toEpochDay() },
+                            )
                             Tab.SETTINGS -> SettingsScreen(
                                 settings = settings,
                                 onThemeMode = { lifecycleScope.launch { repository.setThemeMode(it) } },
