@@ -183,7 +183,7 @@ fun RecordSheet(
         }
     }
 
-    GlassSheet(visible && entered, onRequestClose = { requestClose() }, onExited = { if (!visible) onDismiss() }) {
+    GlassSheet(visible && entered, onRequestClose = { requestClose() }, onExited = { if (!visible) onDismiss() }, title = stringResource(R.string.record_title)) {
         val primary = t.neutrals.textPrimary.asColor()
         val secondary = t.neutrals.textSecondary.asColor()
         Column(

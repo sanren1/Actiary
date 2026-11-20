@@ -11,8 +11,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -40,10 +44,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.actiary.glass.GlassBottomBar
+import com.actiary.glass.GlassBottomBarHeight
+import com.actiary.glass.LocalGlassProfile
 import com.actiary.glass.GlassFloatingAction
 import com.actiary.glass.GlassHost
 import com.actiary.glass.GlassIconButton
@@ -68,6 +76,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
+
+private val BarGap = 12.dp
 
 private enum class Tab { CALENDAR, REVIEW, STATS }
 
@@ -102,8 +112,12 @@ class MainActivity : ComponentActivity() {
                 BackHandler(appearance) { appearance = false }
 
                 val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                // 64dp bar + 12dp gap above the navigation bar; the page without the bar only clears the navigation bar.
-                val insets = FloatingInsets(if (appearance) navBar else navBar + 76.dp)
+                // Bar + gap above the navigation bar; the page without the bar only clears the navigation bar.
+                val insets = FloatingInsets(if (appearance) navBar else navBar + GlassBottomBarHeight + BarGap)
+                // Behind the sheet or menu: page and base chrome are inert for TalkBack; behind the sheet they also go flat (spec 4.1 glass cap).
+                val modalOpen = editing != null || menu
+                val baseProfile = if (editing != null) profile.copy(degraded = true) else profile
+                val hideBase = Modifier.semantics { if (modalOpen) hideFromAccessibility() }
                 val tabs = listOf(
                     GlassTab(Icons.Outlined.CalendarMonth, stringResource(R.string.tab_calendar)),
                     GlassTab(Icons.Outlined.PhotoLibrary, stringResource(R.string.tab_review)),
@@ -114,10 +128,11 @@ class MainActivity : ComponentActivity() {
                     GlassHost(
                         tokens, profile,
                         overlay = {
+                            CompositionLocalProvider(LocalGlassProfile provides baseProfile) { Box(Modifier.fillMaxSize().then(hideBase)) {
                             if (!appearance) {
                                 GlassBottomBar(
                                     tabs, tab.ordinal, { tab = Tab.entries[it]; menu = false },
-                                    Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                                    Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = BarGap),
                                 )
                             }
                             if (onHome) {
@@ -139,19 +154,22 @@ class MainActivity : ComponentActivity() {
                                 chrome.fab?.let { label ->
                                     GlassFloatingAction(
                                         stringResource(label), Icons.Outlined.Edit, { editing = selected.toEpochDay() },
-                                        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = insets.bottom + 12.dp),
+                                        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = insets.bottom + BarGap),
                                     )
                                 }
-                                GlassMenu(
-                                    menu, { menu = false },
-                                    listOf(stringResource(R.string.appearance_title) to { menu = false; appearance = true }),
-                                    Modifier.statusBarsPadding().padding(top = 56.dp),
-                                )
                             }
                             if (appearance) {
                                 GlassIconButton(
                                     Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.nav_back), { appearance = false },
                                     Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 12.dp, top = 8.dp),
+                                )
+                            }
+                            } }
+                            if (onHome) {
+                                GlassMenu(
+                                    menu, { menu = false },
+                                    listOf(stringResource(R.string.appearance_title) to { menu = false; appearance = true }),
+                                    panelPadding = PaddingValues(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 56.dp),
                                 )
                             }
                             editing?.let { day ->
@@ -166,6 +184,7 @@ class MainActivity : ComponentActivity() {
                         },
                     ) {
                         val page = if (appearance) "appearance" else tab.name
+                        CompositionLocalProvider(LocalGlassProfile provides baseProfile) { Box(Modifier.fillMaxSize().then(hideBase)) {
                         holder.SaveableStateProvider(page) { when {
                             appearance -> AppearanceScreen(
                                 settings = settings,
@@ -184,6 +203,7 @@ class MainActivity : ComponentActivity() {
                             )
                             tab == Tab.REVIEW -> ReviewPlaceholder()
                             else -> StatsPlaceholder()
+                        } }
                         } }
                     }
                 }

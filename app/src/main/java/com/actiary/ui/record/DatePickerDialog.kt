@@ -57,12 +57,12 @@ fun DatePickerDialog(selected: LocalDate, onSelect: (LocalDate) -> Unit, onDismi
             )
             GlassIconButton(
                 Icons.AutoMirrored.Outlined.KeyboardArrowLeft, stringResource(R.string.home_prev_month),
-                { scope.launch { state.animateScrollToMonth(month.minusMonths(1)) } }, enabled = month > state.startMonth,
+                { scope.launch { state.animateScrollToMonth(month.minusMonths(1)) } }, enabled = month > state.startMonth, glass = false,
             )
             Spacer(Modifier.width(4.dp))
             GlassIconButton(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight, stringResource(R.string.home_next_month),
-                { scope.launch { state.animateScrollToMonth(month.plusMonths(1)) } }, enabled = month < state.endMonth,
+                { scope.launch { state.animateScrollToMonth(month.plusMonths(1)) } }, enabled = month < state.endMonth, glass = false,
             )
         }
         MonthCalendar(state, emptyMap(), selected, today, locale, onSelect) { !isFuture(it, today) }

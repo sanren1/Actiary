@@ -52,6 +52,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.actiary.theme.LocalThemeTokens
@@ -65,8 +69,11 @@ import kotlin.math.roundToInt
 
 private val ScrimColor = Color.Black.copy(alpha = 0.32f)
 
+// Unlabeled to TalkBack: dismiss stays reachable through Back and the visible buttons.
 private fun Modifier.scrim(onTap: () -> Unit) =
-    clickable(interactionSource = null, indication = null, onClick = onTap)
+    clickable(interactionSource = null, indication = null, onClick = onTap).clearAndSetSemantics {}
+
+private fun Modifier.modalPane(title: String) = semantics { paneTitle = title; isTraversalGroup = true }
 
 private fun Modifier.consumeTaps() = pointerInput(Unit) { detectTapGestures { } }
 
@@ -77,6 +84,7 @@ fun GlassMenu(
     items: List<Pair<String, () -> Unit>>,
     modifier: Modifier = Modifier,
     anchor: Alignment = Alignment.TopEnd,
+    panelPadding: PaddingValues = PaddingValues(),
 ) {
     BackHandler(expanded, onDismiss)
     val still = rememberAnimationsOff()
@@ -89,7 +97,7 @@ fun GlassMenu(
             val t = LocalThemeTokens.current
             Column(
                 Modifier
-                    .align(anchor).padding(16.dp).widthIn(min = 180.dp)
+                    .align(anchor).padding(panelPadding).padding(16.dp).widthIn(min = 180.dp)
                     .glassSurface(RoundedCornerShape(20.dp), GlassSampling.Content)
                     .background(t.neutrals.surface.asColor().copy(alpha = 0.72f), RoundedCornerShape(20.dp))
                     .consumeTaps()
@@ -117,7 +125,7 @@ fun GlassDialog(
     onDismiss: () -> Unit,
 ) {
     val t = LocalThemeTokens.current
-    GlassOverlayPanel(visible, onDismiss, PaddingValues(start = 24.dp, top = 24.dp, end = 12.dp, bottom = 8.dp)) {
+    GlassOverlayPanel(visible, onDismiss, PaddingValues(start = 24.dp, top = 24.dp, end = 12.dp, bottom = 8.dp), text) {
         Text(text, color = t.neutrals.textPrimary.asColor(), modifier = Modifier.padding(end = 12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onDismiss, Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = t.neutrals.textSecondary.asColor())) { Text(dismiss) }
@@ -132,6 +140,7 @@ fun GlassOverlayPanel(
     visible: Boolean,
     onDismiss: () -> Unit,
     contentPadding: PaddingValues,
+    title: String = "",
     content: @Composable ColumnScope.() -> Unit,
 ) {
     BackHandler(visible, onDismiss)
@@ -147,6 +156,7 @@ fun GlassOverlayPanel(
             Column(
                 Modifier
                     .padding(32.dp).widthIn(max = 360.dp)
+                    .modalPane(title)
                     .glassSurface(shape, GlassSampling.Content)
                     .background(t.neutrals.surface.asColor().copy(alpha = 0.72f), shape)
                     .consumeTaps()
@@ -166,6 +176,7 @@ fun GlassSheet(
     visible: Boolean,
     onRequestClose: () -> Unit,
     onExited: () -> Unit = {},
+    title: String = "",
     content: @Composable ColumnScope.() -> Unit,
 ) {
     BackHandler(visible, onRequestClose)
@@ -196,6 +207,7 @@ fun GlassSheet(
                     .fillMaxWidth().heightIn(max = maxHeight * 0.92f)
                     .onSizeChanged { heightPx = it.height }
                     .offset { IntOffset(0, offset.roundToInt()) }
+                    .modalPane(title)
                     .glassSurface(shape, GlassSampling.Content)
                     .background(t.neutrals.surface.asColor().copy(alpha = 0.72f), shape)
                     .consumeTaps(),

@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,11 +84,12 @@ fun GlassIconButton(
     sampling: GlassSampling = GlassSampling.Content,
     backdrop: GlassBackdrop? = null,
     enabled: Boolean = true,
+    glass: Boolean = true,
 ) {
     Box(
         modifier
             .size(48.dp)
-            .glassSurface(CircleShape, sampling, backdrop = backdrop)
+            .then(if (glass) Modifier.glassSurface(CircleShape, sampling, backdrop = backdrop) else Modifier)
             .clip(CircleShape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -116,6 +118,9 @@ fun GlassFloatingAction(text: String, icon: ImageVector, onClick: () -> Unit, mo
     }
 }
 
+/** Height of [GlassBottomBar]; MainActivity derives page insets from it. */
+val GlassBottomBarHeight = 64.dp
+
 data class GlassTab(val icon: ImageVector, val label: String)
 
 /** Applies no insets or outer padding: the caller supplies them through [modifier]. */
@@ -128,7 +133,7 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
         if (rememberAnimationsOff()) snap() else spring(dampingRatio = 0.8f, stiffness = 500f),
         label = "tab",
     )
-    BoxWithConstraints(modifier.fillMaxWidth().height(64.dp).glassSurface(shape, GlassSampling.Content).padding(4.dp)) {
+    BoxWithConstraints(modifier.fillMaxWidth().height(GlassBottomBarHeight).glassSurface(shape, GlassSampling.Content).padding(4.dp)) {
         val tabW = maxWidth / tabs.size
         val tabWpx = with(LocalDensity.current) { tabW.toPx() }
         Box(
@@ -137,7 +142,7 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
                 .width(tabW).fillMaxHeight()
                 .clip(shape).background(t.accent.accentSubtle.asColor()),
         )
-        Row(Modifier.fillMaxHeight()) {
+        Row(Modifier.fillMaxHeight().selectableGroup()) {
             tabs.forEachIndexed { i, tab ->
                 val color = (if (i == selected) t.accent.accentAction else t.neutrals.textSecondary).asColor()
                 Column(
@@ -186,7 +191,7 @@ fun GlassTopBar(title: String, visible: Boolean, modifier: Modifier = Modifier, 
 fun GlassSegmentedPicker(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     val t = LocalThemeTokens.current
     val shape = RoundedCornerShape(50)
-    Row(modifier.fillMaxWidth().glassSurface(shape, GlassSampling.Background).padding(4.dp)) {
+    Row(modifier.fillMaxWidth().glassSurface(shape, GlassSampling.Background).padding(4.dp).selectableGroup()) {
         options.forEachIndexed { i, label ->
             val on = i == selected
             Box(
