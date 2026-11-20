@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -31,12 +32,18 @@ import com.actiary.theme.asColor
 import com.actiary.ui.calendar.MonthCalendar
 import com.actiary.ui.calendar.isFuture
 import com.kizitonwose.calendar.compose.rememberCalendarState
-import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 
 @Composable
-fun DatePickerDialog(selected: LocalDate, onSelect: (LocalDate) -> Unit, onDismiss: () -> Unit, title: String = "") {
+fun DatePickerDialog(
+    selected: LocalDate,
+    firstDayOfWeek: DayOfWeek,
+    onSelect: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+    title: String = "",
+) {
     val t = LocalThemeTokens.current
     val locale = LocalConfiguration.current.locales[0]
     val today = LocalDate.now()
@@ -45,8 +52,9 @@ fun DatePickerDialog(selected: LocalDate, onSelect: (LocalDate) -> Unit, onDismi
         startMonth = thisMonth.minusYears(10),
         endMonth = thisMonth,
         firstVisibleMonth = YearMonth.from(selected),
-        firstDayOfWeek = remember { firstDayOfWeekFromLocale() },
+        firstDayOfWeek = remember { firstDayOfWeek },
     )
+    SideEffect { state.firstDayOfWeek = firstDayOfWeek }
     val scope = rememberCoroutineScope()
     val month = state.firstVisibleMonth.yearMonth
     GlassOverlayPanel(true, onDismiss, PaddingValues(16.dp), title = title) {

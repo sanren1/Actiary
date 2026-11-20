@@ -10,24 +10,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,7 +29,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
@@ -64,7 +55,7 @@ import com.actiary.theme.seed
 private val presets = AccentPreset.entries.filter { it != AccentPreset.CUSTOM }
 
 @Composable
-private fun presetName(p: AccentPreset): String = stringResource(
+internal fun presetName(p: AccentPreset): String = stringResource(
     when (p) {
         AccentPreset.MIST_TEAL -> R.string.preset_mist_teal
         AccentPreset.SLATE_BLUE -> R.string.preset_slate_blue
@@ -72,7 +63,7 @@ private fun presetName(p: AccentPreset): String = stringResource(
         AccentPreset.SAND -> R.string.preset_sand
         AccentPreset.DUSTY_LAVENDER -> R.string.preset_dusty_lavender
         AccentPreset.GRAPHITE -> R.string.preset_graphite
-        AccentPreset.CUSTOM -> R.string.accent_title
+        AccentPreset.CUSTOM -> R.string.preset_custom
     },
 )
 
@@ -88,29 +79,14 @@ fun AppearanceScreen(
     onGlassLevel: (GlassLevel) -> Unit,
     onGlassTint: (GlassTintStrength) -> Unit,
     onAmbient: (Boolean) -> Unit,
-    scrollContainer: Boolean = true,
+    onBack: () -> Unit,
+    onResetAppearance: () -> Unit,
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
 
-    // true: standalone page owns the single scroller + insets. false: host owns them, so this
-    // column only carries its own spacing and must not nest another same-direction scroller.
-    val outer = if (scrollContainer) {
-        Modifier.fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)
-            .navigationBarsPadding()
-    } else {
-        Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)
-    }
-    Column(outer, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        BasicText(
-            stringResource(R.string.appearance_title),
-            Modifier.height(48.dp).semantics { heading() },
-            style = style(n.textPrimary, 28, FontWeight.Bold),
-        )
+    SettingsPageLayout(stringResource(R.string.appearance_title), onBack) {
         GlassPreview(t, LocalGlassProfile.current)
 
         GlassPanel(Modifier.fillMaxWidth()) {
@@ -207,6 +183,7 @@ fun AppearanceScreen(
                 }
             }
         }
+        SettingsRow(stringResource(R.string.settings_reset_appearance), Icons.Outlined.RestartAlt, onClick = onResetAppearance)
     }
 }
 

@@ -1,0 +1,103 @@
+package com.actiary.ui.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.actiary.R
+import com.actiary.glass.GlassIconButton
+import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.asColor
+import com.actiary.ui.common.LocalFloatingInsets
+
+internal enum class SettingsPage { HOME, APPEARANCE, GENERAL, TYPES, ABOUT }
+
+@Composable
+internal fun SettingsPageLayout(
+    title: String,
+    onBack: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val n = LocalThemeTokens.current.neutrals
+    Column(
+        Modifier.fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            .verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = LocalFloatingInsets.current.bottom + 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onBack != null) {
+                GlassIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.nav_back), onBack, glass = false)
+            }
+            BasicText(
+                title,
+                Modifier.weight(1f).semantics { heading() },
+                style = TextStyle(n.textPrimary.asColor(), 28.sp, FontWeight.Bold),
+            )
+        }
+        content()
+    }
+}
+
+@Composable
+internal fun SettingsRow(
+    label: String,
+    icon: ImageVector,
+    endIcon: ImageVector? = null,
+    summary: String? = null,
+    onClick: () -> Unit,
+) {
+    val n = LocalThemeTokens.current.neutrals
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(n.surface.asColor())
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(icon, null, tint = n.textPrimary.asColor())
+        Column(Modifier.weight(1f)) {
+            BasicText(label, style = TextStyle(n.textPrimary.asColor(), 16.sp))
+            if (summary != null) BasicText(summary, style = TextStyle(n.textSecondary.asColor(), 14.sp))
+        }
+        if (endIcon != null) Icon(endIcon, null, tint = n.textSecondary.asColor())
+    }
+}

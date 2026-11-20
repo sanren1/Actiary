@@ -90,8 +90,8 @@ import com.actiary.ui.common.LocalFloatingInsets
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
 import com.actiary.ui.record.formatDistance
-import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import kotlinx.coroutines.flow.map
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -118,6 +118,7 @@ fun RecordsScreen(
     repository: RecordRepository,
     photoStore: PhotoStore,
     initialView: RecordsView,
+    firstDayOfWeek: DayOfWeek,
     onKind: (RangeKind) -> Unit,
     onMetric: (ChartMetric) -> Unit,
     onEdit: (LocalDate) -> Unit,
@@ -129,14 +130,13 @@ fun RecordsScreen(
         today = LocalDate.now()
         onPauseOrDispose {}
     }
-    val firstDay = remember { firstDayOfWeekFromLocale() }
     var kindIx by rememberSaveable { mutableIntStateOf(KINDS.indexOf(initialView.kind)) }
     var anchor by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
     var metricIx by rememberSaveable { mutableIntStateOf(initialView.metric.ordinal) }
     var filterId by rememberSaveable { mutableStateOf<Long?>(null) }
-    val range = rangeOf(LocalDate.ofEpochDay(anchor), KINDS[kindIx], firstDay)
-    val prev = shiftRange(range, -1, today, firstDay)?.takeIf { !it.from.isBefore(today.minusYears(10)) }
-    val next = shiftRange(range, 1, today, firstDay)
+    val range = rangeOf(LocalDate.ofEpochDay(anchor), KINDS[kindIx], firstDayOfWeek)
+    val prev = shiftRange(range, -1, today, firstDayOfWeek)?.takeIf { !it.from.isBefore(today.minusYears(10)) }
+    val next = shiftRange(range, 1, today, firstDayOfWeek)
 
     val loaded by remember(range) { repository.observeRange(range.from, range.to).map { range to it } }
         .collectAsStateWithLifecycle(null)

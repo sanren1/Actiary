@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,10 +66,10 @@ import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.LocalFloatingInsets
 import com.kizitonwose.calendar.compose.rememberCalendarState
-import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -83,6 +84,7 @@ fun HomeScreen(
     repository: RecordRepository,
     photoStore: PhotoStore,
     selected: LocalDate,
+    firstDayOfWeek: DayOfWeek,
     onSelect: (LocalDate) -> Unit,
     onChrome: (HomeChrome) -> Unit,
     onEdit: (LocalDate) -> Unit,
@@ -98,12 +100,18 @@ fun HomeScreen(
     val calendar = rememberCalendarState(
         startMonth = thisMonth.minusYears(10),
         endMonth = thisMonth.plusYears(1),
-        firstVisibleMonth = YearMonth.from(selected),
-        firstDayOfWeek = remember { firstDayOfWeekFromLocale() },
+        firstVisibleMonth = remember { YearMonth.from(selected) },
+        firstDayOfWeek = remember { firstDayOfWeek },
     )
+    // Update the saved pager in place so changing the week layout retains the visible month.
+    SideEffect { calendar.firstDayOfWeek = firstDayOfWeek }
+    var alignedSelection by rememberSaveable { mutableStateOf(selected) }
     LaunchedEffect(selected) {
-        val m = YearMonth.from(selected).coerceIn(thisMonth.minusYears(10), thisMonth.plusYears(1))
-        if (m != calendar.firstVisibleMonth.yearMonth) calendar.animateScrollToMonth(m)
+        if (selected != alignedSelection) {
+            val m = YearMonth.from(selected).coerceIn(calendar.startMonth, calendar.endMonth)
+            if (m != calendar.firstVisibleMonth.yearMonth) calendar.animateScrollToMonth(m)
+            alignedSelection = selected
+        }
     }
     val visible = calendar.firstVisibleMonth.yearMonth
     // Keyed with their month/date so a stale value from the previous key never reads as "loaded".
@@ -126,7 +134,8 @@ fun HomeScreen(
         if (animationsOff) p = target
         else settling = scope.launch { animate(p, target, animationSpec = tween(150)) { v, _ -> p = v } }
     }
-    val rangePx = with(LocalDensity.current) { (CELL_HEIGHT * (calendar.firstVisibleMonth.weekDays.size - 1)).toPx() }
+    val lastRow = keptRowIndex(visible, visible.atEndOfMonth(), calendar.firstDayOfWeek)
+    val rangePx = with(LocalDensity.current) { (CELL_HEIGHT * lastRow).toPx() }
     val range by rememberUpdatedState(rangePx)
     val connection = remember {
         object : NestedScrollConnection {

@@ -85,6 +85,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -145,6 +146,7 @@ private val CapturePathsSaver = Saver<MutableList<String>, List<String>>(
 @Composable
 internal fun RecordSheet(
     date: LocalDate,
+    firstDayOfWeek: DayOfWeek,
     repository: RecordRepository,
     photoStore: PhotoStore,
     onDismiss: () -> Unit,
@@ -444,6 +446,7 @@ internal fun RecordSheet(
     if (showDatePicker) {
         DatePickerDialog(
             selected = current?.date ?: date,
+            firstDayOfWeek = firstDayOfWeek,
             onSelect = { d ->
                 showDatePicker = false
                 if (d != current?.date) {

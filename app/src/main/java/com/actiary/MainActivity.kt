@@ -52,6 +52,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.actiary.data.appearance.resolve
 import com.actiary.data.photo.recognizeWorkoutScreenshot
 import com.actiary.domain.WorkoutScreenshot
 import com.actiary.glass.GlassBottomBar
@@ -78,6 +79,7 @@ import com.actiary.ui.record.RecordSheet
 import com.actiary.ui.records.RecordsScreen
 import com.actiary.ui.settings.CustomTypeIconPicker
 import com.actiary.ui.settings.CustomTypesScreen
+import com.actiary.ui.settings.SettingsPage
 import com.actiary.ui.settings.SettingsScreen
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
@@ -98,10 +100,13 @@ class MainActivity : ComponentActivity() {
         // Tiny local DataStore file: a blocking first read at startup avoids a light-theme flash.
         val initial = runBlocking { repository.settings.first() }
         val recordsView = runBlocking { container.recordsPrefs.view.first() }
+        val initialWeekStart = runBlocking { container.generalPrefs.weekStart.first() }
         val systemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         window.setBackgroundDrawable(ColorDrawable(resolveTheme(initial, systemDark).neutrals.background))
         setContent {
             val settings by repository.settings.collectAsStateWithLifecycle(initial)
+            val weekStart by container.generalPrefs.weekStart.collectAsStateWithLifecycle(initialWeekStart)
+            val firstDayOfWeek = weekStart.resolve()
             val tokens = resolveTheme(settings, isSystemInDarkTheme())
             val profile = resolveGlass(settings.glassLevel, settings.glassTintStrength, tokens, rememberGlassDegraded())
             DisposableEffect(tokens.dark) {
@@ -138,7 +143,8 @@ class MainActivity : ComponentActivity() {
                     scanningUri = null
                 }
                 var tab by rememberSaveable { mutableStateOf(Tab.CALENDAR) }
-                var customTypes by rememberSaveable { mutableStateOf(false) }
+                var settingsPage by rememberSaveable { mutableStateOf(SettingsPage.HOME) }
+                var confirmAppearanceReset by rememberSaveable { mutableStateOf(false) }
                 var pendingTypeRemoval by rememberSaveable { mutableStateOf<Long?>(null) }
                 val defaultTypeIcon = CUSTOM_TYPE_ICONS.first().key
                 var typeIcon by rememberSaveable { mutableStateOf(defaultTypeIcon) }
@@ -146,30 +152,33 @@ class MainActivity : ComponentActivity() {
                 val holder = rememberSaveableStateHolder()
                 var chrome by remember { mutableStateOf(HomeChrome()) }
                 BackHandler(tab != Tab.CALENDAR) { tab = Tab.CALENDAR }
-                // Registered after the tab handler (later handler wins): back first exits the
-                // custom-types page, only then resets the tab to CALENDAR.
-                BackHandler(customTypes) { customTypes = false }
+                // Overlays register later; back dismisses them before returning to settings home.
+                BackHandler(tab == Tab.SETTINGS && settingsPage != SettingsPage.HOME) {
+                    settingsPage = SettingsPage.HOME
+                }
 
                 val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                // Bar + gap above the navigation bar; the page only clears the navigation bar when the bar is absent.
+                // Include the bar, its gap, and the navigation inset in the scroll clearance.
                 val insets = FloatingInsets(navBar + GlassBottomBarHeight + BarGap)
                 // Behind the sheet: page and base chrome are inert for TalkBack; the base also goes flat (spec 4.1 glass cap).
                 val choosingWorkoutDate = screenshot != null && editing == null
-                val modalOpen = editing != null || pendingTypeRemoval != null || pickingTypeIcon || scanningUri != null || choosingWorkoutDate
-                val baseProfile = if (editing != null) profile.copy(degraded = true) else profile
+                val modalOpen = editing != null || pendingTypeRemoval != null || pickingTypeIcon ||
+                    scanningUri != null || choosingWorkoutDate || confirmAppearanceReset
+                val baseProfile = if (editing != null || confirmAppearanceReset) profile.copy(degraded = true) else profile
                 val hideBase = Modifier.semantics { if (modalOpen) hideFromAccessibility() }
                 val tabs = listOf(
                     GlassTab(Icons.Outlined.CalendarMonth, stringResource(R.string.tab_calendar)),
                     GlassTab(Icons.Outlined.BarChart, stringResource(R.string.tab_records)),
                     GlassTab(Icons.Outlined.Settings, stringResource(R.string.tab_settings)),
                 )
-                val onHome = tab == Tab.CALENDAR && !customTypes
+                val onHome = tab == Tab.CALENDAR
+                val onTypes = tab == Tab.SETTINGS && settingsPage == SettingsPage.TYPES
                 CompositionLocalProvider(LocalFloatingInsets provides insets) {
                     GlassHost(
                         tokens, profile,
                         overlay = {
                             CompositionLocalProvider(LocalGlassProfile provides baseProfile) { Box(Modifier.fillMaxSize().then(hideBase)) {
-                            if (!customTypes) {
+                            if (!onTypes) {
                                 GlassBottomBar(
                                     tabs, tab.ordinal, { tab = Tab.entries[it] },
                                     Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = BarGap),
@@ -204,6 +213,7 @@ class MainActivity : ComponentActivity() {
                             if (choosingWorkoutDate) {
                                 DatePickerDialog(
                                     selected = selected.coerceAtMost(LocalDate.now()),
+                                    firstDayOfWeek = firstDayOfWeek,
                                     onSelect = { editing = it.toEpochDay() },
                                     onDismiss = { screenshot = null },
                                     title = stringResource(R.string.home_import_select_date),
@@ -212,6 +222,7 @@ class MainActivity : ComponentActivity() {
                             editing?.let { day ->
                                 RecordSheet(
                                     date = LocalDate.ofEpochDay(day),
+                                    firstDayOfWeek = firstDayOfWeek,
                                     repository = container.recordRepository,
                                     photoStore = container.photoStore,
                                     onDismiss = {
@@ -222,6 +233,17 @@ class MainActivity : ComponentActivity() {
                                     screenshot = screenshot,
                                 )
                             }
+                            GlassDialog(
+                                visible = confirmAppearanceReset,
+                                text = stringResource(R.string.settings_reset_appearance_message),
+                                confirm = stringResource(R.string.settings_reset),
+                                dismiss = stringResource(R.string.record_cancel),
+                                onConfirm = {
+                                    confirmAppearanceReset = false
+                                    lifecycleScope.launch { repository.resetAppearance() }
+                                },
+                                onDismiss = { confirmAppearanceReset = false },
+                            )
                             GlassDialog(
                                 visible = pendingTypeRemoval != null,
                                 text = stringResource(R.string.custom_type_delete_confirm),
@@ -246,22 +268,13 @@ class MainActivity : ComponentActivity() {
                         },
                     ) {
                         CompositionLocalProvider(LocalGlassProfile provides baseProfile) { Box(Modifier.fillMaxSize().then(hideBase)) {
-                        if (customTypes) {
-                            holder.SaveableStateProvider("custom_types") {
-                                CustomTypesScreen(
-                                    repository = container.recordRepository,
-                                    onBack = { customTypes = false },
-                                    iconKey = typeIcon,
-                                    onRequestIconPicker = { pickingTypeIcon = true },
-                                    onResetIcon = { typeIcon = defaultTypeIcon },
-                                    onRequestRemoval = { pendingTypeRemoval = it },
-                                )
-                            }
-                        } else holder.SaveableStateProvider(tab.name) { when (tab) {
+                        val pageKey = if (tab == Tab.SETTINGS) settingsPage.name else tab.name
+                        holder.SaveableStateProvider(pageKey) { when (tab) {
                             Tab.CALENDAR -> HomeScreen(
                                 repository = container.recordRepository,
                                 photoStore = container.photoStore,
                                 selected = selected,
+                                firstDayOfWeek = firstDayOfWeek,
                                 onSelect = { selected = it },
                                 onChrome = { chrome = it },
                                 onEdit = { editing = it.toEpochDay() },
@@ -270,18 +283,33 @@ class MainActivity : ComponentActivity() {
                                 repository = container.recordRepository,
                                 photoStore = container.photoStore,
                                 initialView = recordsView,
+                                firstDayOfWeek = firstDayOfWeek,
                                 onKind = { lifecycleScope.launch { container.recordsPrefs.setKind(it) } },
                                 onMetric = { lifecycleScope.launch { container.recordsPrefs.setMetric(it) } },
                                 onEdit = { editing = it.toEpochDay() },
                             )
                             Tab.SETTINGS -> SettingsScreen(
+                                page = settingsPage,
+                                onPage = { settingsPage = it },
                                 settings = settings,
+                                weekStart = weekStart,
+                                onWeekStart = { lifecycleScope.launch { container.generalPrefs.setWeekStart(it) } },
                                 onThemeMode = { lifecycleScope.launch { repository.setThemeMode(it) } },
                                 onPreset = { lifecycleScope.launch { repository.setAccentPreset(it) } },
                                 onGlassLevel = { lifecycleScope.launch { repository.setGlassLevel(it) } },
                                 onGlassTint = { lifecycleScope.launch { repository.setGlassTintStrength(it) } },
                                 onAmbient = { lifecycleScope.launch { repository.setAmbientBackground(it) } },
-                                onCustomTypes = { customTypes = true },
+                                onResetAppearance = { confirmAppearanceReset = true },
+                                typesContent = { onBack ->
+                                    CustomTypesScreen(
+                                        repository = container.recordRepository,
+                                        onBack = onBack,
+                                        iconKey = typeIcon,
+                                        onRequestIconPicker = { pickingTypeIcon = true },
+                                        onResetIcon = { typeIcon = defaultTypeIcon },
+                                        onRequestRemoval = { pendingTypeRemoval = it },
+                                    )
+                                },
                             )
                         } }
                         } }

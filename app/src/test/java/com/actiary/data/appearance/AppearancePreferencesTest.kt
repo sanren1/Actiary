@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.actiary.domain.ChartMetric
+import com.actiary.domain.RangeKind
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -15,16 +17,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class AppearancePreferencesTest {
-    // In-memory store: the file-based DataStore fails its tmp-file rename over an existing file on Windows JVM.
-    private fun repo() = AppearanceRepository(object : DataStore<Preferences> {
-        private val state = MutableStateFlow(emptyPreferences())
-        override val data: Flow<Preferences> = state
-        override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
-            val next = transform(state.value)
-            state.value = next
-            return next
-        }
-    })
+    private fun repo() = AppearanceRepository(inMemoryPreferencesStore())
 
     @Test fun emptyIsDefault() {
         assertEquals(AppearanceSettings(), emptyPreferences().toAppearanceSettings())
@@ -86,5 +79,45 @@ class AppearancePreferencesTest {
         assertEquals(GlassTintStrength.HIGH, s.glassTintStrength)
         assertEquals(ChartPalette.FOLLOW_ACCENT, s.chartPalette)
         assertEquals(false, s.ambientBackground)
+    }
+
+    @Test fun customAccentIsStoredUppercase() = runBlocking {
+        val appearance = repo()
+        appearance.setCustomAccent("#3a7bd5")
+        assertEquals("#3A7BD5", appearance.settings.first().customAccentHex)
+    }
+
+    @Test fun resetKeepsNonAppearanceKeys() = runBlocking {
+        val store = inMemoryPreferencesStore()
+        val appearance = AppearanceRepository(store)
+        val records = RecordsPrefsRepository(store)
+        val general = GeneralPrefsRepository(store)
+
+        records.setKind(RangeKind.WEEK)
+        records.setMetric(ChartMetric.CALORIES)
+        general.setWeekStart(WeekStart.SUNDAY)
+        appearance.setThemeMode(ThemeMode.DARK)
+        appearance.setCustomAccent("#123456")
+        appearance.setGlassLevel(GlassLevel.CLEAR)
+        appearance.setGlassTintStrength(GlassTintStrength.HIGH)
+        appearance.setChartPalette(ChartPalette.FOLLOW_ACCENT)
+        appearance.setAmbientBackground(false)
+
+        appearance.resetAppearance()
+
+        assertEquals(AppearanceSettings(), appearance.settings.first())
+        assertEquals(RecordsView(RangeKind.WEEK, ChartMetric.CALORIES), records.view.first())
+        assertEquals(WeekStart.SUNDAY, general.weekStart.first())
+    }
+}
+
+// The file-based DataStore fails its tmp-file rename over an existing file on Windows JVM.
+internal fun inMemoryPreferencesStore(): DataStore<Preferences> = object : DataStore<Preferences> {
+    private val state = MutableStateFlow(emptyPreferences())
+    override val data: Flow<Preferences> = state
+    override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+        val next = transform(state.value)
+        state.value = next
+        return next
     }
 }

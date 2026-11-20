@@ -10,17 +10,10 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -92,28 +85,7 @@ fun CustomTypesScreen(
     val selectedIcon = CUSTOM_TYPE_ICONS.first { it.key == iconKey }
     val canAdd = name.trim().isNotEmpty()
 
-    Column(
-        Modifier.fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .verticalScroll(rememberScrollState())
-            .navigationBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .clickable(role = Role.Button, onClick = onBack)
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BasicText(stringResource(R.string.nav_back), style = TextStyle(n.textPrimary.asColor(), 16.sp))
-        }
-        BasicText(
-            stringResource(R.string.custom_type_title),
-            Modifier.semantics { heading() },
-            style = TextStyle(n.textPrimary.asColor(), 28.sp, FontWeight.Bold),
-        )
-
+    SettingsPageLayout(stringResource(R.string.settings_custom_types), onBack) {
         Column(
             Modifier.fillMaxWidth().background(n.surface.asColor(), RoundedCornerShape(16.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

@@ -67,9 +67,9 @@ fun MonthCalendar(
 ) {
     val t = LocalThemeTokens.current
     val cell = with(LocalDensity.current) { CELL_HEIGHT.toPx() }
-    val month = state.firstVisibleMonth
-    val rows = month.weekDays.size
-    val kept = keptRowIndex(month.yearMonth, selected, state.firstDayOfWeek)
+    val month = state.firstVisibleMonth.yearMonth
+    val rows = keptRowIndex(month, month.atEndOfMonth(), state.firstDayOfWeek) + 1
+    val kept = keptRowIndex(month, selected, state.firstDayOfWeek)
     Column {
         Row(Modifier.fillMaxWidth()) {
             for (d in daysOfWeek(firstDayOfWeek = state.firstDayOfWeek)) {
@@ -114,7 +114,7 @@ private fun DayCell(date: LocalDate, state: DayState, selected: Boolean, today: 
         DayState.UNRECORDED -> R.string.day_unrecorded
     })
     val description = listOfNotNull(
-        date.format(DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)),
+        date.format(DateTimeFormatter.ofPattern(stringResource(R.string.day_accessibility_pattern), locale)),
         stateText,
         if (today) stringResource(R.string.day_today) else null,
     ).joinToString(", ")

@@ -55,10 +55,20 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
     suspend fun setCustomAccent(hex: String) {
         require(parseHex(hex) != null) { "Invalid hex color: $hex" }
         store.edit {
-            it[CUSTOM_ACCENT_HEX] = hex
+            it[CUSTOM_ACCENT_HEX] = hex.uppercase()
             it[ACCENT_PRESET] = AccentPreset.CUSTOM.name
         }
     }
 
-    suspend fun resetAppearance() { store.edit { it.clear() } }
+    suspend fun resetAppearance() {
+        store.edit {
+            it.remove(THEME_MODE)
+            it.remove(ACCENT_PRESET)
+            it.remove(CUSTOM_ACCENT_HEX)
+            it.remove(GLASS_LEVEL)
+            it.remove(GLASS_TINT_STRENGTH)
+            it.remove(CHART_PALETTE)
+            it.remove(AMBIENT_BACKGROUND)
+        }
+    }
 }
