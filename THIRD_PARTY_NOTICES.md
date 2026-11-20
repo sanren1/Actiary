@@ -8,6 +8,7 @@
 - Vendored at: `app/src/main/java/com/kyant/backdrop/`
 - Files were modified for Kotlin 2.1 / Compose 1.8 (Android only; expect/actual merged, context parameter and `com.kyant.shapes` dependency removed). Each modified file carries a `// Modified for Actiary:` line.
 - Also includes adapted (rewritten) code from the catalog examples of the same repository (Apache-2.0): `glass/PressDragState.kt`, `glass/InspectDragGestures.kt` and the interactive controls built on them.
+- Spring and deformation parameters (damping ratio / response, minimum lift time, flex limits) reference the documentation of NEORUAA/Glasmio (Apache-2.0); numbers only, no code copied.
 
 ## Google ML Kit Text Recognition v2 (bundled Chinese model)
 

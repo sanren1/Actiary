@@ -49,4 +49,11 @@ class PressDragMathTest {
         assertEquals(3f, valueFor(9, count), 0f)
         assertEquals(0f, valueFor(-2, count), 0f)
     }
+
+    @Test fun stiffnessFromResponseMatchesGlasmioNumbers() {
+        assertEquals(631.65f, stiffnessFromResponse(0.25f), 0.5f)
+        assertEquals(246.74f, stiffnessFromResponse(0.4f), 0.5f)
+        assertEquals(986.96f, stiffnessFromResponse(0.2f), 0.5f)
+        assertEquals(157.91f, stiffnessFromResponse(0.5f), 0.1f)
+    }
 }
