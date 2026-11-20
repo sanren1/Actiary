@@ -9,7 +9,13 @@ sealed interface DraftPhoto {
     data class Picked(val uri: String) : DraftPhoto
 }
 
-data class DraftEntry(val typeId: Long, val durationMinutes: Int? = null, val distanceMeters: Int? = null)
+data class DraftEntry(
+    val typeId: Long,
+    val durationMinutes: Int? = null,
+    val distanceMeters: Int? = null,
+    val calories: Int? = null,
+    val avgHeartRate: Int? = null,
+)
 
 data class DayDraft(
     val date: LocalDate,
@@ -49,7 +55,7 @@ data class DayDraft(
                 date = date,
                 status = day.record.status,
                 entries = day.entries.sortedBy { it.sortOrder }
-                    .map { DraftEntry(it.typeId, it.durationMinutes, it.distanceMeters) },
+                    .map { DraftEntry(it.typeId, it.durationMinutes, it.distanceMeters, it.calories, it.avgHeartRate) },
                 note = day.record.note,
                 photos = day.photos.sortedBy { it.sortOrder }.map { DraftPhoto.Saved(it.fileName) },
             )

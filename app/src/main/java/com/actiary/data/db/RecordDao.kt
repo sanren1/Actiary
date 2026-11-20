@@ -44,6 +44,12 @@ interface RecordDao {
     suspend fun insertEntries(entries: List<ExerciseEntryEntity>)
 
     @Insert
+    suspend fun insertType(type: ExerciseTypeEntity): Long
+
+    @Query("UPDATE exercise_type SET archived = 1 WHERE id = :id")
+    suspend fun archiveType(id: Long)
+
+    @Insert
     suspend fun insertPhotos(photos: List<PhotoAttachmentEntity>)
 
     @Transaction

@@ -1,6 +1,7 @@
 package com.actiary.data.db
 
 import android.content.Context
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -9,7 +10,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 
@@ -32,16 +36,44 @@ class RecordDaoTest {
     fun tearDown() = db.close()
 
     private fun record(day: Long) = DailyRecordEntity(day, DayStatus.EXERCISED, "", 0)
-    private fun entry(day: Long, type: Long = 1) = ExerciseEntryEntity(epochDay = day, typeId = type, durationMinutes = 30, distanceMeters = null, sortOrder = 0)
+    private fun entry(day: Long, type: Long = 1) = ExerciseEntryEntity(epochDay = day, typeId = type, durationMinutes = 30, distanceMeters = null, calories = null, avgHeartRate = null, sortOrder = 0)
     private fun photo(day: Long, name: String) = PhotoAttachmentEntity(epochDay = day, fileName = name, sortOrder = 0, addedAt = 0)
 
     private fun count(table: String): Int =
         db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { it.moveToFirst(); it.getInt(0) }
 
     @Test
-    fun seedsSevenBuiltinTypesInOrder() = runBlocking {
-        val keys = dao.observeTypes().first().map { it.builtinKey }
-        assertEquals(listOf("running", "strength", "cycling", "swimming", "yoga", "hiking", "ball"), keys)
+    fun seedsEightBuiltinTypesInOrder() = runBlocking {
+        val types = dao.observeTypes().first()
+        assertEquals(
+            listOf("running", "strength", "cycling", "swimming", "yoga", "hiking", "ball", "freeform"),
+            types.map { it.builtinKey },
+        )
+        assertEquals(
+            setOf("running", "cycling", "swimming", "hiking"),
+            types.filter { it.hasDistance }.map { it.builtinKey }.toSet(),
+        )
+    }
+
+    @Test
+    fun archivedTypeReferencedByEntryRemainsReadable() = runBlocking {
+        val typeId = dao.insertType(ExerciseTypeEntity(builtinKey = null, name = "custom", sortOrder = 99))
+        dao.replaceDay(record(20), listOf(entry(20, typeId)), emptyList())
+        dao.archiveType(typeId)
+
+        assertTrue(typeId !in dao.observeTypes().first().map { it.id })
+        assertTrue(typeId in dao.observeAllTypes().first().map { it.id })
+
+        val day = dao.get(20)!!
+        assertEquals(typeId, day.entries.single().typeId)
+        assertNotNull(dao.observeAllTypes().first().firstOrNull { it.id == typeId }?.name)
+
+        try {
+            db.openHelper.writableDatabase.execSQL("DELETE FROM exercise_type WHERE id = $typeId")
+            fail("RESTRICT 应阻止物理删除被引用的类型")
+        } catch (expected: SQLiteConstraintException) {
+            // 引用仍在，只能归档不能删除
+        }
     }
 
     @Test

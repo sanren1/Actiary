@@ -15,6 +15,7 @@ import com.actiary.domain.toDayState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.InputStream
@@ -54,7 +55,7 @@ class RecordRepository(
             dao.replaceDay(
                 DailyRecordEntity(epochDay, draft.status, draft.note, now),
                 draft.entries.mapIndexed { i, e ->
-                    ExerciseEntryEntity(0, epochDay, e.typeId, e.durationMinutes, e.distanceMeters, i)
+                    ExerciseEntryEntity(0, epochDay, e.typeId, e.durationMinutes, e.distanceMeters, e.calories, e.avgHeartRate, i)
                 },
                 names.mapIndexed { i, n -> PhotoAttachmentEntity(0, epochDay, n, i, now) },
             )
@@ -66,6 +67,23 @@ class RecordRepository(
         // Only after the commit: drop files the draft no longer references.
         val kept = names.toSet()
         original?.photos?.forEach { if (it.fileName !in kept) photos.delete(it.fileName) }
+    }
+
+    suspend fun addType(name: String, hasDistance: Boolean): Long = withContext(io) {
+        val nextSortOrder = allTypes.first().maxOfOrNull { it.sortOrder }?.plus(1) ?: 0
+        dao.insertType(
+            ExerciseTypeEntity(
+                builtinKey = null,
+                name = name.trim(),
+                sortOrder = nextSortOrder,
+                archived = false,
+                hasDistance = hasDistance,
+            ),
+        )
+    }
+
+    suspend fun archiveType(id: Long) = withContext(io) {
+        dao.archiveType(id)
     }
 
     suspend fun quickCheckIn(date: LocalDate) {

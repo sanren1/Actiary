@@ -3,6 +3,7 @@ package com.actiary.ui.calendar
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -85,6 +86,7 @@ fun HomeScreen(
     selected: LocalDate,
     onSelect: (LocalDate) -> Unit,
     onChrome: (HomeChrome) -> Unit,
+    onEdit: (LocalDate) -> Unit,
 ) {
     val t = LocalThemeTokens.current
     val locale = LocalConfiguration.current.locales[0]
@@ -155,7 +157,7 @@ fun HomeScreen(
     }
     val detailScroll = rememberScrollState()
     val pastTitle = p >= 0.9f
-    val fab = if (canRecord && !loading) (if (detail == null) R.string.home_log else R.string.home_edit) else null
+    val fab = if (canRecord && !loading && detail == null) R.string.home_log else null
     LaunchedEffect(pastTitle, fab) { onChrome(HomeChrome(pastTitle, fab)) }
 
     val calendarLayer = rememberGlassLayer()
@@ -207,13 +209,16 @@ fun HomeScreen(
         ) {
         GlassPanel(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
-                DayDetail(
-                    title = selected.format(DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)),
-                    detail = detail,
-                    types = types.associateBy { it.id },
-                    photoStore = photoStore,
-                    loading = loading,
-                )
+                val editable = canRecord && !loading && detail != null
+                Box(Modifier.then(if (editable) Modifier.clickable(role = Role.Button) { onEdit(selected) } else Modifier)) {
+                    DayDetail(
+                        title = selected.format(DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)),
+                        detail = detail,
+                        types = types.associateBy { it.id },
+                        photoStore = photoStore,
+                        loading = loading,
+                    )
+                }
                 if (canRecord && !loading && detail == null) {
                     BasicText(
                         stringResource(R.string.home_quick_check_in),

@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -49,6 +50,7 @@ fun PhotoRow(
     onView: (Int) -> Unit,
     onRemove: (Int) -> Unit,
     onAdd: () -> Unit,
+    onCapture: () -> Unit,
 ) {
     val t = LocalThemeTokens.current
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -76,6 +78,15 @@ fun PhotoRow(
             }
         }
         if (photos.size < DayDraft.PHOTO_LIMIT) {
+            item {
+                Box(
+                    Modifier.padding(top = 8.dp).size(80.dp).clip(RoundedCornerShape(12.dp))
+                        .background(t.neutrals.surfaceMuted.asColor()).clickable(role = Role.Button, onClick = onCapture),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.PhotoCamera, stringResource(R.string.record_take_photo), tint = t.neutrals.textPrimary.asColor())
+                }
+            }
             item {
                 Box(
                     Modifier.padding(top = 8.dp).size(80.dp).clip(RoundedCornerShape(12.dp))

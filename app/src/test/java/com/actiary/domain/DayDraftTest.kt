@@ -1,8 +1,12 @@
 package com.actiary.domain
 
+import com.actiary.data.db.DailyRecordEntity
 import com.actiary.data.db.DayStatus
+import com.actiary.data.db.DayWithDetails
+import com.actiary.data.db.ExerciseEntryEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
@@ -46,5 +50,20 @@ class DayDraftTest {
         assertTrue(empty.toggleType(1).needsRestConfirm)
         assertFalse(empty.toggleType(1).markRest().needsRestConfirm)
         assertFalse(empty.markRest().needsRestConfirm)
+    }
+
+    @Test fun newFieldsRoundTripAndToggleDefaults() {
+        val epochDay = date.toEpochDay()
+        val day = DayWithDetails(
+            DailyRecordEntity(epochDay, DayStatus.EXERCISED, "", 1),
+            listOf(ExerciseEntryEntity(1, epochDay, 5, 30, 5000, 320, 145, 0)),
+            emptyList(),
+        )
+        val loaded = DayDraft.from(date, day).entries.single()
+        assertEquals(320, loaded.calories)
+        assertEquals(145, loaded.avgHeartRate)
+        val added = empty.toggleType(9).entries.single()
+        assertNull(added.calories)
+        assertNull(added.avgHeartRate)
     }
 }

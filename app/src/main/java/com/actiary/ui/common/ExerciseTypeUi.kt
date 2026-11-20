@@ -24,6 +24,7 @@ fun exerciseTypeLabel(type: ExerciseTypeEntity): String = when (type.builtinKey)
     "yoga" -> stringResource(R.string.type_yoga)
     "hiking" -> stringResource(R.string.type_hiking)
     "ball" -> stringResource(R.string.type_ball)
+    "freeform" -> stringResource(R.string.type_freeform)
     else -> type.name.orEmpty()
 }
 
@@ -35,5 +36,6 @@ fun exerciseTypeIcon(type: ExerciseTypeEntity): ImageVector = when (type.builtin
     "yoga" -> Icons.Outlined.SelfImprovement
     "hiking" -> Icons.Outlined.Hiking
     "ball" -> Icons.Outlined.SportsBasketball
+    "freeform" -> Icons.Outlined.FitnessCenter
     else -> Icons.Outlined.Star
 }

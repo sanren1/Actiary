@@ -13,13 +13,19 @@ android {
         applicationId = "com.actiary"
         minSdk = 31
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
         compose = true
+    }
+
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDirs(files("$projectDir/schemas"))
+        }
     }
 
     compileOptions {
@@ -50,7 +56,9 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.calendar.compose)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.core)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.room.testing)
 }

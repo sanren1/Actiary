@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.hideFromAccessibility
@@ -57,10 +58,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import com.actiary.R
 import com.actiary.data.RecordRepository
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.ExerciseTypeEntity
+import com.actiary.data.photo.CameraCapture
 import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DraftEntry
@@ -76,12 +79,13 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /** Encodes a (nullable) draft as primitives so it survives rotation / process death. */
 @Suppress("UNCHECKED_CAST")
-private val DraftSaver = Saver<DayDraft?, Any>(
+internal val DraftSaver = Saver<DayDraft?, Any>(
     save = { d ->
         if (d == null) arrayListOf<Any>() else arrayListOf<Any>(
             d.date.toEpochDay(), d.status.name, d.note,
@@ -89,6 +93,8 @@ private val DraftSaver = Saver<DayDraft?, Any>(
             ArrayList(d.entries.map { it.durationMinutes ?: -1 }),
             ArrayList(d.entries.map { it.distanceMeters ?: -1 }),
             ArrayList(d.photos.map { if (it is DraftPhoto.Saved) "s:${it.fileName}" else "p:${(it as DraftPhoto.Picked).uri}" }),
+            ArrayList(d.entries.map { it.calories ?: -1 }),
+            ArrayList(d.entries.map { it.avgHeartRate ?: -1 }),
         )
     },
     restore = { v ->
@@ -97,15 +103,35 @@ private val DraftSaver = Saver<DayDraft?, Any>(
             val ids = l[3] as List<Long>
             val dur = l[4] as List<Int>
             val dist = l[5] as List<Int>
+            val cal = l.getOrElse(7) { emptyList<Int>() } as List<Int>
+            val hr = l.getOrElse(8) { emptyList<Int>() } as List<Int>
             DayDraft(
                 date = LocalDate.ofEpochDay(l[0] as Long),
                 status = DayStatus.valueOf(l[1] as String),
-                entries = ids.mapIndexed { i, id -> DraftEntry(id, dur[i].takeIf { it >= 0 }, dist[i].takeIf { it >= 0 }) },
+                entries = ids.mapIndexed { i, id ->
+                    DraftEntry(
+                        id,
+                        dur[i].takeIf { it >= 0 },
+                        dist[i].takeIf { it >= 0 },
+                        cal.getOrElse(i) { -1 }.takeIf { it >= 0 },
+                        hr.getOrElse(i) { -1 }.takeIf { it >= 0 },
+                    )
+                },
                 note = l[2] as String,
                 photos = (l[6] as List<String>).map { if (it.startsWith("s:")) DraftPhoto.Saved(it.drop(2)) else DraftPhoto.Picked(it.drop(2)) },
             )
         }
     },
+)
+
+private val InvalidTypesSaver = Saver<Set<Long>, List<Long>>(
+    save = { it.toList() },
+    restore = { it.toSet() },
+)
+
+private val CapturePathsSaver = Saver<MutableList<String>, List<String>>(
+    save = { it.toList() },
+    restore = { it.toMutableList() },
 )
 
 @Composable
@@ -118,6 +144,7 @@ fun RecordSheet(
 ) {
     val t = LocalThemeTokens.current
     val locale = LocalConfiguration.current.locales[0]
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var draft by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<DayDraft?>(null) }
     var original by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<DayDraft?>(null) }
@@ -131,6 +158,10 @@ fun RecordSheet(
     var showClear by rememberSaveable { mutableStateOf(false) }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var viewing by rememberSaveable { mutableStateOf<Int?>(null) }
+    var showInvalid by rememberSaveable { mutableStateOf(false) }
+    var invalidTypes by rememberSaveable(stateSaver = InvalidTypesSaver) { mutableStateOf(emptySet<Long>()) }
+    var pendingCapturePath by rememberSaveable { mutableStateOf<String?>(null) }
+    var capturePaths by rememberSaveable(stateSaver = CapturePathsSaver) { mutableStateOf(mutableListOf<String>()) }
     val types by repository.types.collectAsState(emptyList())
     val allTypes by repository.allTypes.collectAsState(emptyList())
 
@@ -141,6 +172,8 @@ fun RecordSheet(
             draft = original
             existing = day != null
             failed = false
+            invalidTypes = emptySet()
+            showInvalid = false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -153,9 +186,16 @@ fun RecordSheet(
     val dirty = current != null && original?.let { current.isChangedFrom(it) } == true
     var entered by remember { mutableStateOf(false) } // starts hidden so the slide-in plays
     LaunchedEffect(Unit) { entered = true }
-    fun close() { visible = false }
+    fun cleanupCaptures() {
+        capturePaths.forEach { CameraCapture.cleanup(File(it)) }
+        capturePaths = mutableListOf()
+    }
+    fun close() { cleanupCaptures(); visible = false }
     fun requestClose() { if (saving || !visible) return; if (dirty) showDiscard = true else close() }
-    fun update(f: (DayDraft) -> DayDraft) { draft = draft?.let(f) }
+    fun update(f: (DayDraft) -> DayDraft) { showInvalid = false; draft = draft?.let(f) }
+    fun onEntryValidity(typeId: Long, valid: Boolean) {
+        invalidTypes = if (valid) invalidTypes - typeId else invalidTypes + typeId
+    }
 
     val remaining = DayDraft.PHOTO_LIMIT - (current?.photos?.size ?: 0)
     // PickMultipleVisualMedia requires maxItems >= 2; the single picker covers the last slot.
@@ -166,6 +206,27 @@ fun RecordSheet(
         if (uri != null) update { it.addPhotos(listOf(uri.toString())) }
     }
     val imageOnly = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val path = pendingCapturePath
+        pendingCapturePath = null
+        if (path != null) {
+            if (ok) {
+                val uri = FileProvider.getUriForFile(context, CameraCapture.AUTHORITY, File(path))
+                update { it.addPhotos(listOf(uri.toString())) }
+            } else {
+                CameraCapture.cleanup(File(path))
+                capturePaths = capturePaths.filterNot { it == path }.toMutableList()
+            }
+        }
+    }
+    fun launchCapture() {
+        if (remaining >= 1) {
+            val file = CameraCapture.createTempFile(context.cacheDir)
+            pendingCapturePath = file.absolutePath
+            capturePaths = (capturePaths + file.absolutePath).toMutableList()
+            cameraLauncher.launch(FileProvider.getUriForFile(context, CameraCapture.AUTHORITY, file))
+        }
+    }
 
     fun launchOp(work: suspend () -> Unit, after: () -> Unit) {
         saving = true
@@ -251,9 +312,9 @@ fun RecordSheet(
                     }
                     current.entries.forEach { entry ->
                         val type = allTypes.firstOrNull { it.id == entry.typeId } ?: return@forEach
-                        EntryFields(current.date, type, entry) { e ->
+                        EntryFields(current.date, type, entry, { e ->
                             update { d -> d.copy(entries = d.entries.map { if (it.typeId == e.typeId) e else it }) }
-                        }
+                        }) { id, valid -> onEntryValidity(id, valid) }
                     }
                 }
                 Section(R.string.record_note) {
@@ -276,6 +337,7 @@ fun RecordSheet(
                         onView = { viewing = it },
                         onRemove = { i -> update { it.removePhoto(i) } },
                         onAdd = { if (remaining >= 2) multiPicker.launch(imageOnly) else singlePicker.launch(imageOnly) },
+                        onCapture = { launchCapture() },
                     )
                 }
                 if (existing) {
@@ -294,12 +356,24 @@ fun RecordSheet(
                         style = TextStyle(primary, 14.sp, FontWeight.Medium),
                     )
                 }
+                if (showInvalid) {
+                    BasicText(
+                        stringResource(R.string.record_invalid_value),
+                        Modifier.padding(bottom = 8.dp),
+                        style = TextStyle(t.accent.accentStroke.asColor(), 14.sp, FontWeight.Medium),
+                    )
+                }
                 val canSave = current != null && !saving && visible
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(if (canSave) 1f else 0.5f).clip(RoundedCornerShape(50))
                         .background(t.accent.accentAction.asColor())
                         .clickable(enabled = canSave, role = Role.Button) {
                             current?.let { d ->
+                                if (d.entries.any { it.typeId in invalidTypes }) {
+                                    showInvalid = true
+                                    return@let
+                                }
+                                showInvalid = false
                                 launchOp({ repository.save(d) }) {
                                     onSaved(d.date)
                                     close()
@@ -336,7 +410,7 @@ fun RecordSheet(
             showDiscard = false
             val p = pendingDate
             pendingDate = null
-            if (p != null) scope.launch { load(LocalDate.ofEpochDay(p)) } else close()
+            if (p != null) { cleanupCaptures(); scope.launch { load(LocalDate.ofEpochDay(p)) } } else close()
         },
         onDismiss = { showDiscard = false; pendingDate = null },
     )
@@ -408,23 +482,72 @@ private fun TypeCell(type: ExerciseTypeEntity, selected: Boolean, enabled: Boole
     }
 }
 
+private fun entryInputInvalid(
+    distance: String,
+    hasDistance: Boolean,
+    swimming: Boolean,
+    calories: String,
+    heartRate: String,
+): Boolean =
+    (hasDistance && distance.isNotEmpty() && if (swimming) parseMeters(distance) == null else parseKmToMeters(distance) == null) ||
+        (calories.isNotEmpty() && parseCalories(calories) == null) ||
+        (heartRate.isNotEmpty() && parseHeartRate(heartRate) == null)
+
 @Composable
-private fun EntryFields(date: LocalDate, type: ExerciseTypeEntity, entry: DraftEntry, onChange: (DraftEntry) -> Unit) {
+private fun EntryFields(
+    date: LocalDate,
+    type: ExerciseTypeEntity,
+    entry: DraftEntry,
+    onChange: (DraftEntry) -> Unit,
+    onValidity: (Long, Boolean) -> Unit,
+) {
     val t = LocalThemeTokens.current
+    val hasDistance = type.hasDistance
+    val swimming = type.builtinKey == "swimming"
     var minutes by rememberSaveable(date.toEpochDay(), type.id) { mutableStateOf(formatMinutes(entry.durationMinutes)) }
-    var km by rememberSaveable(date.toEpochDay(), type.id) { mutableStateOf(formatKm(entry.distanceMeters)) }
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BasicText(
-            exerciseTypeLabel(type), Modifier.width(72.dp).padding(bottom = 12.dp),
-            style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp, FontWeight.Medium), maxLines = 1,
-        )
-        NumberField(R.string.record_duration, minutes, Modifier.weight(1f), KeyboardType.Number) {
-            minutes = sanitizeMinutes(it)
-            onChange(entry.copy(durationMinutes = parseMinutes(minutes)))
+    var distance by rememberSaveable(date.toEpochDay(), type.id) {
+        mutableStateOf(formatDistance(entry.distanceMeters, type.builtinKey, hasDistance))
+    }
+    var calories by rememberSaveable(date.toEpochDay(), type.id) { mutableStateOf(formatCalories(entry.calories)) }
+    var heartRate by rememberSaveable(date.toEpochDay(), type.id) { mutableStateOf(formatHeartRate(entry.avgHeartRate)) }
+
+    fun report() = onValidity(type.id, !entryInputInvalid(distance, hasDistance, swimming, calories, heartRate))
+    LaunchedEffect(type.id) { report() }
+
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BasicText(
+                exerciseTypeLabel(type), Modifier.width(72.dp).padding(bottom = 12.dp),
+                style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp, FontWeight.Medium), maxLines = 1,
+            )
+            NumberField(R.string.record_duration, minutes, Modifier.weight(1f), KeyboardType.Number) {
+                minutes = sanitizeMinutes(it)
+                onChange(entry.copy(durationMinutes = parseMinutes(minutes)))
+            }
+            if (hasDistance) {
+                NumberField(
+                    if (swimming) R.string.record_distance_meters else R.string.record_distance,
+                    distance, Modifier.weight(1f),
+                    if (swimming) KeyboardType.Number else KeyboardType.Decimal,
+                ) {
+                    distance = if (swimming) sanitizeMinutes(it) else sanitizeKm(it)
+                    onChange(entry.copy(distanceMeters = if (swimming) parseMeters(distance) else parseKmToMeters(distance)))
+                    report()
+                }
+            }
         }
-        NumberField(R.string.record_distance, km, Modifier.weight(1f), KeyboardType.Decimal) {
-            km = sanitizeKm(it)
-            onChange(entry.copy(distanceMeters = parseKmToMeters(km)))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.width(72.dp)) // aligns this row's fields with the row above
+            NumberField(R.string.record_calories, calories, Modifier.weight(1f), KeyboardType.Number) {
+                calories = sanitizeCalories(it)
+                onChange(entry.copy(calories = parseCalories(calories)))
+                report()
+            }
+            NumberField(R.string.record_heart_rate, heartRate, Modifier.weight(1f), KeyboardType.Number) {
+                heartRate = sanitizeHeartRate(it)
+                onChange(entry.copy(avgHeartRate = parseHeartRate(heartRate)))
+                report()
+            }
         }
     }
 }

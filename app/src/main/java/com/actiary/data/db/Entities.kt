@@ -24,6 +24,7 @@ data class ExerciseTypeEntity(
     val name: String?,
     val sortOrder: Int,
     val archived: Boolean = false,
+    val hasDistance: Boolean = false,
 )
 
 @Entity(
@@ -50,6 +51,8 @@ data class ExerciseEntryEntity(
     val typeId: Long,
     val durationMinutes: Int?,
     val distanceMeters: Int?,
+    val calories: Int?,
+    val avgHeartRate: Int?,
     val sortOrder: Int,
 )
 

@@ -88,23 +88,27 @@ fun AppearanceScreen(
     onGlassLevel: (GlassLevel) -> Unit,
     onGlassTint: (GlassTintStrength) -> Unit,
     onAmbient: (Boolean) -> Unit,
+    scrollContainer: Boolean = true,
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
 
-    Column(
+    // true: standalone page owns the single scroller + insets. false: host owns them, so this
+    // column only carries its own spacing and must not nest another same-direction scroller.
+    val outer = if (scrollContainer) {
         Modifier.fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .verticalScroll(rememberScrollState())
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)
-            .navigationBarsPadding(),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        // The back button floats in the host overlay at the start of this row.
+            .navigationBarsPadding()
+    } else {
+        Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)
+    }
+    Column(outer, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         BasicText(
             stringResource(R.string.appearance_title),
-            Modifier.height(48.dp).padding(start = 56.dp).semantics { heading() },
+            Modifier.height(48.dp).semantics { heading() },
             style = style(n.textPrimary, 28, FontWeight.Bold),
         )
         GlassPreview(t, LocalGlassProfile.current)

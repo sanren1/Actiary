@@ -2,6 +2,9 @@ package com.actiary.ui.record
 
 private const val MAX_MINUTES = 100_000
 private const val MAX_KM_TENTHS = 100_000 // 10,000 km
+private const val MAX_CALORIES = 9999
+private const val MIN_HEART_RATE = 30
+private const val MAX_HEART_RATE = 230
 
 fun sanitizeMinutes(text: String): String =
     text.filter { it in '0'..'9' }.take(6).let { s -> s.takeIf { (it.toIntOrNull() ?: 0) <= MAX_MINUTES } ?: s.dropLast(1) }
@@ -41,4 +44,28 @@ fun formatKm(meters: Int?): String {
     if (meters == null) return ""
     val tenths = (meters + 50) / 100
     return if (tenths % 10 == 0) (tenths / 10).toString() else "${tenths / 10}.${tenths % 10}"
+}
+
+fun sanitizeCalories(text: String): String = text.filter { it in '0'..'9' }.take(4)
+
+fun parseCalories(text: String): Int? =
+    text.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.toIntOrNull()?.takeIf { it in 1..MAX_CALORIES }
+
+fun sanitizeHeartRate(text: String): String = text.filter { it in '0'..'9' }.take(3)
+
+fun parseHeartRate(text: String): Int? =
+    text.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.toIntOrNull()?.takeIf { it in MIN_HEART_RATE..MAX_HEART_RATE }
+
+fun formatCalories(v: Int?): String = v?.toString().orEmpty()
+
+fun formatHeartRate(v: Int?): String = v?.toString().orEmpty()
+
+fun formatMeters(meters: Int?): String = meters?.toString().orEmpty()
+
+fun parseMeters(text: String): Int? =
+    text.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.toIntOrNull()?.takeIf { it > 0 }
+
+fun formatDistance(meters: Int?, typeKey: String?, hasDistance: Boolean): String {
+    if (!hasDistance || meters == null) return ""
+    return if (typeKey == "swimming") formatMeters(meters) else formatKm(meters)
 }

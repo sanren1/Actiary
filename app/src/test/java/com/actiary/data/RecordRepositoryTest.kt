@@ -10,12 +10,14 @@ import com.actiary.data.db.RecordDao
 import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DayState
+import com.actiary.domain.DraftEntry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -29,6 +31,7 @@ import java.time.YearMonth
 
 private class FakeDao : RecordDao {
     val rows = MutableStateFlow<Map<Long, DayWithDetails>>(emptyMap())
+    val typeRows = MutableStateFlow<List<ExerciseTypeEntity>>(emptyList())
     var failReplace = false
     var lastRange: Pair<Long, Long>? = null
 
@@ -38,8 +41,8 @@ private class FakeDao : RecordDao {
     }
     override suspend fun get(epochDay: Long) = rows.value[epochDay]
     override fun observeDay(epochDay: Long) = rows.map { it[epochDay] }
-    override fun observeTypes(): Flow<List<ExerciseTypeEntity>> = MutableStateFlow(emptyList())
-    override fun observeAllTypes(): Flow<List<ExerciseTypeEntity>> = MutableStateFlow(emptyList())
+    override fun observeTypes(): Flow<List<ExerciseTypeEntity>> = typeRows.map { list -> list.filter { !it.archived } }
+    override fun observeAllTypes(): Flow<List<ExerciseTypeEntity>> = typeRows
     override suspend fun insertRecordIfAbsent(record: DailyRecordEntity) {
         if (record.epochDay !in rows.value) rows.value = rows.value + (record.epochDay to DayWithDetails(record, emptyList(), emptyList()))
     }
@@ -47,6 +50,14 @@ private class FakeDao : RecordDao {
     override suspend fun deleteEntries(epochDay: Long) = error("unused")
     override suspend fun deletePhotos(epochDay: Long) = error("unused")
     override suspend fun insertEntries(entries: List<ExerciseEntryEntity>) = error("unused")
+    override suspend fun insertType(type: ExerciseTypeEntity): Long {
+        val id = (typeRows.value.maxOfOrNull { it.id } ?: 0L) + 1
+        typeRows.value = typeRows.value + type.copy(id = id)
+        return id
+    }
+    override suspend fun archiveType(id: Long) {
+        typeRows.value = typeRows.value.map { if (it.id == id) it.copy(archived = true) else it }
+    }
     override suspend fun insertPhotos(photos: List<PhotoAttachmentEntity>) = error("unused")
     override suspend fun replaceDay(
         record: DailyRecordEntity,
@@ -137,5 +148,34 @@ class RecordRepositoryTest {
         val m = repo().observeMonth(YearMonth.of(2024, 2)).first()
         assertEquals(mapOf(date to DayState.EXERCISED, rest to DayState.REST), m)
         assertEquals(LocalDate.of(2024, 2, 1).toEpochDay() to LocalDate.of(2024, 2, 29).toEpochDay(), dao.lastRange)
+    }
+
+    @Test fun saveWritesCaloriesAndHeartRate() = runBlocking {
+        val d = DayDraft(
+            date, DayStatus.EXERCISED,
+            listOf(DraftEntry(1L, 30, 5000, 320, 145)), "", emptyList(),
+        )
+        repo().save(d)
+        val e = dao.get(date.toEpochDay())!!.entries.single()
+        assertEquals(320, e.calories)
+        assertEquals(145, e.avgHeartRate)
+    }
+
+    @Test fun addTypeAppendsSortedTrimsAndClearsBuiltinKey() = runBlocking {
+        dao.insertType(ExerciseTypeEntity(builtinKey = "run", name = "跑步", sortOrder = 5))
+        val id = repo().addType("  瑜伽  ", false)
+        val t = repo().allTypes.first().single { it.id == id }
+        assertEquals("瑜伽", t.name)
+        assertNull(t.builtinKey)
+        assertFalse(t.archived)
+        assertFalse(t.hasDistance)
+        assertEquals(6, t.sortOrder)
+    }
+
+    @Test fun archiveTypeHidesFromTypesButKeepsInAll() = runBlocking {
+        val id = repo().addType("瑜伽", false)
+        repo().archiveType(id)
+        assertTrue(repo().types.first().none { it.id == id })
+        assertTrue(repo().allTypes.first().any { it.id == id })
     }
 }
