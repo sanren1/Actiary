@@ -68,4 +68,10 @@
     <string name="record_keep_editing">继续编辑</string>
     <string name="record_save_failed">保存失败，请重试</string>
     <string name="record_counter">%1$d/%2$d</string>
+    <string name="tab_calendar">日历</string>
+    <string name="tab_review">回顾</string>
+    <string name="tab_stats">统计</string>
+    <string name="coming_soon">即将推出</string>
+    <string name="home_more">更多</string>
+    <string name="nav_back">返回</string>
 </resources>

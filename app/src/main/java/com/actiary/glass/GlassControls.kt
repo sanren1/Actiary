@@ -82,16 +82,17 @@ fun GlassIconButton(
     modifier: Modifier = Modifier,
     sampling: GlassSampling = GlassSampling.Content,
     backdrop: GlassBackdrop? = null,
+    enabled: Boolean = true,
 ) {
     Box(
         modifier
             .size(48.dp)
             .glassSurface(CircleShape, sampling, backdrop = backdrop)
             .clip(CircleShape)
-            .clickable(role = Role.Button, onClick = onClick),
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription, tint = LocalThemeTokens.current.neutrals.textPrimary.asColor())
+        Icon(icon, contentDescription, tint = LocalThemeTokens.current.neutrals.textPrimary.asColor().copy(alpha = if (enabled) 1f else 0.3f))
     }
 }
 

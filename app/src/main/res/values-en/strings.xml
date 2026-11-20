@@ -68,4 +68,10 @@
     <string name="record_keep_editing">Keep editing</string>
     <string name="record_save_failed">Couldn’t save. Try again.</string>
     <string name="record_counter">%1$d/%2$d</string>
+    <string name="tab_calendar">Calendar</string>
+    <string name="tab_review">Review</string>
+    <string name="tab_stats">Stats</string>
+    <string name="coming_soon">Coming soon</string>
+    <string name="home_more">More</string>
+    <string name="nav_back">Back</string>
 </resources>

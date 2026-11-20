@@ -14,7 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -31,6 +37,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
@@ -45,6 +52,10 @@ import com.actiary.data.appearance.AppearanceSettings
 import com.actiary.data.appearance.GlassLevel
 import com.actiary.data.appearance.GlassTintStrength
 import com.actiary.data.appearance.ThemeMode
+import com.actiary.glass.GlassPanel
+import com.actiary.glass.GlassPreview
+import com.actiary.glass.GlassSegmentedPicker
+import com.actiary.glass.LocalGlassProfile
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.theme.contrast
@@ -83,137 +94,139 @@ fun AppearanceScreen(
     val a = t.accent
 
     Column(
-        Modifier.fillMaxSize().background(n.background.asColor()).safeDrawingPadding()
-            .verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        Modifier.fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            .verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)
+            .navigationBarsPadding(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        BasicText(stringResource(R.string.appearance_title), style = style(n.textPrimary, 28, FontWeight.Bold))
-
-        Segmented(
-            listOf(
-                ThemeMode.LIGHT to R.string.theme_mode_light,
-                ThemeMode.DARK to R.string.theme_mode_dark,
-                ThemeMode.SYSTEM to R.string.theme_mode_system,
-            ),
-            settings.themeMode, onThemeMode,
+        // The back button floats in the host overlay at the start of this row.
+        BasicText(
+            stringResource(R.string.appearance_title),
+            Modifier.height(48.dp).padding(start = 56.dp).semantics { heading() },
+            style = style(n.textPrimary, 28, FontWeight.Bold),
         )
+        GlassPreview(t, LocalGlassProfile.current)
 
-        BasicText(stringResource(R.string.accent_title), style = style(n.textSecondary, 14))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            presets.forEach { p ->
-                val sel = settings.accentPreset == p
-                Column(
-                    Modifier.width(96.dp)
-                        .then(if (sel) Modifier.border(2.dp, a.accentStroke.asColor(), RoundedCornerShape(12.dp)) else Modifier)
-                        .semantics { selected = sel }
-                        .clickable(role = Role.Button) { onPreset(p) }
-                        .padding(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+        GlassPanel(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Segmented(
+                    listOf(
+                        ThemeMode.LIGHT to R.string.theme_mode_light,
+                        ThemeMode.DARK to R.string.theme_mode_dark,
+                        ThemeMode.SYSTEM to R.string.theme_mode_system,
+                    ),
+                    settings.themeMode, onThemeMode,
+                )
+                BasicText(stringResource(R.string.accent_title), style = style(n.textSecondary, 14))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Box(
-                        Modifier.size(40.dp).background((p.seed() ?: 0).asColor(), CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val seed = p.seed() ?: 0
-                        val checkColor = if (contrast(seed, 0xFFFFFFFF.toInt()) >= contrast(seed, 0xFF000000.toInt())) Color.White else Color.Black
-                        if (sel) Canvas(Modifier.size(20.dp)) {
-                            val path = Path().apply {
-                                moveTo(size.width * 0.15f, size.height * 0.55f)
-                                lineTo(size.width * 0.4f, size.height * 0.8f)
-                                lineTo(size.width * 0.85f, size.height * 0.25f)
+                    presets.forEach { p ->
+                        val sel = settings.accentPreset == p
+                        Column(
+                            Modifier.width(96.dp)
+                                .then(if (sel) Modifier.border(2.dp, a.accentStroke.asColor(), RoundedCornerShape(12.dp)) else Modifier)
+                                .semantics { selected = sel }
+                                .clickable(role = Role.Button) { onPreset(p) }
+                                .padding(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Box(
+                                Modifier.size(40.dp).background((p.seed() ?: 0).asColor(), CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                val seed = p.seed() ?: 0
+                                val checkColor = if (contrast(seed, 0xFFFFFFFF.toInt()) >= contrast(seed, 0xFF000000.toInt())) Color.White else Color.Black
+                                if (sel) Canvas(Modifier.size(20.dp)) {
+                                    val path = Path().apply {
+                                        moveTo(size.width * 0.15f, size.height * 0.55f)
+                                        lineTo(size.width * 0.4f, size.height * 0.8f)
+                                        lineTo(size.width * 0.85f, size.height * 0.25f)
+                                    }
+                                    drawPath(path, checkColor, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+                                }
                             }
-                            drawPath(path, checkColor, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+                            BasicText(
+                                presetName(p),
+                                style = style(n.textPrimary, 12, if (sel) FontWeight.Bold else FontWeight.Normal),
+                            )
                         }
                     }
-                    BasicText(
-                        presetName(p),
-                        style = style(n.textPrimary, 12, if (sel) FontWeight.Bold else FontWeight.Normal),
-                    )
                 }
             }
         }
 
-        BasicText(stringResource(R.string.glass_level_title), style = style(n.textSecondary, 14))
-        Segmented(
-            listOf(
-                GlassLevel.SOFT to R.string.glass_level_soft,
-                GlassLevel.BALANCED to R.string.glass_level_balanced,
-                GlassLevel.CLEAR to R.string.glass_level_clear,
-            ),
-            settings.glassLevel, onGlassLevel,
-        )
-        BasicText(stringResource(R.string.glass_tint_title), style = style(n.textSecondary, 14))
-        Segmented(
-            listOf(
-                GlassTintStrength.LOW to R.string.glass_tint_low,
-                GlassTintStrength.MEDIUM to R.string.glass_tint_medium,
-                GlassTintStrength.HIGH to R.string.glass_tint_high,
-            ),
-            settings.glassTintStrength, onGlassTint,
-        )
-        val on = settings.ambientBackground
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .semantics { toggleableState = ToggleableState(on) }
-                .clickable(role = Role.Switch) { onAmbient(!on) },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            BasicText(stringResource(R.string.ambient_title), style = style(n.textPrimary))
-            Box(
-                Modifier.size(width = 48.dp, height = 28.dp)
-                    .background(if (on) a.accentAction.asColor() else n.surfaceMuted.asColor(), CircleShape)
-                    .border(1.dp, if (on) a.accentAction.asColor() else n.divider.asColor(), CircleShape)
-                    .padding(3.dp),
-                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-            ) {
-                Box(
-                    Modifier.size(20.dp).background(if (on) a.onAccentAction.asColor() else n.textSecondary.asColor(), CircleShape),
+        GlassPanel(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                BasicText(stringResource(R.string.glass_level_title), style = style(n.textSecondary, 14))
+                Segmented(
+                    listOf(
+                        GlassLevel.SOFT to R.string.glass_level_soft,
+                        GlassLevel.BALANCED to R.string.glass_level_balanced,
+                        GlassLevel.CLEAR to R.string.glass_level_clear,
+                    ),
+                    settings.glassLevel, onGlassLevel,
                 )
+                BasicText(stringResource(R.string.glass_tint_title), style = style(n.textSecondary, 14))
+                Segmented(
+                    listOf(
+                        GlassTintStrength.LOW to R.string.glass_tint_low,
+                        GlassTintStrength.MEDIUM to R.string.glass_tint_medium,
+                        GlassTintStrength.HIGH to R.string.glass_tint_high,
+                    ),
+                    settings.glassTintStrength, onGlassTint,
+                )
+                val on = settings.ambientBackground
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .semantics { toggleableState = ToggleableState(on) }
+                        .clickable(role = Role.Switch) { onAmbient(!on) },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    BasicText(stringResource(R.string.ambient_title), style = style(n.textPrimary))
+                    Box(
+                        Modifier.size(width = 48.dp, height = 28.dp)
+                            .background(if (on) a.accentAction.asColor() else n.surfaceMuted.asColor(), CircleShape)
+                            .border(1.dp, if (on) a.accentAction.asColor() else n.divider.asColor(), CircleShape)
+                            .padding(3.dp),
+                        contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+                    ) {
+                        Box(
+                            Modifier.size(20.dp).background(if (on) a.onAccentAction.asColor() else n.textSecondary.asColor(), CircleShape),
+                        )
+                    }
+                }
             }
         }
 
-        Box(
-            Modifier.background(a.accentAction.asColor(), RoundedCornerShape(12.dp))
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-        ) { BasicText(stringResource(R.string.sample_button), style = style(a.onAccentAction)) }
-        Box(
-            Modifier.background(a.accentSubtle.asColor(), RoundedCornerShape(8.dp))
-                .border(1.dp, a.accentStroke.asColor(), RoundedCornerShape(8.dp))
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-        ) { BasicText(stringResource(R.string.sample_tag), style = style(n.textPrimary, 14)) }
-        BasicText(stringResource(R.string.sample_body), style = style(n.textPrimary))
-        BasicText(stringResource(R.string.sample_secondary), style = style(n.textSecondary, 14))
+        GlassPanel(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    Modifier.background(a.accentAction.asColor(), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                ) { BasicText(stringResource(R.string.sample_button), style = style(a.onAccentAction)) }
+                Box(
+                    Modifier.background(a.accentSubtle.asColor(), RoundedCornerShape(8.dp))
+                        .border(1.dp, a.accentStroke.asColor(), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) { BasicText(stringResource(R.string.sample_tag), style = style(n.textPrimary, 14)) }
+                BasicText(stringResource(R.string.sample_body), style = style(n.textPrimary))
+                BasicText(stringResource(R.string.sample_secondary), style = style(n.textSecondary, 14))
+            }
+        }
     }
 }
 
 @Composable
 private fun <T> Segmented(options: List<Pair<T, Int>>, current: T, onSelect: (T) -> Unit) {
-    val n = LocalThemeTokens.current.neutrals
-    Row(
-        Modifier.fillMaxWidth().background(n.surfaceMuted.asColor(), RoundedCornerShape(12.dp)).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        options.forEach { (value, label) ->
-            val sel = current == value
-            Box(
-                Modifier.weight(1f)
-                    .background(if (sel) n.surface.asColor() else Color.Transparent, RoundedCornerShape(9.dp))
-                    .semantics { selected = sel }
-                    .clickable(role = Role.Button) { onSelect(value) }
-                    .heightIn(min = 48.dp)
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                BasicText(
-                    stringResource(label),
-                    style = style(n.textPrimary, 15, if (sel) FontWeight.Bold else FontWeight.Normal),
-                )
-            }
-        }
-    }
+    GlassSegmentedPicker(
+        options.map { stringResource(it.second) },
+        options.indexOfFirst { it.first == current },
+        { onSelect(options[it].first) },
+    )
 }

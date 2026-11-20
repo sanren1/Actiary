@@ -76,7 +76,11 @@ fun DayDetail(
             }
         }
         if (detail != null && detail.record.note.isNotBlank()) {
-            BasicText(detail.record.note, style = TextStyle(primary, 15.sp), maxLines = 3, overflow = TextOverflow.Ellipsis)
+            BasicText(
+                detail.record.note,
+                Modifier.fillMaxWidth().background(t.neutrals.surface.asColor().copy(alpha = 0.72f), RoundedCornerShape(12.dp)).padding(12.dp),
+                style = TextStyle(primary, 15.sp), maxLines = 3, overflow = TextOverflow.Ellipsis,
+            )
         }
         val photos = detail?.photos.orEmpty()
         if (photos.isNotEmpty()) {
