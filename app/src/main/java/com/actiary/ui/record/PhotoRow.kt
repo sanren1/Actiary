@@ -25,6 +25,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.actiary.R
@@ -89,7 +92,11 @@ fun PhotoRow(
 @Composable
 fun PhotoViewer(photo: DraftPhoto, photoStore: PhotoStore, description: String, onDismiss: () -> Unit) {
     BackHandler(onBack = onDismiss)
-    Box(Modifier.fillMaxSize().background(Color.Black).clickable(interactionSource = null, indication = null, onClick = onDismiss)) {
+    val pane = stringResource(R.string.record_photos)
+    Box(
+        Modifier.fillMaxSize().semantics { paneTitle = pane; isTraversalGroup = true }
+            .background(Color.Black).clickable(interactionSource = null, indication = null, onClick = onDismiss),
+    ) {
         AsyncImage(model(photo, photoStore), description, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
     }
 }

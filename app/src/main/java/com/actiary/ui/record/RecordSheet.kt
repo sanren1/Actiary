@@ -49,6 +49,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -187,7 +189,7 @@ fun RecordSheet(
         val primary = t.neutrals.textPrimary.asColor()
         val secondary = t.neutrals.textSecondary.asColor()
         Column(
-            Modifier.fillMaxWidth().then(
+            Modifier.fillMaxWidth().semantics { if (viewing != null) hideFromAccessibility() }.then(
                 // closing: swallow all input until the exit animation ends
                 if (visible) Modifier else Modifier.pointerInput(Unit) {
                     awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
