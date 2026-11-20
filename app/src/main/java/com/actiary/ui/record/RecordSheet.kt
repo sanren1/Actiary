@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -74,6 +73,7 @@ import com.actiary.domain.DraftPhoto
 import com.actiary.domain.WorkoutScreenshot
 import com.actiary.domain.withRecognizedWorkout
 import com.actiary.glass.GlassDialog
+import com.actiary.glass.GlassSegmentedPicker
 import com.actiary.glass.GlassSheet
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
@@ -307,18 +307,16 @@ internal fun RecordSheet(
                         style = TextStyle(primary, 15.sp, FontWeight.Medium),
                     )
                 }
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(t.neutrals.surfaceMuted.asColor()).padding(4.dp),
-                ) {
-                    StatusSegment(R.string.record_status_workout, current.status == DayStatus.EXERCISED, Modifier.weight(1f)) {
-                        update { it.markExercised() }
-                    }
-                    StatusSegment(R.string.record_status_rest, current.status == DayStatus.REST, Modifier.weight(1f)) {
-                        if (current.status != DayStatus.REST) {
+                GlassSegmentedPicker(
+                    listOf(stringResource(R.string.record_status_workout), stringResource(R.string.record_status_rest)),
+                    if (current.status == DayStatus.REST) 1 else 0,
+                    { i ->
+                        if (i == 0) update { it.markExercised() }
+                        else if (current.status != DayStatus.REST) {
                             if (current.needsRestConfirm) showRest = true else update { it.markRest() }
                         }
-                    }
-                }
+                    },
+                )
                 val rest = current.status == DayStatus.REST
                 Section(R.string.record_activities) {
                     if (waitingForType && !rest) {
@@ -502,20 +500,6 @@ private fun Section(title: Int, counter: String? = null, content: @Composable ()
             if (counter != null) BasicText(counter, style = TextStyle(t.neutrals.textSecondary.asColor(), 12.sp))
         }
         content()
-    }
-}
-
-@Composable
-private fun StatusSegment(label: Int, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val t = LocalThemeTokens.current
-    val shape = RoundedCornerShape(50)
-    Box(
-        modifier.heightIn(min = 44.dp).clip(shape)
-            .then(if (selected) Modifier.background(t.accent.accentSubtle.asColor()).border(1.dp, t.accent.accentStroke.asColor(), shape) else Modifier)
-            .selectable(selected, role = Role.RadioButton, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        BasicText(stringResource(label), style = TextStyle(t.neutrals.textPrimary.asColor(), 15.sp, if (selected) FontWeight.SemiBold else FontWeight.Normal))
     }
 }
 

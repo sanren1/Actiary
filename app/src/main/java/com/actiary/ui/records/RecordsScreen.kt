@@ -3,9 +3,7 @@ package com.actiary.ui.records
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,14 +24,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Bedtime
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,7 +51,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -280,9 +275,10 @@ private fun SummaryCard(stats: RangeStats, kind: RangeKind, metric: ChartMetric,
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ChartMetric.entries.forEach { Chip(stringResource(it.label), null, it == metric) { onMetric(it) } }
-                }
+                GlassSegmentedPicker(
+                    ChartMetric.entries.map { stringResource(it.label) }, metric.ordinal,
+                    { onMetric(ChartMetric.entries[it]) },
+                )
                 BarChart(stats, kind, metric, colors)
             }
         }
@@ -356,37 +352,12 @@ private fun BarChart(stats: RangeStats, kind: RangeKind, metric: ChartMetric, co
 
 @Composable
 private fun FilterBar(present: List<ExerciseTypeEntity>, selected: Long?, onSelect: (Long?) -> Unit) {
-    GlassPanel(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()).padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Chip(stringResource(R.string.records_all), null, selected == null) { onSelect(null) }
-            present.forEach { type ->
-                Chip(exerciseTypeLabel(type), exerciseTypeIcon(type), selected == type.id) { onSelect(type.id) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Chip(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector?, on: Boolean, onClick: () -> Unit) {
-    val t = LocalThemeTokens.current
-    val shape = RoundedCornerShape(50)
-    val color = (if (on) t.accent.accentAction else t.neutrals.textPrimary).asColor()
-    Row(
-        Modifier.heightIn(min = 48.dp).clip(shape)
-            .then(if (on) Modifier.background(t.accent.accentSubtle.asColor()).border(2.dp, t.accent.accentStroke.asColor(), shape) else Modifier)
-            .semantics { selected = on }
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        if (on) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp), tint = color)
-        else if (icon != null) Icon(icon, null, Modifier.size(18.dp), tint = color)
-        BasicText(label, style = TextStyle(color, 14.sp, FontWeight.Medium), maxLines = 1)
-    }
+    GlassSegmentedPicker(
+        listOf(stringResource(R.string.records_all)) + present.map { exerciseTypeLabel(it) },
+        present.indexOfFirst { it.id == selected } + 1,
+        { onSelect(if (it == 0) null else present[it - 1].id) },
+        scrollable = true,
+    )
 }
 
 @Composable

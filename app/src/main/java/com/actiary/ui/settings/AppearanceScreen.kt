@@ -54,7 +54,6 @@ import com.actiary.theme.asColor
 import com.actiary.theme.contrast
 import com.actiary.theme.parseHex
 import com.actiary.theme.seed
-import com.actiary.ui.common.SolidChip
 
 private val presets = AccentPreset.entries.filter { it != AccentPreset.CUSTOM }
 
@@ -165,23 +164,14 @@ fun AppearanceScreen(
                     }
                 }
                 BasicText(stringResource(R.string.chart_palette_title), style = style(n.textSecondary, 14))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SolidChip(
-                        stringResource(R.string.chart_palette_neutral),
-                        settings.chartPalette == ChartPalette.NEUTRAL_FIRST,
-                    ) { onChartPalette(ChartPalette.NEUTRAL_FIRST) }
-                    SolidChip(
-                        stringResource(R.string.chart_palette_accent),
-                        settings.chartPalette == ChartPalette.FOLLOW_ACCENT,
-                    ) { onChartPalette(ChartPalette.FOLLOW_ACCENT) }
-                    SolidChip(
-                        stringResource(R.string.chart_palette_muted),
-                        settings.chartPalette == ChartPalette.MUTED_CATEGORIES,
-                    ) { onChartPalette(ChartPalette.MUTED_CATEGORIES) }
-                }
+                Segmented(
+                    listOf(
+                        ChartPalette.NEUTRAL_FIRST to R.string.chart_palette_neutral,
+                        ChartPalette.FOLLOW_ACCENT to R.string.chart_palette_accent,
+                        ChartPalette.MUTED_CATEGORIES to R.string.chart_palette_muted,
+                    ),
+                    settings.chartPalette, onChartPalette,
+                )
             }
         }
         SettingsRow(stringResource(R.string.settings_reset_appearance), Icons.Outlined.RestartAlt, onClick = onResetAppearance)
