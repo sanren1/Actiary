@@ -45,9 +45,6 @@ private class FakeDao : RecordDao {
     override fun observeAllTypes(): Flow<List<ExerciseTypeEntity>> = typeRows.map { list -> list.sortedWith(compareBy({ it.sortOrder }, { it.id })) }
     override suspend fun getActiveTypes() = observeTypes().first()
     override suspend fun maxTypeSortOrder() = typeRows.value.maxOfOrNull { it.sortOrder }
-    override suspend fun insertRecordIfAbsent(record: DailyRecordEntity) {
-        if (record.epochDay !in rows.value) rows.value = rows.value + (record.epochDay to DayWithDetails(record, emptyList(), emptyList()))
-    }
     override suspend fun upsertRecord(record: DailyRecordEntity) = error("unused")
     override suspend fun deleteEntries(epochDay: Long) = error("unused")
     override suspend fun deletePhotos(epochDay: Long) = error("unused")
@@ -135,15 +132,6 @@ class RecordRepositoryTest {
         val d = DayDraft.from(date, dao.get(date.toEpochDay())).removePhoto(0).addPhotos(listOf("n"))
         try { repo().save(d); fail() } catch (_: IllegalStateException) {}
         assertEquals(setOf("a.jpg", "b.jpg"), dir.list()!!.toSet())
-    }
-
-    @Test fun quickCheckInDoesNotOverwrite() = runBlocking {
-        seed()
-        repo().quickCheckIn(date)
-        assertEquals(2, dao.get(date.toEpochDay())!!.photos.size)
-        val other = date.plusDays(1)
-        repo().quickCheckIn(other)
-        assertEquals(DayStatus.EXERCISED, dao.get(other.toEpochDay())!!.record.status)
     }
 
     @Test fun clearDayDeletesRowAndFiles() = runBlocking {

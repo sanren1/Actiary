@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Settings
@@ -60,7 +59,6 @@ import com.actiary.glass.GlassBottomBar
 import com.actiary.glass.GlassBottomBarHeight
 import com.actiary.glass.GlassDialog
 import com.actiary.glass.LocalGlassProfile
-import com.actiary.glass.GlassFloatingAction
 import com.actiary.glass.GlassHost
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassOverlayPanel
@@ -190,12 +188,6 @@ class MainActivity : ComponentActivity() {
                                             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                                             .padding(top = 8.dp, end = 16.dp),
                                     )
-                                    chrome.fab?.let { label ->
-                                        GlassFloatingAction(
-                                            stringResource(label), Icons.Outlined.Edit, { editing = selected.toEpochDay() },
-                                            Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = insets.bottom + BarGap),
-                                        )
-                                    }
                                 }
                             }
                             } }

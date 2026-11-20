@@ -1,6 +1,5 @@
 package com.actiary.ui.calendar
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,9 +74,9 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 /** What the floating chrome (top bar, record button) living outside the page needs from it. */
-data class HomeChrome(val pastTitle: Boolean = false, @StringRes val fab: Int? = null)
+data class HomeChrome(val pastTitle: Boolean = false)
 
-private val FAB_CLEARANCE = 56.dp + 24.dp
+private val BOTTOM_CLEARANCE = 24.dp
 
 @Composable
 fun HomeScreen(
@@ -157,8 +156,7 @@ fun HomeScreen(
     }
     val detailScroll = rememberScrollState()
     val pastTitle = p >= 0.9f
-    val fab = if (canRecord && !loading && detail == null) R.string.home_log else null
-    LaunchedEffect(pastTitle, fab) { onChrome(HomeChrome(pastTitle, fab)) }
+    LaunchedEffect(pastTitle) { onChrome(HomeChrome(pastTitle)) }
 
     val calendarLayer = rememberGlassLayer()
     val primary = t.neutrals.textPrimary.asColor()
@@ -210,11 +208,11 @@ fun HomeScreen(
         }
         Column(
             Modifier.weight(1f).verticalScroll(detailScroll)
-                .padding(bottom = LocalFloatingInsets.current.bottom + FAB_CLEARANCE),
+                .padding(bottom = LocalFloatingInsets.current.bottom + BOTTOM_CLEARANCE),
         ) {
         GlassPanel(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
-                val editable = canRecord && !loading && detail != null
+                val editable = canRecord && !loading
                 Box(Modifier.then(if (editable) Modifier.clickable(role = Role.Button) { onEdit(selected) } else Modifier)) {
                     DayDetail(
                         title = selected.format(DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)),
@@ -222,15 +220,6 @@ fun HomeScreen(
                         types = types.associateBy { it.id },
                         photoStore = photoStore,
                         loading = loading,
-                    )
-                }
-                if (canRecord && !loading && detail == null) {
-                    BasicText(
-                        stringResource(R.string.home_quick_check_in),
-                        Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
-                            scope.launch { repository.quickCheckIn(selected) }
-                        }.padding(top = 12.dp),
-                        style = TextStyle(t.accent.accentStroke.asColor(), 15.sp, FontWeight.Medium),
                     )
                 }
             }

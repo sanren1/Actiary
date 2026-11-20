@@ -1,7 +1,6 @@
 package com.actiary.data
 
 import com.actiary.data.db.DailyRecordEntity
-import com.actiary.data.db.DayStatus
 import com.actiary.data.db.DayWithDetails
 import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
@@ -86,10 +85,6 @@ class RecordRepository(
 
     suspend fun removeType(id: Long) = withContext(io) {
         dao.removeType(id)
-    }
-
-    suspend fun quickCheckIn(date: LocalDate) {
-        dao.insertRecordIfAbsent(DailyRecordEntity(date.toEpochDay(), DayStatus.EXERCISED, "", clock()))
     }
 
     suspend fun clearDay(date: LocalDate) = withContext(io) {

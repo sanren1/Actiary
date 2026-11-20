@@ -26,9 +26,6 @@
     <string name="home_recognizing_screenshot">Reading screenshot…</string>
     <string name="home_import_failed">Couldn’t read this image. Choose a workout details screenshot from Huawei Health.</string>
     <string name="home_import_select_date">Choose the workout date shown in the screenshot.</string>
-    <string name="home_log">Log workout</string>
-    <string name="home_edit">Edit</string>
-    <string name="home_quick_check_in">Quick check-in</string>
     <string name="day_checked_in">Checked in</string>
     <string name="day_rest">Rest day</string>
     <string name="day_unrecorded">No record</string>
@@ -85,7 +82,6 @@
     <string name="settings_data">Data</string>
     <string name="settings_about">About</string>
     <string name="coming_soon">Coming soon</string>
-    <string name="home_more">More</string>
     <string name="nav_back">Back</string>
     <string name="settings_custom_types">Workout types</string>
     <string name="custom_type_title">Workout types</string>

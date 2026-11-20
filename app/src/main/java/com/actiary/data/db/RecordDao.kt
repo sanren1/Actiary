@@ -2,7 +2,6 @@ package com.actiary.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
@@ -30,9 +29,6 @@ interface RecordDao {
 
     @Query("SELECT * FROM exercise_type WHERE archived = 0 ORDER BY sortOrder, id")
     suspend fun getActiveTypes(): List<ExerciseTypeEntity>
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertRecordIfAbsent(record: DailyRecordEntity)
 
     @Upsert
     suspend fun upsertRecord(record: DailyRecordEntity)

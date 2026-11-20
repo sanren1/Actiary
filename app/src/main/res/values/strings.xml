@@ -26,9 +26,6 @@
     <string name="home_recognizing_screenshot">正在识别截图…</string>
     <string name="home_import_failed">未能识别，请选择华为运动健康的运动详情截图。</string>
     <string name="home_import_select_date">请选择截图对应的运动日期。</string>
-    <string name="home_log">记录运动</string>
-    <string name="home_edit">编辑</string>
-    <string name="home_quick_check_in">快速打卡</string>
     <string name="day_checked_in">已打卡</string>
     <string name="day_rest">休息日</string>
     <string name="day_unrecorded">未记录</string>
@@ -85,7 +82,6 @@
     <string name="settings_data">数据</string>
     <string name="settings_about">关于</string>
     <string name="coming_soon">即将推出</string>
-    <string name="home_more">更多</string>
     <string name="nav_back">返回</string>
     <string name="settings_custom_types">运动类型</string>
     <string name="custom_type_title">运动类型</string>
