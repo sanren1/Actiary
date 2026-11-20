@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [DailyRecordEntity::class, ExerciseTypeEntity::class, ExerciseEntryEntity::class, PhotoAttachmentEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class ActiaryDatabase : RoomDatabase() {
@@ -41,6 +41,17 @@ abstract class ActiaryDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """UPDATE exercise_entry
+                        SET typeId = (SELECT id FROM exercise_type WHERE builtinKey = 'freeform')
+                        WHERE typeId = (SELECT id FROM exercise_type WHERE builtinKey = 'strength')""",
+                )
+                db.execSQL("DELETE FROM exercise_type WHERE builtinKey = 'strength'")
+            }
+        }
+
         fun seedBuiltinTypes(db: SupportSQLiteDatabase) {
             BUILTIN_TYPE_KEYS.forEachIndexed { i, key ->
                 val hasDistance = if (key in DISTANCE_TYPE_KEYS) 1 else 0
@@ -55,5 +66,5 @@ fun ActiaryDatabase.Companion.build(context: Context): ActiaryDatabase =
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) = ActiaryDatabase.seedBuiltinTypes(db)
         })
-        .addMigrations(ActiaryDatabase.MIGRATION_1_2, ActiaryDatabase.MIGRATION_2_3)
+        .addMigrations(ActiaryDatabase.MIGRATION_1_2, ActiaryDatabase.MIGRATION_2_3, ActiaryDatabase.MIGRATION_3_4)
         .build()

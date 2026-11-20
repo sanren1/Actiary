@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -25,9 +27,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.actiary.R
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.ThemeTokens
 import com.actiary.theme.asColor
@@ -64,21 +68,15 @@ fun GlassPreview(tokens: ThemeTokens, profile: GlassProfile, modifier: Modifier 
                 }
                 Box(Modifier.padding(top = 16.dp).fillMaxWidth(0.6f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(n.textSecondary.asColor()))
             }
-            Row(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                GlassBottomBar(
-                    listOf(GlassTab(Icons.Filled.CalendarMonth, ""), GlassTab(Icons.Filled.Settings, "")),
-                    tab, { tab = it }, Modifier.weight(1f),
-                )
-                Box(
-                    Modifier.height(48.dp).clip(RoundedCornerShape(50)).background(tokens.accent.accentAction.asColor())
-                        .padding(horizontal = 20.dp),
-                    contentAlignment = Alignment.Center,
-                ) { Box(Modifier.size(16.dp).clip(CircleShape).background(tokens.accent.onAccentAction.asColor())) }
-            }
+            GlassBottomBar(
+                listOf(
+                    GlassTab(Icons.Outlined.CalendarMonth, stringResource(R.string.tab_calendar)),
+                    GlassTab(Icons.Outlined.PhotoLibrary, stringResource(R.string.tab_review)),
+                    GlassTab(Icons.Outlined.BarChart, stringResource(R.string.tab_stats)),
+                    GlassTab(Icons.Outlined.Settings, stringResource(R.string.tab_settings)),
+                ),
+                tab, { tab = it }, Modifier.align(Alignment.BottomCenter).padding(12.dp),
+            )
         }
     }
 }

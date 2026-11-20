@@ -22,11 +22,14 @@ interface RecordDao {
     @Query("SELECT * FROM daily_record WHERE epochDay = :epochDay")
     fun observeDay(epochDay: Long): Flow<DayWithDetails?>
 
-    @Query("SELECT * FROM exercise_type WHERE archived = 0 ORDER BY sortOrder")
+    @Query("SELECT * FROM exercise_type WHERE archived = 0 ORDER BY sortOrder, id")
     fun observeTypes(): Flow<List<ExerciseTypeEntity>>
 
-    @Query("SELECT * FROM exercise_type ORDER BY sortOrder")
+    @Query("SELECT * FROM exercise_type ORDER BY sortOrder, id")
     fun observeAllTypes(): Flow<List<ExerciseTypeEntity>>
+
+    @Query("SELECT * FROM exercise_type WHERE archived = 0 ORDER BY sortOrder, id")
+    suspend fun getActiveTypes(): List<ExerciseTypeEntity>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertRecordIfAbsent(record: DailyRecordEntity)
@@ -46,8 +49,38 @@ interface RecordDao {
     @Insert
     suspend fun insertType(type: ExerciseTypeEntity): Long
 
-    @Query("UPDATE exercise_type SET archived = 1 WHERE id = :id")
+    @Query("SELECT MAX(sortOrder) FROM exercise_type")
+    suspend fun maxTypeSortOrder(): Int?
+
+    @Transaction
+    suspend fun appendType(type: ExerciseTypeEntity): Long =
+        insertType(type.copy(sortOrder = (maxTypeSortOrder() ?: -1) + 1))
+
+    @Query("UPDATE exercise_type SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun setTypeSortOrder(id: Long, sortOrder: Int)
+
+    @Transaction
+    suspend fun moveType(id: Long, offset: Int) {
+        val types = getActiveTypes().toMutableList()
+        val index = types.indexOfFirst { it.id == id }
+        val destination = index + offset
+        if (index < 0 || destination !in types.indices) return
+        types.add(destination, types.removeAt(index))
+        types.forEachIndexed { order, type ->
+            if (type.sortOrder != order) setTypeSortOrder(type.id, order)
+        }
+    }
+
+    @Query("UPDATE exercise_type SET archived = 1 WHERE id = :id AND builtinKey IS NULL")
     suspend fun archiveType(id: Long)
+
+    @Query("DELETE FROM exercise_type WHERE id = :id AND builtinKey IS NULL AND NOT EXISTS (SELECT 1 FROM exercise_entry WHERE typeId = :id)")
+    suspend fun deleteUnusedType(id: Long): Int
+
+    @Transaction
+    suspend fun removeType(id: Long) {
+        if (deleteUnusedType(id) == 0) archiveType(id)
+    }
 
     @Insert
     suspend fun insertPhotos(photos: List<PhotoAttachmentEntity>)

@@ -1,7 +1,7 @@
 package com.actiary.ui.record
 
 private const val MAX_MINUTES = 100_000
-private const val MAX_KM_TENTHS = 100_000 // 10,000 km
+private const val MAX_KM_HUNDREDTHS = 1_000_000 // 10,000 km
 private const val MAX_CALORIES = 9999
 private const val MIN_HEART_RATE = 30
 private const val MAX_HEART_RATE = 230
@@ -9,14 +9,14 @@ private const val MAX_HEART_RATE = 230
 fun sanitizeMinutes(text: String): String =
     text.filter { it in '0'..'9' }.take(6).let { s -> s.takeIf { (it.toIntOrNull() ?: 0) <= MAX_MINUTES } ?: s.dropLast(1) }
 
-/** Keeps digits and a single separator (normalised to '.') with at most one decimal digit. */
+/** Keeps digits and a single separator (normalised to '.') with at most two decimal digits. */
 fun sanitizeKm(text: String): String {
     val sb = StringBuilder()
     var sep = false
     var decimals = 0
     for (c in text) {
         when {
-            c in '0'..'9' -> if (!sep) sb.append(c) else if (decimals < 1) { sb.append(c); decimals++ }
+            c in '0'..'9' -> if (!sep) sb.append(c) else if (decimals < 2) { sb.append(c); decimals++ }
             (c == '.' || c == ',') && !sep -> { sb.append('.'); sep = true }
         }
     }
@@ -33,17 +33,18 @@ fun parseKmToMeters(text: String): Int? {
     val s = text.replace(',', '.')
     if (s.isEmpty() || s.any { it !in '0'..'9' && it != '.' } || s.count { it == '.' } > 1) return null
     val (whole, frac) = s.split('.').let { it[0] to it.getOrElse(1) { "" } }
-    if (frac.length > 1 || (whole.isEmpty() && frac.isEmpty())) return null
-    val tenths = (whole.ifEmpty { "0" }.toIntOrNull() ?: return null).toLong() * 10 + (frac.ifEmpty { "0" }.toInt())
-    return if (tenths > MAX_KM_TENTHS) null else (tenths * 100).toInt()
+    if (frac.length > 2 || (whole.isEmpty() && frac.isEmpty())) return null
+    val hundredths = (whole.ifEmpty { "0" }.toIntOrNull() ?: return null).toLong() * 100 + frac.padEnd(2, '0').toInt()
+    return if (hundredths > MAX_KM_HUNDREDTHS) null else (hundredths * 10).toInt()
 }
 
 fun formatMinutes(minutes: Int?): String = minutes?.toString().orEmpty()
 
 fun formatKm(meters: Int?): String {
     if (meters == null) return ""
-    val tenths = (meters + 50) / 100
-    return if (tenths % 10 == 0) (tenths / 10).toString() else "${tenths / 10}.${tenths % 10}"
+    val hundredths = (meters.toLong() + 5) / 10
+    val fraction = (hundredths % 100).toString().padStart(2, '0').trimEnd('0')
+    return if (fraction.isEmpty()) (hundredths / 100).toString() else "${hundredths / 100}.$fraction"
 }
 
 fun sanitizeCalories(text: String): String = text.filter { it in '0'..'9' }.take(4)

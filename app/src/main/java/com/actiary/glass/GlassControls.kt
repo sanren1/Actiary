@@ -17,20 +17,25 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,9 +48,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
@@ -85,6 +93,7 @@ fun GlassIconButton(
     backdrop: GlassBackdrop? = null,
     enabled: Boolean = true,
     glass: Boolean = true,
+    iconSize: Dp = 24.dp,
 ) {
     Box(
         modifier
@@ -94,7 +103,10 @@ fun GlassIconButton(
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription, tint = LocalThemeTokens.current.neutrals.textPrimary.asColor().copy(alpha = if (enabled) 1f else 0.3f))
+        Icon(
+            icon, contentDescription, Modifier.size(iconSize),
+            tint = LocalThemeTokens.current.neutrals.textPrimary.asColor().copy(alpha = if (enabled) 1f else 0.3f),
+        )
     }
 }
 
@@ -172,14 +184,15 @@ fun GlassTopBar(title: String, visible: Boolean, modifier: Modifier = Modifier, 
         Row(
             Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
-                .height(56.dp)
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .heightIn(min = 56.dp)
+                .padding(start = 16.dp, top = 8.dp, end = 72.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                title, Modifier.weight(1f).semantics { heading() }, color = t.neutrals.textPrimary.asColor(),
-                fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            BasicText(
+                title, Modifier.weight(1f).semantics { heading() },
+                style = TextStyle(t.neutrals.textPrimary.asColor(), 28.sp, FontWeight.Bold),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             actions()
         }

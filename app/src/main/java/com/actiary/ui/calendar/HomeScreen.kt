@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -50,6 +49,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -172,16 +172,21 @@ fun HomeScreen(
             .padding(start = 16.dp, end = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Fixed height: once collapsed the top bar sits exactly in this slot, so the title only fades out.
+        // The collapsed top bar uses the same title slot, so the title only fades out.
         BasicText(
             stringResource(R.string.home_title),
-            Modifier.padding(top = 8.dp, end = 56.dp).height(48.dp).alpha(1f - p)
+            Modifier.fillMaxWidth().padding(top = 8.dp, end = 56.dp).heightIn(min = 48.dp).alpha(1f - p)
                 .semantics { if (pastTitle) hideFromAccessibility() else heading() },
             style = TextStyle(primary, 28.sp, FontWeight.Bold),
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         GlassPanel(Modifier.fillMaxWidth(), exported = calendarLayer) {
             Column(Modifier.padding(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     BasicText(
                         visible.format(DateTimeFormatter.ofPattern(stringResource(R.string.home_month_pattern), locale)),
                         Modifier.weight(1f).padding(start = 8.dp),
@@ -192,12 +197,12 @@ fun HomeScreen(
                     GlassIconButton(
                         Icons.AutoMirrored.Outlined.KeyboardArrowLeft, stringResource(R.string.home_prev_month),
                         { go(visible.minusMonths(1)) }, Modifier,
-                        GlassSampling.Background, calendarLayer, hasPrev,
+                        GlassSampling.Background, calendarLayer, hasPrev, iconSize = 28.dp,
                     )
                     GlassIconButton(
                         Icons.AutoMirrored.Outlined.KeyboardArrowRight, stringResource(R.string.home_next_month),
                         { go(visible.plusMonths(1)) }, Modifier,
-                        GlassSampling.Background, calendarLayer, hasNext,
+                        GlassSampling.Background, calendarLayer, hasNext, iconSize = 28.dp,
                     )
                 }
                 MonthCalendar(calendar, monthStates, selected, today, locale, onSelect, collapse = p, userScrollEnabled = p < 1f)

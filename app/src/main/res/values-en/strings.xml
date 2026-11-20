@@ -22,6 +22,10 @@
     <string name="preset_dusty_lavender">Dusty Lavender</string>
     <string name="preset_graphite">Graphite</string>
     <string name="home_title">Workouts</string>
+    <string name="home_import_screenshot">Scan workout screenshot</string>
+    <string name="home_recognizing_screenshot">Reading screenshot…</string>
+    <string name="home_import_failed">Couldn’t read this image. Choose a workout details screenshot from Huawei Health.</string>
+    <string name="home_import_select_date">Choose the workout date shown in the screenshot.</string>
     <string name="home_log">Log workout</string>
     <string name="home_edit">Edit</string>
     <string name="home_quick_check_in">Quick check-in</string>
@@ -61,6 +65,9 @@
     <string name="record_add_photos">Add photos</string>
     <string name="record_take_photo">Take photo</string>
     <string name="record_remove_photo">Remove photo</string>
+    <string name="record_remove_entry">Remove this activity entry</string>
+    <string name="record_import_select_type">Choose a workout type to fill in the scanned data.</string>
+    <string name="record_import_photo_limit">Remove one photo before saving to stay within the photo limit.</string>
     <string name="record_clear">Clear this day</string>
     <string name="record_clear_confirm">Clear this day? Photos will be deleted too.</string>
     <string name="record_rest_confirm">Selected activities will be cleared. Note and photos stay.</string>
@@ -85,6 +92,7 @@
     <string name="custom_type_name">Type name</string>
     <string name="custom_type_has_distance">Track distance</string>
     <string name="custom_type_icon">Icon</string>
+    <string name="custom_type_choose_icon">Choose an icon</string>
     <string name="icon_gym">Gym</string>
     <string name="icon_stretch">Stretching</string>
     <string name="icon_gymnastics">Gymnastics</string>
@@ -106,9 +114,11 @@
     <string name="icon_skate">Skateboarding</string>
     <string name="icon_sports">Other sports</string>
     <string name="custom_type_add">Add</string>
-    <string name="custom_type_archive">Archive</string>
-    <string name="custom_type_archive_confirm">Archived types can no longer be used for new records. Archive this type?</string>
-    <string name="custom_type_archived">Archived</string>
+    <string name="custom_type_delete">Delete</string>
+    <string name="custom_type_delete_named">Delete %1$s</string>
+    <string name="custom_type_delete_confirm">Delete this workout type? A type with records will be archived and its history kept. An unused type will be permanently deleted.</string>
+    <string name="custom_type_move_up">Move %1$s up</string>
+    <string name="custom_type_move_down">Move %1$s down</string>
     <string name="custom_type_with_distance">With distance</string>
     <string name="custom_type_no_distance">No distance</string>
 </resources>

@@ -16,11 +16,8 @@ private object TestSaverScope : SaverScope {
 class DraftSaverTest {
     private val date = LocalDate.of(2024, 2, 10)
 
-    // Saver.save has a SaverScope receiver that is awkward to invoke from Kotlin source
-    // in this Compose version; call its JVM method directly with a permissive scope.
     private fun roundTrip(draft: DayDraft?): DayDraft? {
-        val method = DraftSaver.javaClass.getMethod("save", SaverScope::class.java, Any::class.java)
-        val saved = method.invoke(DraftSaver, TestSaverScope, draft)
+        val saved = with(DraftSaver) { TestSaverScope.save(draft) } ?: return null
         return DraftSaver.restore(saved)
     }
 
@@ -29,9 +26,9 @@ class DraftSaverTest {
             date = date,
             status = DayStatus.EXERCISED,
             entries = listOf(
-                DraftEntry(1, 30, 5000, 320, 145),
-                DraftEntry(2, 45, null, null, null),
-                DraftEntry(3, null, 1200, 1, 230),
+                DraftEntry(1, 30, 5000, 320, 145, id = 4),
+                DraftEntry(1, 45, null, null, null, id = 5),
+                DraftEntry(3, null, 1200, 1, 230, id = 6),
             ),
             note = "note",
             photos = listOf(DraftPhoto.Picked("content://capture/1"), DraftPhoto.Saved("a.jpg")),

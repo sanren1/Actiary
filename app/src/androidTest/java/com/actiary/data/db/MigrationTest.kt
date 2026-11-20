@@ -21,7 +21,7 @@ class MigrationTest {
     )
 
     @Test
-    fun migrate1To2KeepsOldDataAndAddsNewColumns() = runBlocking {
+    fun migrate1To2KeepsOldDataAndAddsNewColumns() {
         // 模拟真实 v1 安装：7 个内置类型 + 1 个自定义类型 + 1 条旧条目
         val db = helper.createDatabase(TEST_DB, 1)
         listOf("running", "strength", "cycling", "swimming", "yoga", "hiking", "ball")
@@ -33,35 +33,29 @@ class MigrationTest {
         db.execSQL("INSERT INTO exercise_entry (epochDay, typeId, durationMinutes, distanceMeters, sortOrder) VALUES (100, 8, 30, 5000, 0)")
         db.close()
 
-        helper.runMigrationsAndValidate(TEST_DB, 2, true, ActiaryDatabase.MIGRATION_1_2).close()
-
-        val room = Room.databaseBuilder(
-            InstrumentationRegistry.getInstrumentation().targetContext,
-            ActiaryDatabase::class.java,
-            TEST_DB,
-        ).build()
-        try {
-            val day = room.recordDao().get(100)!!
-            val entry = day.entries.single()
-            assertEquals(30, entry.durationMinutes)
-            assertEquals(5000, entry.distanceMeters)
-            assertNull(entry.calories)
-            assertNull(entry.avgHeartRate)
-
-            val types = room.recordDao().observeAllTypes().first().filter { it.builtinKey != null }
-            assertEquals(8, types.size)
-            assertEquals("freeform", types.last().builtinKey)
-            assertEquals(
-                setOf("running", "cycling", "swimming", "hiking"),
-                types.filter { it.hasDistance }.map { it.builtinKey }.toSet(),
-            )
-        } finally {
-            room.close()
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, ActiaryDatabase.MIGRATION_1_2).use { migrated ->
+            migrated.query("SELECT durationMinutes, distanceMeters, calories, avgHeartRate FROM exercise_entry").use { entries ->
+                assertEquals(1, entries.count)
+                entries.moveToFirst()
+                assertEquals(30, entries.getInt(0))
+                assertEquals(5000, entries.getInt(1))
+                assertNull(entries.getString(2))
+                assertNull(entries.getString(3))
+            }
+            migrated.query("SELECT builtinKey FROM exercise_type WHERE builtinKey IS NOT NULL ORDER BY sortOrder").use { types ->
+                assertEquals(8, types.count)
+                types.moveToLast()
+                assertEquals("freeform", types.getString(0))
+            }
+            migrated.query("SELECT builtinKey FROM exercise_type WHERE hasDistance = 1").use { types ->
+                val keys = buildSet { while (types.moveToNext()) add(types.getString(0)) }
+                assertEquals(setOf("running", "cycling", "swimming", "hiking"), keys)
+            }
         }
     }
 
     @Test
-    fun migrate2To3DropsUnusedStrengthYogaArchivesUsedOnesAndAddsIconKey() = runBlocking {
+    fun migrate2To3DropsUnusedStrengthYogaArchivesUsedOnesAndAddsIconKey() {
         val db = helper.createDatabase(TEST_DB, 2)
         listOf("running", "strength", "cycling", "swimming", "yoga", "hiking", "ball", "freeform")
             .forEachIndexed { i, key ->
@@ -72,7 +66,49 @@ class MigrationTest {
         db.execSQL("INSERT INTO exercise_entry (epochDay, typeId, durationMinutes, distanceMeters, calories, avgHeartRate, sortOrder) VALUES (100, 2, 30, NULL, NULL, NULL, 0)")
         db.close()
 
-        helper.runMigrationsAndValidate(TEST_DB, 3, true, ActiaryDatabase.MIGRATION_2_3).close()
+        helper.runMigrationsAndValidate(TEST_DB, 3, true, ActiaryDatabase.MIGRATION_2_3).use { migrated ->
+            migrated.query("SELECT builtinKey, archived, iconKey FROM exercise_type ORDER BY sortOrder").use { types ->
+                val keys = mutableListOf<String>()
+                val archived = mutableListOf<String>()
+                while (types.moveToNext()) {
+                    val key = types.getString(0)
+                    keys.add(key)
+                    if (types.getInt(1) == 1) archived.add(key)
+                    assertNull(types.getString(2))
+                }
+                assertEquals(listOf("running", "strength", "cycling", "swimming", "hiking", "ball", "freeform"), keys)
+                assertEquals(listOf("strength"), archived)
+            }
+            migrated.query("SELECT durationMinutes FROM exercise_entry").use { entries ->
+                assertEquals(1, entries.count)
+                entries.moveToFirst()
+                assertEquals(30, entries.getInt(0))
+            }
+        }
+    }
+
+    @Test
+    fun migrate3To4MovesOnlyBuiltinStrengthEntriesToFreeform() = runBlocking {
+        helper.createDatabase(TEST_DB, 3).use { db ->
+            db.execSQL(
+                """INSERT INTO exercise_type (id, builtinKey, name, sortOrder, archived, hasDistance) VALUES
+                    (2, 'strength', NULL, 1, 1, 0),
+                    (5, 'yoga', NULL, 4, 1, 0),
+                    (8, 'freeform', NULL, 7, 0, 0),
+                    (9, NULL, 'Strength', 8, 0, 0)""",
+            )
+            db.execSQL("INSERT INTO daily_record (epochDay, status, note, updatedAt) VALUES (100, 'EXERCISED', 'training note', 1234)")
+            db.execSQL("INSERT INTO photo_attachment (id, epochDay, fileName, sortOrder, addedAt) VALUES (31, 100, 'a.jpg', 0, 1234)")
+            db.execSQL(
+                """INSERT INTO exercise_entry (id, epochDay, typeId, durationMinutes, distanceMeters, calories, avgHeartRate, sortOrder) VALUES
+                    (21, 100, 2, 30, 750, 320, 145, 0),
+                    (22, 100, 8, 45, NULL, 200, 120, 1),
+                    (23, 100, 5, 50, NULL, NULL, NULL, 2),
+                    (24, 100, 9, 60, NULL, 500, NULL, 3)""",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 4, true, ActiaryDatabase.MIGRATION_3_4).close()
 
         val room = Room.databaseBuilder(
             InstrumentationRegistry.getInstrumentation().targetContext,
@@ -80,14 +116,27 @@ class MigrationTest {
             TEST_DB,
         ).build()
         try {
-            val types = room.recordDao().observeAllTypes().first()
+            val dao = room.recordDao()
             assertEquals(
-                listOf("running", "strength", "cycling", "swimming", "hiking", "ball", "freeform"),
-                types.map { it.builtinKey },
+                listOf(
+                    ExerciseTypeEntity(5, "yoga", null, 4, archived = true),
+                    ExerciseTypeEntity(8, "freeform", null, 7),
+                    ExerciseTypeEntity(9, null, "Strength", 8),
+                ),
+                dao.observeAllTypes().first(),
             )
-            assertEquals(listOf("strength"), types.filter { it.archived }.map { it.builtinKey })
-            assertEquals(30, room.recordDao().get(100)!!.entries.single().durationMinutes)
-            assertNull(types.first().iconKey)
+            val day = dao.get(100)!!
+            assertEquals(DailyRecordEntity(100, DayStatus.EXERCISED, "training note", 1234), day.record)
+            assertEquals(listOf(PhotoAttachmentEntity(31, 100, "a.jpg", 0, 1234)), day.photos)
+            assertEquals(
+                listOf(
+                    ExerciseEntryEntity(21, 100, 8, 30, 750, 320, 145, 0),
+                    ExerciseEntryEntity(22, 100, 8, 45, null, 200, 120, 1),
+                    ExerciseEntryEntity(23, 100, 5, 50, null, null, null, 2),
+                    ExerciseEntryEntity(24, 100, 9, 60, null, 500, null, 3),
+                ),
+                day.entries.sortedBy { it.sortOrder },
+            )
         } finally {
             room.close()
         }

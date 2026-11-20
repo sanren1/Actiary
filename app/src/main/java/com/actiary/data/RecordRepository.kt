@@ -15,7 +15,6 @@ import com.actiary.domain.toDayState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.InputStream
@@ -70,21 +69,23 @@ class RecordRepository(
     }
 
     suspend fun addType(name: String, hasDistance: Boolean, iconKey: String?): Long = withContext(io) {
-        val nextSortOrder = allTypes.first().maxOfOrNull { it.sortOrder }?.plus(1) ?: 0
-        dao.insertType(
+        dao.appendType(
             ExerciseTypeEntity(
                 builtinKey = null,
                 name = name.trim(),
-                sortOrder = nextSortOrder,
-                archived = false,
+                sortOrder = 0,
                 hasDistance = hasDistance,
                 iconKey = iconKey,
             ),
         )
     }
 
-    suspend fun archiveType(id: Long) = withContext(io) {
-        dao.archiveType(id)
+    suspend fun moveType(id: Long, offset: Int) = withContext(io) {
+        dao.moveType(id, offset)
+    }
+
+    suspend fun removeType(id: Long) = withContext(io) {
+        dao.removeType(id)
     }
 
     suspend fun quickCheckIn(date: LocalDate) {

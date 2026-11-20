@@ -4,27 +4,42 @@ import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,31 +54,41 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.actiary.data.photo.recognizeWorkoutScreenshot
+import com.actiary.domain.WorkoutScreenshot
 import com.actiary.glass.GlassBottomBar
 import com.actiary.glass.GlassBottomBarHeight
 import com.actiary.glass.GlassDialog
 import com.actiary.glass.LocalGlassProfile
 import com.actiary.glass.GlassFloatingAction
 import com.actiary.glass.GlassHost
+import com.actiary.glass.GlassIconButton
+import com.actiary.glass.GlassOverlayPanel
 import com.actiary.glass.GlassTab
 import com.actiary.glass.GlassTopBar
 import com.actiary.glass.rememberGlassDegraded
 import com.actiary.glass.resolveGlass
 import com.actiary.theme.AppTheme
+import com.actiary.theme.asColor
 import com.actiary.theme.resolveTheme
 import com.actiary.ui.calendar.HomeChrome
 import com.actiary.ui.calendar.HomeScreen
 import com.actiary.ui.common.FloatingInsets
 import com.actiary.ui.common.LocalFloatingInsets
+import com.actiary.ui.common.CUSTOM_TYPE_ICONS
+import com.actiary.ui.record.DatePickerDialog
 import com.actiary.ui.record.RecordSheet
 import com.actiary.ui.review.ReviewPlaceholder
+import com.actiary.ui.settings.CustomTypeIconPicker
 import com.actiary.ui.settings.CustomTypesScreen
 import com.actiary.ui.settings.SettingsScreen
 import com.actiary.ui.stats.StatsPlaceholder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
+import java.time.YearMonth
 
 private val BarGap = 12.dp
 
@@ -91,9 +116,36 @@ class MainActivity : ComponentActivity() {
             AppTheme(tokens) {
                 var selected by rememberSaveable { mutableStateOf(LocalDate.now()) }
                 var editing by rememberSaveable { mutableStateOf<Long?>(null) }
+                var scanningUri by rememberSaveable { mutableStateOf<String?>(null) }
+                var screenshot by rememberSaveable { mutableStateOf<WorkoutScreenshot?>(null) }
+                val screenshotPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+                    scanningUri = uri?.toString()
+                }
+                LaunchedEffect(scanningUri) {
+                    val uri = scanningUri ?: return@LaunchedEffect
+                    val workout = try {
+                        recognizeWorkoutScreenshot(this@MainActivity, uri)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (workout == null) {
+                        Toast.makeText(this@MainActivity, R.string.home_import_failed, Toast.LENGTH_LONG).show()
+                    } else {
+                        screenshot = WorkoutScreenshot(uri, workout)
+                        val today = LocalDate.now()
+                        val firstDay = YearMonth.from(today).minusYears(10).atDay(1)
+                        editing = workout.date?.takeIf { it in firstDay..today }?.toEpochDay()
+                    }
+                    scanningUri = null
+                }
                 var tab by rememberSaveable { mutableStateOf(Tab.CALENDAR) }
                 var customTypes by rememberSaveable { mutableStateOf(false) }
-                var pendingArchive by rememberSaveable { mutableStateOf<Long?>(null) }
+                var pendingTypeRemoval by rememberSaveable { mutableStateOf<Long?>(null) }
+                val defaultTypeIcon = CUSTOM_TYPE_ICONS.first().key
+                var typeIcon by rememberSaveable { mutableStateOf(defaultTypeIcon) }
+                var pickingTypeIcon by rememberSaveable { mutableStateOf(false) }
                 val holder = rememberSaveableStateHolder()
                 var chrome by remember { mutableStateOf(HomeChrome()) }
                 BackHandler(tab != Tab.CALENDAR) { tab = Tab.CALENDAR }
@@ -105,7 +157,8 @@ class MainActivity : ComponentActivity() {
                 // Bar + gap above the navigation bar; the page only clears the navigation bar when the bar is absent.
                 val insets = FloatingInsets(navBar + GlassBottomBarHeight + BarGap)
                 // Behind the sheet: page and base chrome are inert for TalkBack; the base also goes flat (spec 4.1 glass cap).
-                val modalOpen = editing != null
+                val choosingWorkoutDate = screenshot != null && editing == null
+                val modalOpen = editing != null || pendingTypeRemoval != null || pickingTypeIcon || scanningUri != null || choosingWorkoutDate
                 val baseProfile = if (editing != null) profile.copy(degraded = true) else profile
                 val hideBase = Modifier.semantics { if (modalOpen) hideFromAccessibility() }
                 val tabs = listOf(
@@ -129,6 +182,14 @@ class MainActivity : ComponentActivity() {
                                     if (chrome.pastTitle) {
                                         GlassTopBar(stringResource(R.string.home_title), true, Modifier.align(Alignment.TopCenter))
                                     }
+                                    GlassIconButton(
+                                        Icons.Outlined.DocumentScanner,
+                                        stringResource(R.string.home_import_screenshot),
+                                        { screenshotPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                        Modifier.align(Alignment.TopEnd)
+                                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                                            .padding(top = 8.dp, end = 16.dp),
+                                    )
                                     chrome.fab?.let { label ->
                                         GlassFloatingAction(
                                             stringResource(label), Icons.Outlined.Edit, { editing = selected.toEpochDay() },
@@ -138,26 +199,59 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             } }
+                            val scanningLabel = stringResource(R.string.home_recognizing_screenshot)
+                            GlassOverlayPanel(
+                                visible = scanningUri != null,
+                                onDismiss = { scanningUri = null },
+                                contentPadding = PaddingValues(20.dp),
+                                title = scanningLabel,
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    CircularProgressIndicator(color = tokens.accent.accentAction.asColor())
+                                    Text(scanningLabel, color = tokens.neutrals.textPrimary.asColor())
+                                }
+                            }
+                            if (choosingWorkoutDate) {
+                                DatePickerDialog(
+                                    selected = selected.coerceAtMost(LocalDate.now()),
+                                    onSelect = { editing = it.toEpochDay() },
+                                    onDismiss = { screenshot = null },
+                                    title = stringResource(R.string.home_import_select_date),
+                                )
+                            }
                             editing?.let { day ->
                                 RecordSheet(
                                     date = LocalDate.ofEpochDay(day),
                                     repository = container.recordRepository,
                                     photoStore = container.photoStore,
-                                    onDismiss = { editing = null },
+                                    onDismiss = {
+                                        screenshot = null
+                                        editing = null
+                                    },
                                     onSaved = { selected = it },
+                                    screenshot = screenshot,
                                 )
                             }
                             GlassDialog(
-                                visible = pendingArchive != null,
-                                text = stringResource(R.string.custom_type_archive_confirm),
-                                confirm = stringResource(R.string.custom_type_archive),
+                                visible = pendingTypeRemoval != null,
+                                text = stringResource(R.string.custom_type_delete_confirm),
+                                confirm = stringResource(R.string.custom_type_delete),
                                 dismiss = stringResource(R.string.record_cancel),
                                 onConfirm = {
-                                    val id = pendingArchive
-                                    pendingArchive = null
-                                    if (id != null) lifecycleScope.launch { container.recordRepository.archiveType(id) }
+                                    val id = pendingTypeRemoval
+                                    pendingTypeRemoval = null
+                                    if (id != null) lifecycleScope.launch { container.recordRepository.removeType(id) }
                                 },
-                                onDismiss = { pendingArchive = null },
+                                onDismiss = { pendingTypeRemoval = null },
+                            )
+                            CustomTypeIconPicker(
+                                visible = pickingTypeIcon,
+                                iconKey = typeIcon,
+                                onSelect = {
+                                    typeIcon = it
+                                    pickingTypeIcon = false
+                                },
+                                onDismiss = { pickingTypeIcon = false },
                             )
                         },
                     ) {
@@ -167,7 +261,10 @@ class MainActivity : ComponentActivity() {
                                 CustomTypesScreen(
                                     repository = container.recordRepository,
                                     onBack = { customTypes = false },
-                                    onRequestArchive = { pendingArchive = it.id },
+                                    iconKey = typeIcon,
+                                    onRequestIconPicker = { pickingTypeIcon = true },
+                                    onResetIcon = { typeIcon = defaultTypeIcon },
+                                    onRequestRemoval = { pendingTypeRemoval = it },
                                 )
                             }
                         } else holder.SaveableStateProvider(tab.name) { when (tab) {

@@ -15,6 +15,7 @@ data class DraftEntry(
     val distanceMeters: Int? = null,
     val calories: Int? = null,
     val avgHeartRate: Int? = null,
+    val id: Long = 0,
 )
 
 data class DayDraft(
@@ -24,11 +25,19 @@ data class DayDraft(
     val note: String,
     val photos: List<DraftPhoto>,
 ) {
-    fun toggleType(typeId: Long): DayDraft = when {
-        status == DayStatus.REST -> this
-        entries.any { it.typeId == typeId } -> copy(entries = entries.filterNot { it.typeId == typeId })
-        else -> copy(entries = entries + DraftEntry(typeId))
+    fun toggleType(typeId: Long): DayDraft {
+        if (status == DayStatus.REST) return this
+        val matching = entries.filter { it.typeId == typeId }
+        return when (matching.size) {
+            0 -> copy(entries = entries + DraftEntry(typeId, id = (entries.maxOfOrNull { it.id } ?: 0L) + 1))
+            1 -> removeEntry(matching.single().id)
+            else -> this // Multiple sessions of this type must be removed individually.
+        }
     }
+
+    fun withEntry(entry: DraftEntry): DayDraft = copy(entries = entries.map { if (it.id == entry.id) entry else it })
+
+    fun removeEntry(id: Long): DayDraft = copy(entries = entries.filterNot { it.id == id })
 
     fun withNote(text: String): DayDraft = copy(note = text.take(NOTE_LIMIT))
 
@@ -43,7 +52,8 @@ data class DayDraft(
 
     val needsRestConfirm: Boolean get() = status == DayStatus.EXERCISED && entries.isNotEmpty()
 
-    fun isChangedFrom(original: DayDraft): Boolean = this != original
+    fun isChangedFrom(original: DayDraft): Boolean =
+        copy(entries = entries.mapIndexed { i, entry -> entry.copy(id = original.entries.getOrNull(i)?.id ?: entry.id) }) != original
 
     companion object {
         const val NOTE_LIMIT = 200
@@ -55,7 +65,7 @@ data class DayDraft(
                 date = date,
                 status = day.record.status,
                 entries = day.entries.sortedBy { it.sortOrder }
-                    .map { DraftEntry(it.typeId, it.durationMinutes, it.distanceMeters, it.calories, it.avgHeartRate) },
+                    .map { DraftEntry(it.typeId, it.durationMinutes, it.distanceMeters, it.calories, it.avgHeartRate, it.id) },
                 note = day.record.note,
                 photos = day.photos.sortedBy { it.sortOrder }.map { DraftPhoto.Saved(it.fileName) },
             )

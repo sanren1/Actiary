@@ -28,11 +28,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -68,6 +71,8 @@ import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DraftEntry
 import com.actiary.domain.DraftPhoto
+import com.actiary.domain.WorkoutScreenshot
+import com.actiary.domain.withRecognizedWorkout
 import com.actiary.glass.GlassDialog
 import com.actiary.glass.GlassSheet
 import com.actiary.theme.LocalThemeTokens
@@ -95,6 +100,7 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
             ArrayList(d.photos.map { if (it is DraftPhoto.Saved) "s:${it.fileName}" else "p:${(it as DraftPhoto.Picked).uri}" }),
             ArrayList(d.entries.map { it.calories ?: -1 }),
             ArrayList(d.entries.map { it.avgHeartRate ?: -1 }),
+            ArrayList(d.entries.map { it.id }),
         )
     },
     restore = { v ->
@@ -105,6 +111,7 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
             val dist = l[5] as List<Int>
             val cal = l.getOrElse(7) { emptyList<Int>() } as List<Int>
             val hr = l.getOrElse(8) { emptyList<Int>() } as List<Int>
+            val entryIds = l.getOrElse(9) { emptyList<Long>() } as List<Long>
             DayDraft(
                 date = LocalDate.ofEpochDay(l[0] as Long),
                 status = DayStatus.valueOf(l[1] as String),
@@ -115,6 +122,7 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
                         dist[i].takeIf { it >= 0 },
                         cal.getOrElse(i) { -1 }.takeIf { it >= 0 },
                         hr.getOrElse(i) { -1 }.takeIf { it >= 0 },
+                        entryIds.getOrElse(i) { -i.toLong() - 1 },
                     )
                 },
                 note = l[2] as String,
@@ -124,7 +132,7 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
     },
 )
 
-private val InvalidTypesSaver = Saver<Set<Long>, List<Long>>(
+private val InvalidEntryIdsSaver = Saver<Set<Long>, List<Long>>(
     save = { it.toList() },
     restore = { it.toSet() },
 )
@@ -135,12 +143,13 @@ private val CapturePathsSaver = Saver<MutableList<String>, List<String>>(
 )
 
 @Composable
-fun RecordSheet(
+internal fun RecordSheet(
     date: LocalDate,
     repository: RecordRepository,
     photoStore: PhotoStore,
     onDismiss: () -> Unit,
     onSaved: (LocalDate) -> Unit = {},
+    screenshot: WorkoutScreenshot? = null,
 ) {
     val t = LocalThemeTokens.current
     val locale = LocalConfiguration.current.locales[0]
@@ -159,7 +168,8 @@ fun RecordSheet(
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var viewing by rememberSaveable { mutableStateOf<Int?>(null) }
     var showInvalid by rememberSaveable { mutableStateOf(false) }
-    var invalidTypes by rememberSaveable(stateSaver = InvalidTypesSaver) { mutableStateOf(emptySet<Long>()) }
+    var waitingForType by rememberSaveable { mutableStateOf(false) }
+    var invalidEntryIds by rememberSaveable(stateSaver = InvalidEntryIdsSaver) { mutableStateOf(emptySet<Long>()) }
     var pendingCapturePath by rememberSaveable { mutableStateOf<String?>(null) }
     var capturePaths by rememberSaveable(stateSaver = CapturePathsSaver) { mutableStateOf(mutableListOf<String>()) }
     val types by repository.types.collectAsState(emptyList())
@@ -168,11 +178,20 @@ fun RecordSheet(
     suspend fun load(d: LocalDate) {
         try {
             val day = repository.observeDay(d).first()
-            original = DayDraft.from(d, day)
-            draft = original
+            val base = DayDraft.from(d, day)
+            val detectedType = screenshot?.workout?.typeKey?.let { key ->
+                repository.types.first().firstOrNull { it.builtinKey == key }
+            }
+            original = base
+            waitingForType = screenshot != null && detectedType == null
+            draft = if (screenshot == null) base else {
+                // Keep all existing photos in the draft. A full day needs a removal before saving.
+                val imported = base.markExercised().copy(photos = base.photos + DraftPhoto.Picked(screenshot.uri))
+                if (detectedType == null) imported else imported.withRecognizedWorkout(screenshot.workout, detectedType)
+            }
             existing = day != null
             failed = false
-            invalidTypes = emptySet()
+            invalidEntryIds = emptySet()
             showInvalid = false
         } catch (e: CancellationException) {
             throw e
@@ -192,9 +211,11 @@ fun RecordSheet(
     }
     fun close() { cleanupCaptures(); visible = false }
     fun requestClose() { if (saving || !visible) return; if (dirty) showDiscard = true else close() }
-    fun update(f: (DayDraft) -> DayDraft) { showInvalid = false; draft = draft?.let(f) }
-    fun onEntryValidity(typeId: Long, valid: Boolean) {
-        invalidTypes = if (valid) invalidTypes - typeId else invalidTypes + typeId
+    fun update(f: (DayDraft) -> DayDraft) {
+        showInvalid = false
+        val updated = draft?.let(f) ?: return
+        invalidEntryIds = invalidEntryIds.intersect(updated.entries.map { it.id }.toSet())
+        draft = updated
     }
 
     val remaining = DayDraft.PHOTO_LIMIT - (current?.photos?.size ?: 0)
@@ -298,23 +319,49 @@ fun RecordSheet(
                 }
                 val rest = current.status == DayStatus.REST
                 Section(R.string.record_activities) {
+                    if (waitingForType && !rest) {
+                        BasicText(
+                            stringResource(R.string.record_import_select_type),
+                            style = TextStyle(primary, 14.sp, FontWeight.Medium),
+                        )
+                    }
+                    val entryCounts = current.entries.groupingBy { it.typeId }.eachCount()
                     Column(Modifier.alpha(if (rest) 0.4f else 1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         types.filter { !it.archived }.chunked(4).forEach { row ->
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 row.forEach { type ->
-                                    TypeCell(type, current.entries.any { it.typeId == type.id }, !rest, Modifier.weight(1f)) {
-                                        update { it.toggleType(type.id) }
+                                    val count = entryCounts[type.id] ?: 0
+                                    val enabled = !rest && (count < 2 || waitingForType)
+                                    TypeCell(type, count > 0, enabled, Modifier.weight(1f).alpha(if (!enabled && count > 1) 0.55f else 1f)) {
+                                        if (waitingForType && screenshot != null) {
+                                            update { it.withRecognizedWorkout(screenshot.workout, type) }
+                                            waitingForType = false
+                                        } else {
+                                            update { it.toggleType(type.id) }
+                                        }
                                     }
                                 }
                                 repeat(4 - row.size) { Box(Modifier.weight(1f)) }
                             }
                         }
                     }
-                    current.entries.forEach { entry ->
-                        val type = allTypes.firstOrNull { it.id == entry.typeId } ?: return@forEach
-                        EntryFields(current.date, type, entry, { e ->
-                            update { d -> d.copy(entries = d.entries.map { if (it.typeId == e.typeId) e else it }) }
-                        }) { id, valid -> onEntryValidity(id, valid) }
+                    if (!waitingForType) {
+                        current.entries.forEach { entry ->
+                            val type = allTypes.firstOrNull { it.id == entry.typeId } ?: return@forEach
+                            key(current.date.toEpochDay(), entry.id, entry.typeId) {
+                                EntryFields(
+                                    type = type,
+                                    entry = entry,
+                                    onChange = { e -> update { it.withEntry(e) } },
+                                    onRemove = if (entryCounts.getValue(type.id) > 1) {
+                                        { update { it.removeEntry(entry.id) } }
+                                    } else null,
+                                    onValidity = { valid ->
+                                        invalidEntryIds = if (valid) invalidEntryIds - entry.id else invalidEntryIds + entry.id
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
                 Section(R.string.record_note) {
@@ -363,13 +410,21 @@ fun RecordSheet(
                         style = TextStyle(t.accent.accentStroke.asColor(), 14.sp, FontWeight.Medium),
                     )
                 }
-                val canSave = current != null && !saving && visible
+                if (remaining < 0) {
+                    BasicText(
+                        stringResource(R.string.record_import_photo_limit),
+                        Modifier.padding(bottom = 8.dp),
+                        style = TextStyle(primary, 14.sp, FontWeight.Medium),
+                    )
+                }
+                val canSave = current != null && !saving && visible && remaining >= 0 &&
+                    (!waitingForType || current.status == DayStatus.REST)
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(if (canSave) 1f else 0.5f).clip(RoundedCornerShape(50))
                         .background(t.accent.accentAction.asColor())
                         .clickable(enabled = canSave, role = Role.Button) {
                             current?.let { d ->
-                                if (d.entries.any { it.typeId in invalidTypes }) {
+                                if (d.entries.any { it.id in invalidEntryIds }) {
                                     showInvalid = true
                                     return@let
                                 }
@@ -495,24 +550,24 @@ private fun entryInputInvalid(
 
 @Composable
 private fun EntryFields(
-    date: LocalDate,
     type: ExerciseTypeEntity,
     entry: DraftEntry,
     onChange: (DraftEntry) -> Unit,
-    onValidity: (Long, Boolean) -> Unit,
+    onRemove: (() -> Unit)?,
+    onValidity: (Boolean) -> Unit,
 ) {
     val t = LocalThemeTokens.current
     val hasDistance = type.hasDistance
     val swimming = type.builtinKey == "swimming"
-    var minutes by rememberSaveable(date.toEpochDay(), type.id) { mutableStateOf(formatMinutes(entry.durationMinutes)) }
-    var distance by rememberSaveable(date.toEpochDay(), type.id) {
+    var minutes by rememberSaveable { mutableStateOf(formatMinutes(entry.durationMinutes)) }
+    var distance by rememberSaveable {
         mutableStateOf(formatDistance(entry.distanceMeters, type.builtinKey, hasDistance))
     }
-    var calories by rememberSaveable(date.toEpochDay(), type.id) { mutableStateOf(formatCalories(entry.calories)) }
-    var heartRate by rememberSaveable(date.toEpochDay(), type.id) { mutableStateOf(formatHeartRate(entry.avgHeartRate)) }
+    var calories by rememberSaveable { mutableStateOf(formatCalories(entry.calories)) }
+    var heartRate by rememberSaveable { mutableStateOf(formatHeartRate(entry.avgHeartRate)) }
 
-    fun report() = onValidity(type.id, !entryInputInvalid(distance, hasDistance, swimming, calories, heartRate))
-    LaunchedEffect(type.id) { report() }
+    fun report() = onValidity(!entryInputInvalid(distance, hasDistance, swimming, calories, heartRate))
+    LaunchedEffect(Unit) { report() }
 
     Column(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -537,7 +592,13 @@ private fun EntryFields(
             }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Spacer(Modifier.width(72.dp)) // aligns this row's fields with the row above
+            Box(Modifier.width(72.dp)) { // aligns this row's fields with the row above
+                if (onRemove != null) {
+                    IconButton(onClick = onRemove, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Outlined.Close, stringResource(R.string.record_remove_entry), tint = t.neutrals.textPrimary.asColor())
+                    }
+                }
+            }
             NumberField(R.string.record_calories, calories, Modifier.weight(1f), KeyboardType.Number) {
                 calories = sanitizeCalories(it)
                 onChange(entry.copy(calories = parseCalories(calories)))

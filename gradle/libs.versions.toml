@@ -14,6 +14,7 @@ materialIcons = "1.7.8"
 androidxTestExt = "1.2.1"
 androidxTestRunner = "1.6.2"
 core = "1.15.0"
+mlkitTextChinese = "16.0.1"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -34,6 +35,7 @@ coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" 
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExt" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 androidx-core = { module = "androidx.core:core", version.ref = "core" }
+mlkit-text-chinese = { module = "com.google.mlkit:text-recognition-chinese", version.ref = "mlkitTextChinese" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

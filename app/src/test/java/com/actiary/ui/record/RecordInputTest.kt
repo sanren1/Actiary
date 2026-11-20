@@ -24,7 +24,8 @@ class RecordInputTest {
         assertNull(parseKmToMeters(""))
         assertNull(parseKmToMeters("."))
         assertNull(parseKmToMeters("-1"))
-        assertNull(parseKmToMeters("5.25"))
+        assertEquals(5250, parseKmToMeters("5.25"))
+        assertNull(parseKmToMeters("5.251"))
         assertNull(parseKmToMeters("1.2.3"))
         assertNull(parseKmToMeters("abc"))
         assertNull(parseKmToMeters("99999999"))
@@ -32,8 +33,8 @@ class RecordInputTest {
 
     @Test fun sanitize() {
         assertEquals("5.2", sanitizeKm("5,2"))
-        assertEquals("5.2", sanitizeKm("5.25"))
-        assertEquals("5.2", sanitizeKm("5.2.3"))
+        assertEquals("5.25", sanitizeKm("5.251"))
+        assertEquals("5.23", sanitizeKm("5.2.3"))
         assertEquals("12", sanitizeKm("1a2"))
         assertEquals("45", sanitizeMinutes("4x5"))
         assertEquals("100000", sanitizeMinutes("100000"))
@@ -48,6 +49,7 @@ class RecordInputTest {
     @Test fun format() {
         assertEquals("5", formatKm(5000))
         assertEquals("5.2", formatKm(5200))
+        assertEquals("4.23", formatKm(4230))
         assertEquals("0.1", formatKm(100))
         assertEquals("", formatKm(null))
         assertEquals("30", formatMinutes(30))

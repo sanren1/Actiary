@@ -41,8 +41,10 @@ private class FakeDao : RecordDao {
     }
     override suspend fun get(epochDay: Long) = rows.value[epochDay]
     override fun observeDay(epochDay: Long) = rows.map { it[epochDay] }
-    override fun observeTypes(): Flow<List<ExerciseTypeEntity>> = typeRows.map { list -> list.filter { !it.archived } }
-    override fun observeAllTypes(): Flow<List<ExerciseTypeEntity>> = typeRows
+    override fun observeTypes(): Flow<List<ExerciseTypeEntity>> = observeAllTypes().map { list -> list.filter { !it.archived } }
+    override fun observeAllTypes(): Flow<List<ExerciseTypeEntity>> = typeRows.map { list -> list.sortedWith(compareBy({ it.sortOrder }, { it.id })) }
+    override suspend fun getActiveTypes() = observeTypes().first()
+    override suspend fun maxTypeSortOrder() = typeRows.value.maxOfOrNull { it.sortOrder }
     override suspend fun insertRecordIfAbsent(record: DailyRecordEntity) {
         if (record.epochDay !in rows.value) rows.value = rows.value + (record.epochDay to DayWithDetails(record, emptyList(), emptyList()))
     }
@@ -56,7 +58,17 @@ private class FakeDao : RecordDao {
         return id
     }
     override suspend fun archiveType(id: Long) {
-        typeRows.value = typeRows.value.map { if (it.id == id) it.copy(archived = true) else it }
+        typeRows.value = typeRows.value.map { if (it.id == id && it.builtinKey == null) it.copy(archived = true) else it }
+    }
+    override suspend fun deleteUnusedType(id: Long): Int {
+        val original = typeRows.value
+        val used = rows.value.values.any { day -> day.entries.any { it.typeId == id } }
+        if (used) return 0
+        typeRows.value = original.filterNot { it.id == id && it.builtinKey == null }
+        return original.size - typeRows.value.size
+    }
+    override suspend fun setTypeSortOrder(id: Long, sortOrder: Int) {
+        typeRows.value = typeRows.value.map { if (it.id == id) it.copy(sortOrder = sortOrder) else it }
     }
     override suspend fun insertPhotos(photos: List<PhotoAttachmentEntity>) = error("unused")
     override suspend fun replaceDay(
@@ -173,10 +185,19 @@ class RecordRepositoryTest {
         assertEquals(6, t.sortOrder)
     }
 
-    @Test fun archiveTypeHidesFromTypesButKeepsInAll() = runBlocking {
+    @Test fun removeUsedTypeHidesFromTypesButKeepsInAll() = runBlocking {
         val id = repo().addType("瑜伽", false, null)
-        repo().archiveType(id)
+        repo().save(draft().toggleType(id))
+        repo().removeType(id)
         assertTrue(repo().types.first().none { it.id == id })
-        assertTrue(repo().allTypes.first().any { it.id == id })
+        assertTrue(repo().allTypes.first().single { it.id == id }.archived)
+        assertEquals(id, repo().observeDay(date).first()!!.entries.single().typeId)
+    }
+
+    @Test fun moveTypeChangesRecordingOrder() = runBlocking {
+        val running = dao.insertType(ExerciseTypeEntity(builtinKey = "running", name = null, sortOrder = 0))
+        val climbing = repo().addType("攀岩", false, "climb")
+        repo().moveType(climbing, -1)
+        assertEquals(listOf(climbing, running), repo().types.first().map { it.id })
     }
 }

@@ -13,8 +13,8 @@ android {
         applicationId = "com.actiary"
         minSdk = 31
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.6.0"
+        versionCode = 7
+        versionName = "0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -57,6 +57,7 @@ dependencies {
     implementation(libs.calendar.compose)
     implementation(libs.coil.compose)
     implementation(libs.androidx.core)
+    implementation(libs.mlkit.text.chinese)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)

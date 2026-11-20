@@ -22,6 +22,10 @@
     <string name="preset_dusty_lavender">雾紫灰</string>
     <string name="preset_graphite">石墨灰</string>
     <string name="home_title">运动记录</string>
+    <string name="home_import_screenshot">识别运动截图</string>
+    <string name="home_recognizing_screenshot">正在识别截图…</string>
+    <string name="home_import_failed">未能识别，请选择华为运动健康的运动详情截图。</string>
+    <string name="home_import_select_date">请选择截图对应的运动日期。</string>
     <string name="home_log">记录运动</string>
     <string name="home_edit">编辑</string>
     <string name="home_quick_check_in">快速打卡</string>
@@ -61,6 +65,9 @@
     <string name="record_add_photos">添加照片</string>
     <string name="record_take_photo">拍一张</string>
     <string name="record_remove_photo">移除照片</string>
+    <string name="record_remove_entry">删除此条运动</string>
+    <string name="record_import_select_type">请选择运动类型，以填入识别到的数据。</string>
+    <string name="record_import_photo_limit">照片已超过上限，请移除一张后再保存。</string>
     <string name="record_clear">清除这天的记录</string>
     <string name="record_clear_confirm">确定清除？照片也会删除。</string>
     <string name="record_rest_confirm">将清除已选运动，备注和照片会保留。</string>
@@ -85,6 +92,7 @@
     <string name="custom_type_name">类型名称</string>
     <string name="custom_type_has_distance">记录距离</string>
     <string name="custom_type_icon">图标</string>
+    <string name="custom_type_choose_icon">选择图标</string>
     <string name="icon_gym">健身房</string>
     <string name="icon_stretch">拉伸</string>
     <string name="icon_gymnastics">体操</string>
@@ -106,9 +114,11 @@
     <string name="icon_skate">滑板</string>
     <string name="icon_sports">其他运动</string>
     <string name="custom_type_add">添加</string>
-    <string name="custom_type_archive">归档</string>
-    <string name="custom_type_archive_confirm">归档后该类型将不再用于新记录，确定归档？</string>
-    <string name="custom_type_archived">已归档</string>
+    <string name="custom_type_delete">删除</string>
+    <string name="custom_type_delete_named">删除%1$s</string>
+    <string name="custom_type_delete_confirm">删除这个运动类型？已有记录的类型会归档，历史记录会保留。未使用的类型将永久删除。</string>
+    <string name="custom_type_move_up">上移%1$s</string>
+    <string name="custom_type_move_down">下移%1$s</string>
     <string name="custom_type_with_distance">带距离</string>
     <string name="custom_type_no_distance">不带距离</string>
 </resources>

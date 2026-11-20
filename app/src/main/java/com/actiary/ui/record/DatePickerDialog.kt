@@ -3,6 +3,7 @@ package com.actiary.ui.record
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassOverlayPanel
@@ -35,7 +36,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 
 @Composable
-fun DatePickerDialog(selected: LocalDate, onSelect: (LocalDate) -> Unit, onDismiss: () -> Unit) {
+fun DatePickerDialog(selected: LocalDate, onSelect: (LocalDate) -> Unit, onDismiss: () -> Unit, title: String = "") {
     val t = LocalThemeTokens.current
     val locale = LocalConfiguration.current.locales[0]
     val today = LocalDate.now()
@@ -48,7 +49,10 @@ fun DatePickerDialog(selected: LocalDate, onSelect: (LocalDate) -> Unit, onDismi
     )
     val scope = rememberCoroutineScope()
     val month = state.firstVisibleMonth.yearMonth
-    GlassOverlayPanel(true, onDismiss, PaddingValues(16.dp)) {
+    GlassOverlayPanel(true, onDismiss, PaddingValues(16.dp), title = title) {
+        if (title.isNotEmpty()) {
+            BasicText(title, Modifier.padding(bottom = 8.dp), style = TextStyle(t.neutrals.textPrimary.asColor(), 16.sp, FontWeight.Medium))
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BasicText(
                 month.format(DateTimeFormatter.ofPattern(stringResource(R.string.home_month_pattern), locale)),

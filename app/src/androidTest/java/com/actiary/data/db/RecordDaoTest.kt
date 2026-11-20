@@ -56,10 +56,10 @@ class RecordDaoTest {
     }
 
     @Test
-    fun archivedTypeReferencedByEntryRemainsReadable() = runBlocking {
+    fun removingTypeReferencedByEntryArchivesItAndPreservesHistory() = runBlocking {
         val typeId = dao.insertType(ExerciseTypeEntity(builtinKey = null, name = "custom", sortOrder = 99))
         dao.replaceDay(record(20), listOf(entry(20, typeId)), emptyList())
-        dao.archiveType(typeId)
+        dao.removeType(typeId)
 
         assertTrue(typeId !in dao.observeTypes().first().map { it.id })
         assertTrue(typeId in dao.observeAllTypes().first().map { it.id })
@@ -74,6 +74,33 @@ class RecordDaoTest {
         } catch (expected: SQLiteConstraintException) {
             // 引用仍在，只能归档不能删除
         }
+    }
+
+    @Test
+    fun removingUnusedTypeDeletesOnlyCustomType() = runBlocking {
+        val builtin = dao.observeTypes().first().first()
+        val custom = dao.insertType(ExerciseTypeEntity(builtinKey = null, name = "custom", sortOrder = 99))
+        dao.removeType(custom)
+        dao.removeType(builtin.id)
+
+        assertTrue(dao.observeAllTypes().first().none { it.id == custom })
+        assertEquals(builtin, dao.observeTypes().first().first())
+    }
+
+    @Test
+    fun moveTypeUsesActiveOrderAndHandlesTiedSortValues() = runBlocking {
+        val initial = dao.observeTypes().first().map { it.id }
+        val custom = dao.insertType(ExerciseTypeEntity(builtinKey = null, name = "custom", sortOrder = 0))
+        val archived = dao.insertType(ExerciseTypeEntity(builtinKey = null, name = "archived", sortOrder = 0, archived = true))
+
+        dao.moveType(custom, -1)
+        dao.moveType(archived, 1)
+        dao.moveType(custom, -1)
+        assertEquals(listOf(custom) + initial, dao.observeTypes().first().map { it.id })
+
+        dao.moveType(initial.first(), 1)
+        assertEquals(listOf(custom, initial[1], initial.first()) + initial.drop(2), dao.observeTypes().first().map { it.id })
+        assertTrue(dao.observeAllTypes().first().single { it.id == archived }.archived)
     }
 
     @Test
