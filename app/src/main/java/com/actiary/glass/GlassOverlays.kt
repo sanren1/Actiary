@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,6 +56,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -113,6 +116,24 @@ fun GlassDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val t = LocalThemeTokens.current
+    GlassOverlayPanel(visible, onDismiss, PaddingValues(start = 24.dp, top = 24.dp, end = 12.dp, bottom = 8.dp)) {
+        Text(text, color = t.neutrals.textPrimary.asColor(), modifier = Modifier.padding(end = 12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onDismiss, Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = t.neutrals.textSecondary.asColor())) { Text(dismiss) }
+            TextButton(onConfirm, Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = t.accent.accentAction.asColor())) { Text(confirm) }
+        }
+    }
+}
+
+/** Centered glass panel over a scrim; back and scrim tap call [onDismiss]. */
+@Composable
+fun GlassOverlayPanel(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    contentPadding: PaddingValues,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     BackHandler(visible, onDismiss)
     val still = rememberAnimationsOff()
     AnimatedVisibility(
@@ -129,26 +150,29 @@ fun GlassDialog(
                     .glassSurface(shape, GlassSampling.Content)
                     .background(t.neutrals.surface.asColor().copy(alpha = 0.72f), shape)
                     .consumeTaps()
-                    .padding(start = 24.dp, top = 24.dp, end = 12.dp, bottom = 8.dp),
-            ) {
-                Text(text, color = t.neutrals.textPrimary.asColor(), modifier = Modifier.padding(end = 12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onDismiss, Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = t.neutrals.textSecondary.asColor())) { Text(dismiss) }
-                    TextButton(onConfirm, Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = t.accent.accentAction.asColor())) { Text(confirm) }
-                }
-            }
+                    .padding(contentPadding),
+                content = content,
+            )
         }
     }
 }
 
 /**
  * Closing is the caller's call: [onRequestClose] fires on scrim tap, back and a long enough downward drag.
- * The sheet owns imePadding; callers must not add it again.
+ * The sheet owns imePadding; callers must not add it again. [onExited] fires after the exit animation when [visible] is false.
  */
 @Composable
-fun GlassSheet(visible: Boolean, onRequestClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun GlassSheet(
+    visible: Boolean,
+    onRequestClose: () -> Unit,
+    onExited: () -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
+) {
     BackHandler(visible, onRequestClose)
     val still = rememberAnimationsOff()
+    val exited by rememberUpdatedState(onExited)
+    // Slide-out is a ~300ms default transition; report once it has finished (immediately when animations are off).
+    LaunchedEffect(visible) { if (!visible) { if (!still) delay(350); exited() } }
     val t = LocalThemeTokens.current
     val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     BoxWithConstraints(Modifier.fillMaxSize()) {

@@ -1,6 +1,5 @@
 package com.actiary.ui.record
 
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,14 +10,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -30,13 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -44,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -53,6 +44,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -70,6 +63,8 @@ import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DraftEntry
 import com.actiary.domain.DraftPhoto
+import com.actiary.glass.GlassDialog
+import com.actiary.glass.GlassSheet
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseTypeIcon
@@ -111,7 +106,6 @@ private val DraftSaver = Saver<DayDraft?, Any>(
     },
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordSheet(
     date: LocalDate,
@@ -126,6 +120,7 @@ fun RecordSheet(
     var draft by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<DayDraft?>(null) }
     var original by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<DayDraft?>(null) }
     var existing by rememberSaveable { mutableStateOf(false) }
+    var visible by rememberSaveable { mutableStateOf(true) } // false = sheet sliding out; onDismiss fires once it is gone
     var saving by remember { mutableStateOf(false) } // not saved: the coroutine does not survive recreation
     var failed by rememberSaveable { mutableStateOf(false) }
     var showDiscard by rememberSaveable { mutableStateOf(false) }
@@ -154,19 +149,11 @@ fun RecordSheet(
 
     val current = draft
     val dirty = current != null && original?.let { current.isChangedFrom(it) } == true
-    val dirtyNow by rememberUpdatedState(dirty)
-    val savingNow by rememberUpdatedState(saving)
-    fun requestClose() { if (saving) return; if (dirty) showDiscard = true else onDismiss() }
+    var entered by remember { mutableStateOf(false) } // starts hidden so the slide-in plays
+    LaunchedEffect(Unit) { entered = true }
+    fun close() { visible = false }
+    fun requestClose() { if (saving || !visible) return; if (dirty) showDiscard = true else close() }
     fun update(f: (DayDraft) -> DayDraft) { draft = draft?.let(f) }
-
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true,
-        confirmValueChange = { target ->
-            if (target != SheetValue.Hidden) true
-            else if (savingNow) false
-            else if (dirtyNow) { showDiscard = true; false } else true
-        },
-    )
 
     val remaining = DayDraft.PHOTO_LIMIT - (current?.photos?.size ?: 0)
     // PickMultipleVisualMedia requires maxItems >= 2; the single picker covers the last slot.
@@ -196,52 +183,29 @@ fun RecordSheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = { requestClose() },
-        sheetState = sheetState,
-        containerColor = t.neutrals.surface.asColor(),
-        dragHandle = {
-            Box(Modifier.padding(vertical = 12.dp).size(36.dp, 4.dp).background(t.neutrals.divider.asColor(), RoundedCornerShape(2.dp)))
-        },
-        contentWindowInsets = { WindowInsets.navigationBars.union(WindowInsets.ime) },
-    ) {
-        BackHandler { requestClose() }
+    GlassSheet(visible && entered, onRequestClose = { requestClose() }, onExited = { if (!visible) onDismiss() }) {
         val primary = t.neutrals.textPrimary.asColor()
         val secondary = t.neutrals.textSecondary.asColor()
-        Column(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.fillMaxWidth().then(
+                // closing: swallow all input until the exit animation ends
+                if (visible) Modifier else Modifier.pointerInput(Unit) {
+                    awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
+                },
+            ),
+        ) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.heightIn(min = 48.dp).clickable(enabled = !saving, role = Role.Button) { requestClose() }.padding(horizontal = 8.dp),
+                    Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).clickable(enabled = !saving, role = Role.Button) { requestClose() }.padding(horizontal = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) { BasicText(stringResource(R.string.record_cancel), style = TextStyle(primary, 16.sp)) }
                 BasicText(
                     stringResource(R.string.record_title), Modifier.weight(1f),
                     style = TextStyle(primary, 17.sp, FontWeight.SemiBold, textAlign = TextAlign.Center),
                 )
-                val canSave = current != null && !saving
-                Box(
-                    Modifier.heightIn(min = 48.dp).alpha(if (canSave) 1f else 0.5f).clip(RoundedCornerShape(50))
-                        .background(t.accent.accentAction.asColor())
-                        .clickable(enabled = canSave, role = Role.Button) {
-                            current?.let { d ->
-                                launchOp({ repository.save(d) }) {
-                                    onSaved(d.date)
-                                    onDismiss()
-                                }
-                            }
-                        }.padding(horizontal = 20.dp),
-                    contentAlignment = Alignment.Center,
-                ) { BasicText(stringResource(R.string.record_save), style = TextStyle(t.accent.onAccentAction.asColor(), 15.sp, FontWeight.SemiBold)) }
+                Spacer(Modifier.width(64.dp)) // balances Cancel so the title stays centered
             }
-            if (failed) {
-                BasicText(
-                    stringResource(R.string.record_save_failed),
-                    Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    style = TextStyle(primary, 14.sp, FontWeight.Medium),
-                )
-            }
-            if (current == null) return@Column
-            Column(
+            if (current != null) Column(
                 Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
@@ -320,6 +284,29 @@ fun RecordSheet(
                     )
                 }
             }
+            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                if (failed) {
+                    BasicText(
+                        stringResource(R.string.record_save_failed),
+                        Modifier.padding(bottom = 8.dp),
+                        style = TextStyle(primary, 14.sp, FontWeight.Medium),
+                    )
+                }
+                val canSave = current != null && !saving && visible
+                Box(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(if (canSave) 1f else 0.5f).clip(RoundedCornerShape(50))
+                        .background(t.accent.accentAction.asColor())
+                        .clickable(enabled = canSave, role = Role.Button) {
+                            current?.let { d ->
+                                launchOp({ repository.save(d) }) {
+                                    onSaved(d.date)
+                                    close()
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) { BasicText(stringResource(R.string.record_save), style = TextStyle(t.accent.onAccentAction.asColor(), 16.sp, FontWeight.SemiBold)) }
+            }
         }
     }
 
@@ -340,59 +327,35 @@ fun RecordSheet(
         if (photo == null) viewing = null
         else PhotoViewer(photo, photoStore, stringResource(R.string.day_photo, i + 1)) { viewing = null }
     }
-    if (showDiscard) {
-        ConfirmDialog(
-            text = R.string.record_discard_title, confirm = R.string.record_discard, dismiss = R.string.record_keep_editing,
-            onConfirm = {
-                showDiscard = false
-                val p = pendingDate
-                pendingDate = null
-                if (p != null) scope.launch { load(LocalDate.ofEpochDay(p)) } else onDismiss()
-            },
-            onDismiss = { showDiscard = false; pendingDate = null },
-        )
-    }
-    if (showRest) {
-        ConfirmDialog(
-            text = R.string.record_rest_confirm, confirm = R.string.record_status_rest, dismiss = R.string.record_cancel,
-            onConfirm = { showRest = false; update { it.markRest() } },
-            onDismiss = { showRest = false },
-        )
-    }
-    if (showClear) {
-        ConfirmDialog(
-            text = R.string.record_clear_confirm, confirm = R.string.record_clear, dismiss = R.string.record_cancel,
-            onConfirm = {
-                showClear = false
-                val d = current?.date ?: date
-                launchOp({ repository.clearDay(d) }) {
-                    onSaved(d)
-                    onDismiss()
-                }
-            },
-            onDismiss = { showClear = false },
-        )
-    }
-}
-
-@Composable
-private fun ConfirmDialog(text: Int, confirm: Int, dismiss: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    val t = LocalThemeTokens.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = t.neutrals.surface.asColor(),
-        textContentColor = t.neutrals.textPrimary.asColor(),
-        text = { BasicText(stringResource(text), style = TextStyle(t.neutrals.textPrimary.asColor(), 16.sp)) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                BasicText(stringResource(confirm), style = TextStyle(t.accent.accentAction.asColor(), 15.sp, FontWeight.SemiBold))
+    GlassDialog(
+        visible = showDiscard,
+        text = stringResource(R.string.record_discard_title), confirm = stringResource(R.string.record_discard), dismiss = stringResource(R.string.record_keep_editing),
+        onConfirm = {
+            showDiscard = false
+            val p = pendingDate
+            pendingDate = null
+            if (p != null) scope.launch { load(LocalDate.ofEpochDay(p)) } else close()
+        },
+        onDismiss = { showDiscard = false; pendingDate = null },
+    )
+    GlassDialog(
+        visible = showRest,
+        text = stringResource(R.string.record_rest_confirm), confirm = stringResource(R.string.record_status_rest), dismiss = stringResource(R.string.record_cancel),
+        onConfirm = { showRest = false; update { it.markRest() } },
+        onDismiss = { showRest = false },
+    )
+    GlassDialog(
+        visible = showClear,
+        text = stringResource(R.string.record_clear_confirm), confirm = stringResource(R.string.record_clear), dismiss = stringResource(R.string.record_cancel),
+        onConfirm = {
+            showClear = false
+            val d = current?.date ?: date
+            launchOp({ repository.clearDay(d) }) {
+                onSaved(d)
+                close()
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                BasicText(stringResource(dismiss), style = TextStyle(t.neutrals.textSecondary.asColor(), 15.sp))
-            }
-        },
+        onDismiss = { showClear = false },
     )
 }
 
