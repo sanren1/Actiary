@@ -26,7 +26,7 @@ private val GLASS_TINT_STRENGTH = stringPreferencesKey("glass_tint_strength")
 private val CHART_PALETTE = stringPreferencesKey("chart_palette")
 private val AMBIENT_BACKGROUND = booleanPreferencesKey("ambient_background")
 
-private inline fun <reified E : Enum<E>> Preferences.enumOr(key: Preferences.Key<String>, default: E): E =
+internal inline fun <reified E : Enum<E>> Preferences.enumOr(key: Preferences.Key<String>, default: E): E =
     this[key]?.let { n -> enumValues<E>().firstOrNull { it.name == n } } ?: default
 
 fun Preferences.toAppearanceSettings(): AppearanceSettings {

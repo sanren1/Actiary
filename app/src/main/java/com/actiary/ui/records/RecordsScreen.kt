@@ -1,5 +1,6 @@
 package com.actiary.ui.records
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -71,6 +72,9 @@ import com.actiary.data.db.DayWithDetails
 import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.photo.PhotoStore
+import com.actiary.data.appearance.RecordsView
+import com.actiary.domain.Bucket
+import com.actiary.domain.ChartMetric
 import com.actiary.domain.DateRange
 import com.actiary.domain.RangeKind
 import com.actiary.domain.RangeStats
@@ -95,10 +99,27 @@ import java.time.format.DateTimeFormatter
 private val BOTTOM_CLEARANCE = 24.dp
 private val KINDS = RangeKind.entries
 
+@get:StringRes
+private val ChartMetric.label: Int get() = when (this) {
+    ChartMetric.DURATION -> R.string.records_stat_duration
+    ChartMetric.CALORIES -> R.string.records_stat_calories
+    ChartMetric.COUNT -> R.string.records_stat_count
+}
+
+/** Null (no bar) when the bucket has no value for the metric or it is 0. */
+private fun Bucket.valueOf(m: ChartMetric): Int? = when (m) {
+    ChartMetric.DURATION -> minutes
+    ChartMetric.CALORIES -> calories
+    ChartMetric.COUNT -> count
+}?.takeIf { it > 0 }
+
 @Composable
 fun RecordsScreen(
     repository: RecordRepository,
     photoStore: PhotoStore,
+    initialView: RecordsView,
+    onKind: (RangeKind) -> Unit,
+    onMetric: (ChartMetric) -> Unit,
     onEdit: (LocalDate) -> Unit,
 ) {
     val t = LocalThemeTokens.current
@@ -109,8 +130,9 @@ fun RecordsScreen(
         onPauseOrDispose {}
     }
     val firstDay = remember { firstDayOfWeekFromLocale() }
-    var kindIx by rememberSaveable { mutableIntStateOf(KINDS.indexOf(RangeKind.MONTH)) }
+    var kindIx by rememberSaveable { mutableIntStateOf(KINDS.indexOf(initialView.kind)) }
     var anchor by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
+    var metricIx by rememberSaveable { mutableIntStateOf(initialView.metric.ordinal) }
     var filterId by rememberSaveable { mutableStateOf<Long?>(null) }
     val range = rangeOf(LocalDate.ofEpochDay(anchor), KINDS[kindIx], firstDay)
     val prev = shiftRange(range, -1, today, firstDay)?.takeIf { !it.from.isBefore(today.minusYears(10)) }
@@ -150,7 +172,7 @@ fun RecordsScreen(
         item {
             GlassSegmentedPicker(
                 listOf(R.string.records_week, R.string.records_month, R.string.records_year).map { stringResource(it) },
-                kindIx, { kindIx = it },
+                kindIx, { kindIx = it; onKind(KINDS[it]) },
             )
         }
         item {
@@ -181,7 +203,7 @@ fun RecordsScreen(
             val present = computeStats(days, range, null).byType.map { it.first }.toSet()
             val filter = filterId?.takeIf { it in present }
             val stats = computeStats(days, range, filter)
-            item { SummaryCard(stats, range.kind, typeById) }
+            item { SummaryCard(stats, range.kind, ChartMetric.entries[metricIx], { metricIx = it.ordinal; onMetric(it) }, typeById) }
             item {
                 FilterBar(types.filter { it.id in present }, filter) { filterId = it }
             }
@@ -213,7 +235,7 @@ private fun durationText(minutes: Int): String {
 }
 
 @Composable
-private fun SummaryCard(stats: RangeStats, kind: RangeKind, typeById: Map<Long, ExerciseTypeEntity>) {
+private fun SummaryCard(stats: RangeStats, kind: RangeKind, metric: ChartMetric, onMetric: (ChartMetric) -> Unit, typeById: Map<Long, ExerciseTypeEntity>) {
     val t = LocalThemeTokens.current
     val secondary = t.neutrals.textSecondary.asColor()
     GlassPanel(Modifier.fillMaxWidth()) {
@@ -246,7 +268,12 @@ private fun SummaryCard(stats: RangeStats, kind: RangeKind, typeById: Map<Long, 
                     }
                 }
             }
-            BarChart(stats, kind)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChartMetric.entries.forEach { Chip(stringResource(it.label), null, it == metric) { onMetric(it) } }
+                }
+                BarChart(stats, kind, metric)
+            }
         }
     }
 }
@@ -265,34 +292,43 @@ private fun Stat(modifier: Modifier, label: String, value: String?) {
 }
 
 @Composable
-private fun BarChart(stats: RangeStats, kind: RangeKind) {
+private fun metricText(metric: ChartMetric, v: Int): String = when (metric) {
+    ChartMetric.DURATION -> durationText(v)
+    ChartMetric.CALORIES -> stringResource(R.string.records_kcal, v)
+    ChartMetric.COUNT -> v.toString()
+}
+
+@Composable
+private fun BarChart(stats: RangeStats, kind: RangeKind, metric: ChartMetric) {
     val t = LocalThemeTokens.current
     val buckets = stats.buckets
-    val max = buckets.maxOf { it.value }.coerceAtLeast(1)
-    val desc = if (kind == RangeKind.YEAR) {
-        stringResource(R.string.records_chart_monthly, stats.exerciseDays, max)
-    } else {
-        stringResource(R.string.records_chart_daily, stats.entryCount, max)
+    val values = buckets.map { it.valueOf(metric) }
+    val max = values.filterNotNull().maxOrNull()
+    val secondary = t.neutrals.textSecondary.asColor()
+    if (max == null) {
+        BasicText(stringResource(R.string.records_none), Modifier.fillMaxWidth().padding(vertical = 16.dp), style = TextStyle(secondary, 16.sp))
+        return
     }
+    val maxText = metricText(metric, max)
+    val desc = stringResource(R.string.records_chart_desc, stringResource(metric.label), maxText)
     val bar = t.accent.accentChart.asColor()
     val slot = t.neutrals.divider.asColor()
-    val secondary = t.neutrals.textSecondary.asColor()
     fun label(i: Int) = buckets[i].start.let { if (kind == RangeKind.YEAR) it.monthValue else it.dayOfMonth }.toString()
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(t.neutrals.surface.asColor())
             .padding(12.dp).semantics(mergeDescendants = true) { contentDescription = desc },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        BasicText(max.toString(), style = TextStyle(secondary, 12.sp))
+        BasicText(maxText, style = TextStyle(secondary, 12.sp))
         Canvas(Modifier.fillMaxWidth().height(96.dp)) {
             val slotW = size.width / buckets.size
             val barW = slotW * 0.6f
             val minH = 2.dp.toPx()
-            buckets.forEachIndexed { i, b ->
+            values.forEachIndexed { i, v ->
                 val x = i * slotW + (slotW - barW) / 2
-                val h = if (b.value == 0) minH else (size.height * b.value / max).coerceAtLeast(4.dp.toPx())
+                val h = if (v == null) minH else (size.height * v / max).coerceAtLeast(4.dp.toPx())
                 drawRoundRect(
-                    if (b.value == 0) slot else bar,
+                    if (v == null) slot else bar,
                     Offset(x, size.height - h), Size(barW, h), CornerRadius(barW.coerceAtMost(4.dp.toPx())),
                 )
             }

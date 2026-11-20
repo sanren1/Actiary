@@ -2,6 +2,7 @@ package com.actiary.domain
 
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.DayWithDetails
+import com.actiary.data.db.ExerciseEntryEntity
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -9,9 +10,12 @@ import java.time.temporal.TemporalAdjusters
 
 enum class RangeKind { WEEK, MONTH, YEAR }
 
+enum class ChartMetric { DURATION, CALORIES, COUNT }
+
 data class DateRange(val kind: RangeKind, val from: LocalDate, val to: LocalDate)
 
-data class Bucket(val start: LocalDate, val value: Int)
+/** [minutes] / [calories] are null when no entry in the bucket has a value. */
+data class Bucket(val start: LocalDate, val count: Int, val minutes: Int?, val calories: Int?)
 
 data class RangeStats(
     val exerciseDays: Int,
@@ -50,17 +54,18 @@ fun computeStats(days: List<DayWithDetails>, range: DateRange, typeFilter: Long?
     val entries = inRange.flatMap { it.entriesF() }
     val byType = entries.groupingBy { it.typeId }.eachCount().toList()
         .sortedWith(compareByDescending<Pair<Long, Int>> { it.second }.thenBy { it.first })
+    fun bucket(start: LocalDate, es: List<ExerciseEntryEntity>) = Bucket(
+        start, es.size,
+        es.mapNotNull { it.durationMinutes }.takeIf { it.isNotEmpty() }?.sum(),
+        es.mapNotNull { it.calories }.takeIf { it.isNotEmpty() }?.sum(),
+    )
     val buckets = if (range.kind == RangeKind.YEAR) {
-        (1..12).map { m ->
-            Bucket(
-                LocalDate.of(range.from.year, m, 1),
-                inRange.count { it.counts() && LocalDate.ofEpochDay(it.record.epochDay).monthValue == m },
-            )
-        }
+        val byMonth = inRange.groupBy({ LocalDate.ofEpochDay(it.record.epochDay).monthValue }, { it.entriesF() })
+        (1..12).map { m -> bucket(LocalDate.of(range.from.year, m, 1), byMonth[m].orEmpty().flatten()) }
     } else {
         val byDay = inRange.associateBy { it.record.epochDay }
         generateSequence(range.from) { it.plusDays(1) }.takeWhile { !it.isAfter(range.to) }
-            .map { d -> Bucket(d, byDay[d.toEpochDay()]?.entriesF()?.size ?: 0) }
+            .map { d -> bucket(d, byDay[d.toEpochDay()]?.entriesF().orEmpty()) }
             .toList()
     }
     return RangeStats(

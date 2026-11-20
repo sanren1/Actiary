@@ -96,8 +96,7 @@
     <string name="records_kcal">%s 千卡</string>
     <string name="records_km">%s 公里</string>
     <string name="records_m">%s 米</string>
-    <string name="records_chart_daily">每日次数，共 %1$s 次，单日最多 %2$s 次</string>
-    <string name="records_chart_monthly">每月运动天数，共 %1$s 天，单月最多 %2$s 天</string>
+    <string name="records_chart_desc">%1$s，最高 %2$s</string>
     <string name="tab_settings">设置</string>
     <string name="settings_title">设置</string>
     <string name="settings_data">数据</string>

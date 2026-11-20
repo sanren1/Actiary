@@ -97,6 +97,7 @@ class MainActivity : ComponentActivity() {
         val repository = container.appearanceRepository
         // Tiny local DataStore file: a blocking first read at startup avoids a light-theme flash.
         val initial = runBlocking { repository.settings.first() }
+        val recordsView = runBlocking { container.recordsPrefs.view.first() }
         val systemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         window.setBackgroundDrawable(ColorDrawable(resolveTheme(initial, systemDark).neutrals.background))
         setContent {
@@ -268,6 +269,9 @@ class MainActivity : ComponentActivity() {
                             Tab.RECORDS -> RecordsScreen(
                                 repository = container.recordRepository,
                                 photoStore = container.photoStore,
+                                initialView = recordsView,
+                                onKind = { lifecycleScope.launch { container.recordsPrefs.setKind(it) } },
+                                onMetric = { lifecycleScope.launch { container.recordsPrefs.setMetric(it) } },
                                 onEdit = { editing = it.toEpochDay() },
                             )
                             Tab.SETTINGS -> SettingsScreen(

@@ -96,8 +96,7 @@
     <string name="records_kcal">%s kcal</string>
     <string name="records_km">%s km</string>
     <string name="records_m">%s m</string>
-    <string name="records_chart_daily">Daily sessions, %1$s total, up to %2$s in a day</string>
-    <string name="records_chart_monthly">Active days per month, %1$s total, up to %2$s in a month</string>
+    <string name="records_chart_desc">%1$s, peak %2$s</string>
     <string name="tab_settings">Settings</string>
     <string name="settings_title">Settings</string>
     <string name="settings_data">Data</string>

@@ -23,7 +23,8 @@ class RangeStatsTest {
         val s = computeStats(emptyList(), march, null)
         assertEquals(RangeStats(0, 0, null, null, emptyList(), s.buckets), s)
         assertEquals(31, s.buckets.size)
-        assertEquals(0, s.buckets.sumOf { it.value })
+        assertEquals(0, s.buckets.sumOf { it.count })
+        assertEquals(true, s.buckets.all { it.minutes == null && it.calories == null })
     }
 
     @Test fun noDurationIsNull_mixedSumsOnlyPresent() {
@@ -51,8 +52,8 @@ class RangeStatsTest {
         assertEquals(2, f.entryCount)
         assertEquals(20, f.totalMinutes)
         assertEquals(listOf(2L to 2), f.byType)
-        assertEquals(1, f.buckets[0].value)
-        assertEquals(0, f.buckets[2].value)
+        assertEquals(Bucket(d(2025, 3, 1), 1, 10, null), f.buckets[0])
+        assertEquals(Bucket(d(2025, 3, 3), 0, null, null), f.buckets[2])
     }
 
     @Test fun restNotCounted_exercisedWithoutEntriesCounts() {
@@ -95,20 +96,19 @@ class RangeStatsTest {
 
     @Test fun yearMonthBuckets() {
         val y = rangeOf(d(2025, 6, 1), RangeKind.YEAR, DayOfWeek.MONDAY)
-        val s = computeStats(
-            listOf(
-                day(d(2025, 1, 5), DayStatus.EXERCISED, entry(1), entry(1)),
-                day(d(2025, 1, 9), DayStatus.EXERCISED, entry(1)),
-                day(d(2025, 12, 31)),
-                day(d(2025, 2, 1), DayStatus.REST),
-                day(d(2024, 12, 31), DayStatus.EXERCISED, entry(1)),
-            ),
-            y, null,
+        val days = listOf(
+            day(d(2025, 1, 5), DayStatus.EXERCISED, entry(1, 30, 200), entry(2)),
+            day(d(2025, 1, 9), DayStatus.EXERCISED, entry(1, 15)),
+            day(d(2025, 12, 31)),
+            day(d(2025, 2, 1), DayStatus.REST),
+            day(d(2024, 12, 31), DayStatus.EXERCISED, entry(1, 99)),
         )
+        val s = computeStats(days, y, null)
         assertEquals(12, s.buckets.size)
-        assertEquals(Bucket(d(2025, 1, 1), 2), s.buckets[0])
-        assertEquals(0, s.buckets[1].value)
-        assertEquals(1, s.buckets[11].value)
+        assertEquals(Bucket(d(2025, 1, 1), 3, 45, 200), s.buckets[0])
+        assertEquals(Bucket(d(2025, 2, 1), 0, null, null), s.buckets[1])
+        assertEquals(Bucket(d(2025, 12, 1), 0, null, null), s.buckets[11])
         assertEquals(3, s.exerciseDays)
+        assertEquals(Bucket(d(2025, 1, 1), 2, 45, 200), computeStats(days, y, 1L).buckets[0])
     }
 }
