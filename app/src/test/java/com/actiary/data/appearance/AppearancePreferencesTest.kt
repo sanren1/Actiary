@@ -74,4 +74,17 @@ class AppearancePreferencesTest {
         r.resetAppearance()
         assertEquals(AppearanceSettings(), r.settings.first())
     }
+
+    @Test fun settersRoundTrip() = runBlocking {
+        val r = repo()
+        r.setGlassLevel(GlassLevel.CLEAR)
+        r.setGlassTintStrength(GlassTintStrength.HIGH)
+        r.setChartPalette(ChartPalette.FOLLOW_ACCENT)
+        r.setAmbientBackground(false)
+        val s = r.settings.first()
+        assertEquals(GlassLevel.CLEAR, s.glassLevel)
+        assertEquals(GlassTintStrength.HIGH, s.glassTintStrength)
+        assertEquals(ChartPalette.FOLLOW_ACCENT, s.chartPalette)
+        assertEquals(false, s.ambientBackground)
+    }
 }

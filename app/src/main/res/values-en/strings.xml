@@ -6,6 +6,15 @@
     <string name="theme_mode_dark">Dark</string>
     <string name="theme_mode_system">System</string>
     <string name="accent_title">Accent</string>
+    <string name="glass_level_title">Liquid glass</string>
+    <string name="glass_level_soft">Soft</string>
+    <string name="glass_level_balanced">Balanced</string>
+    <string name="glass_level_clear">Clear</string>
+    <string name="glass_tint_title">Glass tint</string>
+    <string name="glass_tint_low">Low</string>
+    <string name="glass_tint_medium">Medium</string>
+    <string name="glass_tint_high">High</string>
+    <string name="ambient_title">Ambient background</string>
     <string name="preset_mist_teal">Mist Teal</string>
     <string name="preset_slate_blue">Slate Blue</string>
     <string name="preset_sage">Sage</string>

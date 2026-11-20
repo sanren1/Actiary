@@ -41,4 +41,20 @@ class ColorDerivationTest {
                 deriveAccent(seed, DarkNeutrals, true).accentAction)
         }
     }
+
+    @Test fun ambientAndSubtleWeights() {
+        for (hex in listOf("#77879D", "#AC9680")) for (dark in listOf(false, true)) {
+            val seed = parseHex(hex)!!
+            val n = if (dark) DarkNeutrals else LightNeutrals
+            val tag = "$hex dark=$dark"
+            val amb = deriveAmbient(seed, n, dark)
+            val o = seed.toOklch()
+            val shifted = Oklch(o.l, o.c, (o.h + 40) % 360).toArgb()
+            assertEquals(tag, mix(n.background, seed, if (dark) 0.16 else 0.12), amb.blobA)
+            assertEquals(tag, mix(n.background, shifted, if (dark) 0.10 else 0.08), amb.blobB)
+            val a = deriveAccent(seed, n, dark)
+            assertEquals(tag, mix(n.surface, seed, if (dark) 0.10 else 0.08), a.accentSubtle)
+            assertEquals(tag, if (dark) n.background else 0xFFFFFFFF.toInt(), a.onAccentAction)
+        }
+    }
 }

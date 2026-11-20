@@ -6,6 +6,15 @@
     <string name="theme_mode_dark">深色</string>
     <string name="theme_mode_system">跟随系统</string>
     <string name="accent_title">强调色</string>
+    <string name="glass_level_title">液态玻璃效果</string>
+    <string name="glass_level_soft">柔和</string>
+    <string name="glass_level_balanced">均衡</string>
+    <string name="glass_level_clear">通透</string>
+    <string name="glass_tint_title">玻璃染色强度</string>
+    <string name="glass_tint_low">低</string>
+    <string name="glass_tint_medium">中</string>
+    <string name="glass_tint_high">高</string>
+    <string name="ambient_title">环境背景</string>
     <string name="preset_mist_teal">雾青绿</string>
     <string name="preset_slate_blue">灰蓝</string>
     <string name="preset_sage">鼠尾草</string>

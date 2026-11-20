@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +42,8 @@ import androidx.compose.ui.unit.sp
 import com.actiary.R
 import com.actiary.data.appearance.AccentPreset
 import com.actiary.data.appearance.AppearanceSettings
+import com.actiary.data.appearance.GlassLevel
+import com.actiary.data.appearance.GlassTintStrength
 import com.actiary.data.appearance.ThemeMode
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
@@ -70,6 +74,9 @@ fun AppearanceScreen(
     settings: AppearanceSettings,
     onThemeMode: (ThemeMode) -> Unit,
     onPreset: (AccentPreset) -> Unit,
+    onGlassLevel: (GlassLevel) -> Unit,
+    onGlassTint: (GlassTintStrength) -> Unit,
+    onAmbient: (Boolean) -> Unit,
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
@@ -82,32 +89,14 @@ fun AppearanceScreen(
     ) {
         BasicText(stringResource(R.string.appearance_title), style = style(n.textPrimary, 28, FontWeight.Bold))
 
-        Row(
-            Modifier.fillMaxWidth().background(n.surfaceMuted.asColor(), RoundedCornerShape(12.dp)).padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+        Segmented(
             listOf(
                 ThemeMode.LIGHT to R.string.theme_mode_light,
                 ThemeMode.DARK to R.string.theme_mode_dark,
                 ThemeMode.SYSTEM to R.string.theme_mode_system,
-            ).forEach { (mode, label) ->
-                val sel = settings.themeMode == mode
-                Box(
-                    Modifier.weight(1f)
-                        .background(if (sel) n.surface.asColor() else Color.Transparent, RoundedCornerShape(9.dp))
-                        .semantics { selected = sel }
-                        .clickable(role = Role.Button) { onThemeMode(mode) }
-                        .heightIn(min = 48.dp)
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    BasicText(
-                        stringResource(label),
-                        style = style(n.textPrimary, 15, if (sel) FontWeight.Bold else FontWeight.Normal),
-                    )
-                }
-            }
-        }
+            ),
+            settings.themeMode, onThemeMode,
+        )
 
         BasicText(stringResource(R.string.accent_title), style = style(n.textSecondary, 14))
         FlowRow(
@@ -148,6 +137,46 @@ fun AppearanceScreen(
             }
         }
 
+        BasicText(stringResource(R.string.glass_level_title), style = style(n.textSecondary, 14))
+        Segmented(
+            listOf(
+                GlassLevel.SOFT to R.string.glass_level_soft,
+                GlassLevel.BALANCED to R.string.glass_level_balanced,
+                GlassLevel.CLEAR to R.string.glass_level_clear,
+            ),
+            settings.glassLevel, onGlassLevel,
+        )
+        BasicText(stringResource(R.string.glass_tint_title), style = style(n.textSecondary, 14))
+        Segmented(
+            listOf(
+                GlassTintStrength.LOW to R.string.glass_tint_low,
+                GlassTintStrength.MEDIUM to R.string.glass_tint_medium,
+                GlassTintStrength.HIGH to R.string.glass_tint_high,
+            ),
+            settings.glassTintStrength, onGlassTint,
+        )
+        val on = settings.ambientBackground
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .semantics { toggleableState = ToggleableState(on) }
+                .clickable(role = Role.Switch) { onAmbient(!on) },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            BasicText(stringResource(R.string.ambient_title), style = style(n.textPrimary))
+            Box(
+                Modifier.size(width = 48.dp, height = 28.dp)
+                    .background(if (on) a.accentAction.asColor() else n.surfaceMuted.asColor(), CircleShape)
+                    .border(1.dp, if (on) a.accentAction.asColor() else n.divider.asColor(), CircleShape)
+                    .padding(3.dp),
+                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+            ) {
+                Box(
+                    Modifier.size(20.dp).background(if (on) a.onAccentAction.asColor() else n.textSecondary.asColor(), CircleShape),
+                )
+            }
+        }
+
         Box(
             Modifier.background(a.accentAction.asColor(), RoundedCornerShape(12.dp))
                 .padding(horizontal = 20.dp, vertical = 12.dp),
@@ -159,5 +188,32 @@ fun AppearanceScreen(
         ) { BasicText(stringResource(R.string.sample_tag), style = style(n.textPrimary, 14)) }
         BasicText(stringResource(R.string.sample_body), style = style(n.textPrimary))
         BasicText(stringResource(R.string.sample_secondary), style = style(n.textSecondary, 14))
+    }
+}
+
+@Composable
+private fun <T> Segmented(options: List<Pair<T, Int>>, current: T, onSelect: (T) -> Unit) {
+    val n = LocalThemeTokens.current.neutrals
+    Row(
+        Modifier.fillMaxWidth().background(n.surfaceMuted.asColor(), RoundedCornerShape(12.dp)).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        options.forEach { (value, label) ->
+            val sel = current == value
+            Box(
+                Modifier.weight(1f)
+                    .background(if (sel) n.surface.asColor() else Color.Transparent, RoundedCornerShape(9.dp))
+                    .semantics { selected = sel }
+                    .clickable(role = Role.Button) { onSelect(value) }
+                    .heightIn(min = 48.dp)
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicText(
+                    stringResource(label),
+                    style = style(n.textPrimary, 15, if (sel) FontWeight.Bold else FontWeight.Normal),
+                )
+            }
+        }
     }
 }

@@ -65,6 +65,9 @@ class MainActivity : ComponentActivity() {
                         settings = settings,
                         onThemeMode = { lifecycleScope.launch { repository.setThemeMode(it) } },
                         onPreset = { lifecycleScope.launch { repository.setAccentPreset(it) } },
+                        onGlassLevel = { lifecycleScope.launch { repository.setGlassLevel(it) } },
+                        onGlassTint = { lifecycleScope.launch { repository.setGlassTintStrength(it) } },
+                        onAmbient = { lifecycleScope.launch { repository.setAmbientBackground(it) } },
                     )
                 }
                 editing?.let { day ->
