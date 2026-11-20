@@ -1,0 +1,20 @@
+// Modified for Actiary: added @RequiresApi(33) for lint; merged expect/actual into plain Android functions
+package com.kyant.backdrop.internal
+
+import android.graphics.BlurMaskFilter
+import android.os.Build
+import androidx.annotation.RequiresApi
+import androidx.compose.ui.graphics.Paint
+import com.kyant.backdrop.RuntimeShader
+import com.kyant.backdrop.asAndroidRuntimeShader
+
+internal fun Paint.blur(radius: Float) {
+    this.asFrameworkPaint().maskFilter =
+        if (radius > 0f) BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL)
+        else null
+}
+
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+internal fun Paint.setRuntimeShader(runtimeShader: RuntimeShader?) {
+    this.asFrameworkPaint().shader = runtimeShader?.asAndroidRuntimeShader()
+}
