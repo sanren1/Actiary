@@ -3,17 +3,65 @@ package com.actiary.theme
 import kotlin.math.atan2
 import kotlin.math.cbrt
 import kotlin.math.cos
+import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
 private val HEX_RE = Regex("^#[0-9A-Fa-f]{6}$")
+private val HEX6_RE = Regex("^[0-9A-Fa-f]{6}$")
 
 fun parseHex(hex: String): Int? =
     if (HEX_RE.matches(hex)) (0xFF000000L or hex.substring(1).toLong(16)).toInt() else null
 
 fun Int.toHex(): String = "#%06X".format(this and 0xFFFFFF)
+
+/** Trims, accepts an optional leading '#', requires exactly 6 hex digits, returns uppercase '#RRGGBB'. */
+fun normalizeHex(input: String): String? {
+    val body = input.trim().removePrefix("#")
+    return if (HEX6_RE.matches(body)) "#${body.uppercase()}" else null
+}
+
+data class Hsv(val h: Double, val s: Double, val v: Double)
+
+fun Int.toHsv(): Hsv {
+    val r = ch(this, 16) / 255.0
+    val g = ch(this, 8) / 255.0
+    val b = ch(this, 0) / 255.0
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
+    val d = max - min
+    val v = max
+    val s = if (max == 0.0) 0.0 else d / max
+    val hDeg = when {
+        d == 0.0 -> 0.0
+        max == r -> 60.0 * (g - b) / d
+        max == g -> 60.0 * ((b - r) / d + 2.0)
+        else -> 60.0 * ((r - g) / d + 4.0)
+    }
+    val h = ((hDeg % 360.0) + 360.0) % 360.0
+    return Hsv(h, s, v)
+}
+
+fun Hsv.toArgb(): Int {
+    val h = ((this.h % 360.0) + 360.0) % 360.0
+    val s = this.s.coerceIn(0.0, 1.0)
+    val v = this.v.coerceIn(0.0, 1.0)
+    val c = v * s
+    val x = c * (1.0 - abs((h / 60.0) % 2.0 - 1.0))
+    val m = v - c
+    val (rp, gp, bp) = when ((h / 60.0).toInt().coerceIn(0, 5)) {
+        0 -> Triple(c, x, 0.0)
+        1 -> Triple(x, c, 0.0)
+        2 -> Triple(0.0, c, x)
+        3 -> Triple(0.0, x, c)
+        4 -> Triple(x, 0.0, c)
+        else -> Triple(c, 0.0, x)
+    }
+    fun byte(value: Double) = ((value + m) * 255.0).roundToInt().coerceIn(0, 255)
+    return (0xFF shl 24) or (byte(rp) shl 16) or (byte(gp) shl 8) or byte(bp)
+}
 
 data class Oklch(val l: Double, val c: Double, val h: Double)
 

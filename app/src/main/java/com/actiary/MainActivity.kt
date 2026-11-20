@@ -81,6 +81,7 @@ import com.actiary.ui.settings.CustomTypeIconPicker
 import com.actiary.ui.settings.CustomTypesScreen
 import com.actiary.ui.settings.SettingsPage
 import com.actiary.ui.settings.SettingsScreen
+import com.actiary.ui.settings.parent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -105,6 +106,7 @@ class MainActivity : ComponentActivity() {
         window.setBackgroundDrawable(ColorDrawable(resolveTheme(initial, systemDark).neutrals.background))
         setContent {
             val settings by repository.settings.collectAsStateWithLifecycle(initial)
+            val recent by repository.recentColors.collectAsStateWithLifecycle(emptyList())
             val weekStart by container.generalPrefs.weekStart.collectAsStateWithLifecycle(initialWeekStart)
             val firstDayOfWeek = weekStart.resolve()
             val tokens = resolveTheme(settings, isSystemInDarkTheme())
@@ -154,7 +156,8 @@ class MainActivity : ComponentActivity() {
                 BackHandler(tab != Tab.CALENDAR) { tab = Tab.CALENDAR }
                 // Overlays register later; back dismisses them before returning to settings home.
                 BackHandler(tab == Tab.SETTINGS && settingsPage != SettingsPage.HOME) {
-                    settingsPage = SettingsPage.HOME
+                    val parent = settingsPage.parent()
+                    if (parent != null) settingsPage = parent
                 }
 
                 val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -172,13 +175,14 @@ class MainActivity : ComponentActivity() {
                     GlassTab(Icons.Outlined.Settings, stringResource(R.string.tab_settings)),
                 )
                 val onHome = tab == Tab.CALENDAR
-                val onTypes = tab == Tab.SETTINGS && settingsPage == SettingsPage.TYPES
+                val hideBottomBar = tab == Tab.SETTINGS &&
+                    (settingsPage == SettingsPage.TYPES || settingsPage == SettingsPage.CUSTOM_COLOR)
                 CompositionLocalProvider(LocalFloatingInsets provides insets) {
                     GlassHost(
                         tokens, profile,
                         overlay = {
                             CompositionLocalProvider(LocalGlassProfile provides baseProfile) { Box(Modifier.fillMaxSize().then(hideBase)) {
-                            if (!onTypes) {
+                            if (!hideBottomBar) {
                                 GlassBottomBar(
                                     tabs, tab.ordinal, { tab = Tab.entries[it] },
                                     Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = BarGap),
@@ -284,6 +288,7 @@ class MainActivity : ComponentActivity() {
                                 photoStore = container.photoStore,
                                 initialView = recordsView,
                                 firstDayOfWeek = firstDayOfWeek,
+                                chartPalette = settings.chartPalette,
                                 onKind = { lifecycleScope.launch { container.recordsPrefs.setKind(it) } },
                                 onMetric = { lifecycleScope.launch { container.recordsPrefs.setMetric(it) } },
                                 onEdit = { editing = it.toEpochDay() },
@@ -300,6 +305,10 @@ class MainActivity : ComponentActivity() {
                                 onGlassTint = { lifecycleScope.launch { repository.setGlassTintStrength(it) } },
                                 onAmbient = { lifecycleScope.launch { repository.setAmbientBackground(it) } },
                                 onResetAppearance = { confirmAppearanceReset = true },
+                                onCustomColor = { settingsPage = SettingsPage.CUSTOM_COLOR },
+                                onChartPalette = { lifecycleScope.launch { repository.setChartPalette(it) } },
+                                recent = recent,
+                                onApplyCustomAccent = { hex -> lifecycleScope.launch { repository.applyCustomAccent(hex) } },
                                 typesContent = { onBack ->
                                     CustomTypesScreen(
                                         repository = container.recordRepository,

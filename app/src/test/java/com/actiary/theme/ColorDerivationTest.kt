@@ -25,6 +25,19 @@ class ColorDerivationTest {
         }
     }
 
+    @Test fun extremeSeedsMeetContrastInBothThemes() {
+        val extreme = listOf("#FFFFFF", "#000000", "#FFFF00", "#00FF00", "#FF00FF")
+        for (hex in extreme) for (dark in listOf(false, true)) {
+            val seed = parseHex(hex)!!
+            val n = if (dark) DarkNeutrals else LightNeutrals
+            val a = deriveAccent(seed, n, dark)
+            val tag = "extreme $hex dark=$dark"
+            assertTrue("$tag action >=4.5", contrast(a.onAccentAction, a.accentAction) >= 4.5)
+            assertTrue("$tag stroke >=3.0", contrast(a.accentStroke, n.surface) >= 3.0)
+            assertTrue("$tag chart >=3.0", contrast(a.accentChart, n.background) >= 3.0)
+        }
+    }
+
     @Test fun hueIsPreservedForChromaticPresets() {
         for (hex in presetSeeds.filter { it != "#82858A" }) for (dark in listOf(false, true)) {
             val seed = parseHex(hex)!!

@@ -41,7 +41,14 @@ import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.LocalFloatingInsets
 
-internal enum class SettingsPage { HOME, APPEARANCE, GENERAL, TYPES, ABOUT }
+internal enum class SettingsPage { HOME, APPEARANCE, GENERAL, TYPES, ABOUT, CUSTOM_COLOR }
+
+/** Navigation parent used by both the system back handler and in-page back buttons. */
+internal fun SettingsPage.parent(): SettingsPage? = when (this) {
+    SettingsPage.CUSTOM_COLOR -> SettingsPage.APPEARANCE
+    SettingsPage.HOME -> null
+    else -> SettingsPage.HOME
+}
 
 @Composable
 internal fun SettingsPageLayout(

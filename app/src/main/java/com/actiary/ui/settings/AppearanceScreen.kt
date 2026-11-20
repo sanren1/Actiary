@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.actiary.R
 import com.actiary.data.appearance.AccentPreset
 import com.actiary.data.appearance.AppearanceSettings
+import com.actiary.data.appearance.ChartPalette
 import com.actiary.data.appearance.GlassLevel
 import com.actiary.data.appearance.GlassTintStrength
 import com.actiary.data.appearance.ThemeMode
@@ -47,10 +48,13 @@ import com.actiary.glass.GlassPanel
 import com.actiary.glass.GlassPreview
 import com.actiary.glass.GlassSegmentedPicker
 import com.actiary.glass.LocalGlassProfile
+import com.actiary.theme.DEFAULT_SEED
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.theme.contrast
+import com.actiary.theme.parseHex
 import com.actiary.theme.seed
+import com.actiary.ui.common.SolidChip
 
 private val presets = AccentPreset.entries.filter { it != AccentPreset.CUSTOM }
 
@@ -81,6 +85,8 @@ fun AppearanceScreen(
     onAmbient: (Boolean) -> Unit,
     onBack: () -> Unit,
     onResetAppearance: () -> Unit,
+    onCustomColor: () -> Unit,
+    onChartPalette: (ChartPalette) -> Unit,
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
@@ -105,37 +111,14 @@ fun AppearanceScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     presets.forEach { p ->
-                        val sel = settings.accentPreset == p
-                        Column(
-                            Modifier.width(96.dp)
-                                .then(if (sel) Modifier.border(2.dp, a.accentStroke.asColor(), RoundedCornerShape(12.dp)) else Modifier)
-                                .semantics { selected = sel }
-                                .clickable(role = Role.Button) { onPreset(p) }
-                                .padding(8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Box(
-                                Modifier.size(40.dp).background((p.seed() ?: 0).asColor(), CircleShape),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                val seed = p.seed() ?: 0
-                                val checkColor = if (contrast(seed, 0xFFFFFFFF.toInt()) >= contrast(seed, 0xFF000000.toInt())) Color.White else Color.Black
-                                if (sel) Canvas(Modifier.size(20.dp)) {
-                                    val path = Path().apply {
-                                        moveTo(size.width * 0.15f, size.height * 0.55f)
-                                        lineTo(size.width * 0.4f, size.height * 0.8f)
-                                        lineTo(size.width * 0.85f, size.height * 0.25f)
-                                    }
-                                    drawPath(path, checkColor, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
-                                }
-                            }
-                            BasicText(
-                                presetName(p),
-                                style = style(n.textPrimary, 12, if (sel) FontWeight.Bold else FontWeight.Normal),
-                            )
-                        }
+                        AccentSwatch(p.seed() ?: 0, presetName(p), settings.accentPreset == p) { onPreset(p) }
                     }
+                    AccentSwatch(
+                        parseHex(settings.customAccentHex) ?: DEFAULT_SEED,
+                        stringResource(R.string.preset_custom),
+                        settings.accentPreset == AccentPreset.CUSTOM,
+                        onCustomColor,
+                    )
                 }
             }
         }
@@ -181,6 +164,24 @@ fun AppearanceScreen(
                         )
                     }
                 }
+                BasicText(stringResource(R.string.chart_palette_title), style = style(n.textSecondary, 14))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SolidChip(
+                        stringResource(R.string.chart_palette_neutral),
+                        settings.chartPalette == ChartPalette.NEUTRAL_FIRST,
+                    ) { onChartPalette(ChartPalette.NEUTRAL_FIRST) }
+                    SolidChip(
+                        stringResource(R.string.chart_palette_accent),
+                        settings.chartPalette == ChartPalette.FOLLOW_ACCENT,
+                    ) { onChartPalette(ChartPalette.FOLLOW_ACCENT) }
+                    SolidChip(
+                        stringResource(R.string.chart_palette_muted),
+                        settings.chartPalette == ChartPalette.MUTED_CATEGORIES,
+                    ) { onChartPalette(ChartPalette.MUTED_CATEGORIES) }
+                }
             }
         }
         SettingsRow(stringResource(R.string.settings_reset_appearance), Icons.Outlined.RestartAlt, onClick = onResetAppearance)
@@ -194,4 +195,33 @@ private fun <T> Segmented(options: List<Pair<T, Int>>, current: T, onSelect: (T)
         options.indexOfFirst { it.first == current },
         { onSelect(options[it].first) },
     )
+}
+
+@Composable
+private fun AccentSwatch(seed: Int, label: String, isSelected: Boolean, onClick: () -> Unit) {
+    val t = LocalThemeTokens.current
+    val n = t.neutrals
+    val a = t.accent
+    Column(
+        Modifier.width(96.dp)
+            .then(if (isSelected) Modifier.border(2.dp, a.accentStroke.asColor(), RoundedCornerShape(12.dp)) else Modifier)
+            .semantics { selected = isSelected }
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(40.dp).background(seed.asColor(), CircleShape), contentAlignment = Alignment.Center) {
+            val checkColor = if (contrast(seed, 0xFFFFFFFF.toInt()) >= contrast(seed, 0xFF000000.toInt())) Color.White else Color.Black
+            if (isSelected) Canvas(Modifier.size(20.dp)) {
+                val path = Path().apply {
+                    moveTo(size.width * 0.15f, size.height * 0.55f)
+                    lineTo(size.width * 0.4f, size.height * 0.8f)
+                    lineTo(size.width * 0.85f, size.height * 0.25f)
+                }
+                drawPath(path, checkColor, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+            }
+        }
+        BasicText(label, style = style(n.textPrimary, 12, if (isSelected) FontWeight.Bold else FontWeight.Normal))
+    }
 }

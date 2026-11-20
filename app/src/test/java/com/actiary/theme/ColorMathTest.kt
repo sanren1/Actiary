@@ -54,4 +54,43 @@ class ColorMathTest {
         val m = mix(white, black, 0.5)
         for (shift in listOf(16, 8, 0)) assertTrue(((m shr shift) and 0xFF) in 127..128)
     }
+
+    @Test fun hsvRoundTrip() {
+        val hexes = listOf("#758B84", "#77879D", "#8C9683", "#AC9680", "#928A9F", "#82858A",
+            "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#808080",
+            "#FFFFFF", "#000000", "#3A7BD5")
+        for (hex in hexes) {
+            val c = parseHex(hex)!!
+            val r = c.toHsv().toArgb()
+            for (shift in listOf(16, 8, 0)) {
+                val d = abs(((c shr shift) and 0xFF) - ((r shr shift) and 0xFF))
+                assertTrue("$hex shift $shift diff $d", d <= 1)
+            }
+        }
+    }
+
+    @Test fun hsvKnownValues() {
+        val red = parseHex("#FF0000")!!.toHsv()
+        assertEquals(0.0, red.h, 0.001)
+        assertEquals(1.0, red.s, 0.001)
+        assertEquals(1.0, red.v, 0.001)
+
+        val gray = parseHex("#808080")!!.toHsv()
+        assertEquals(0.0, gray.s, 0.001)
+        assertTrue("gray v ${gray.v}", gray.v in 0.50..0.51)
+    }
+
+    @Test fun normalizeAccepts() {
+        assertEquals("#3A7BD5", normalizeHex("3a7bd5"))
+        assertEquals("#3A7BD5", normalizeHex(" #3A7BD5 "))
+        assertEquals("#3A7BD5", normalizeHex("#3a7bd5"))
+    }
+
+    @Test fun normalizeRejects() {
+        assertNull(normalizeHex(""))
+        assertNull(normalizeHex("#12345"))
+        assertNull(normalizeHex("#1234567"))
+        assertNull(normalizeHex("#GGGGGG"))
+        assertNull(normalizeHex("#12 456"))
+    }
 }

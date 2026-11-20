@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.actiary.R
 import com.actiary.data.appearance.AccentPreset
 import com.actiary.data.appearance.AppearanceSettings
+import com.actiary.data.appearance.ChartPalette
 import com.actiary.data.appearance.GlassLevel
 import com.actiary.data.appearance.GlassTintStrength
 import com.actiary.data.appearance.ThemeMode
@@ -36,9 +37,16 @@ internal fun SettingsScreen(
     onGlassTint: (GlassTintStrength) -> Unit,
     onAmbient: (Boolean) -> Unit,
     onResetAppearance: () -> Unit,
+    onCustomColor: () -> Unit,
+    onChartPalette: (ChartPalette) -> Unit,
+    recent: List<String>,
+    onApplyCustomAccent: (String) -> Unit,
     typesContent: @Composable (() -> Unit) -> Unit,
 ) {
-    val onBack = { onPage(SettingsPage.HOME) }
+    val onBack = {
+        val parent = page.parent()
+        if (parent != null) onPage(parent)
+    }
     when (page) {
         SettingsPage.HOME -> SettingsPageLayout(stringResource(R.string.settings_title)) {
             val chevron = Icons.AutoMirrored.Outlined.KeyboardArrowRight
@@ -63,9 +71,16 @@ internal fun SettingsScreen(
         }
         SettingsPage.APPEARANCE -> AppearanceScreen(
             settings, onThemeMode, onPreset, onGlassLevel, onGlassTint, onAmbient, onBack, onResetAppearance,
+            onCustomColor, onChartPalette,
         )
         SettingsPage.GENERAL -> GeneralScreen(weekStart, onWeekStart, onBack)
         SettingsPage.TYPES -> typesContent(onBack)
         SettingsPage.ABOUT -> AboutScreen(onBack)
+        SettingsPage.CUSTOM_COLOR -> ColorEditorScreen(
+            settings = settings,
+            recent = recent,
+            onApply = onApplyCustomAccent,
+            onBack = onBack,
+        )
     }
 }

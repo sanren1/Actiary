@@ -72,6 +72,7 @@ import com.actiary.data.db.DayWithDetails
 import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.photo.PhotoStore
+import com.actiary.data.appearance.ChartPalette
 import com.actiary.data.appearance.RecordsView
 import com.actiary.domain.Bucket
 import com.actiary.domain.ChartMetric
@@ -84,8 +85,10 @@ import com.actiary.domain.shiftRange
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassPanel
 import com.actiary.glass.GlassSegmentedPicker
+import com.actiary.theme.ChartColors
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
+import com.actiary.theme.resolveChartColors
 import com.actiary.ui.common.LocalFloatingInsets
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
@@ -113,17 +116,25 @@ private fun Bucket.valueOf(m: ChartMetric): Int? = when (m) {
     ChartMetric.COUNT -> count
 }?.takeIf { it > 0 }
 
+/** Index of the first bucket reaching the maximum value, or -1 when no bucket has a value. */
+internal fun maxValueIndex(values: List<Int?>): Int {
+    val max = values.filterNotNull().maxOrNull() ?: return -1
+    return values.indexOfFirst { it == max }
+}
+
 @Composable
 fun RecordsScreen(
     repository: RecordRepository,
     photoStore: PhotoStore,
     initialView: RecordsView,
     firstDayOfWeek: DayOfWeek,
+    chartPalette: ChartPalette,
     onKind: (RangeKind) -> Unit,
     onMetric: (ChartMetric) -> Unit,
     onEdit: (LocalDate) -> Unit,
 ) {
     val t = LocalThemeTokens.current
+    val colors = remember(chartPalette, t) { resolveChartColors(chartPalette, t) }
     val locale = LocalConfiguration.current.locales[0]
     var today by remember { mutableStateOf(LocalDate.now()) }
     LifecycleResumeEffect(Unit) {
@@ -203,7 +214,7 @@ fun RecordsScreen(
             val present = computeStats(days, range, null).byType.map { it.first }.toSet()
             val filter = filterId?.takeIf { it in present }
             val stats = computeStats(days, range, filter)
-            item { SummaryCard(stats, range.kind, ChartMetric.entries[metricIx], { metricIx = it.ordinal; onMetric(it) }, typeById) }
+            item { SummaryCard(stats, range.kind, ChartMetric.entries[metricIx], { metricIx = it.ordinal; onMetric(it) }, typeById, colors) }
             item {
                 FilterBar(types.filter { it.id in present }, filter) { filterId = it }
             }
@@ -235,7 +246,7 @@ private fun durationText(minutes: Int): String {
 }
 
 @Composable
-private fun SummaryCard(stats: RangeStats, kind: RangeKind, metric: ChartMetric, onMetric: (ChartMetric) -> Unit, typeById: Map<Long, ExerciseTypeEntity>) {
+private fun SummaryCard(stats: RangeStats, kind: RangeKind, metric: ChartMetric, onMetric: (ChartMetric) -> Unit, typeById: Map<Long, ExerciseTypeEntity>, colors: ChartColors) {
     val t = LocalThemeTokens.current
     val secondary = t.neutrals.textSecondary.asColor()
     GlassPanel(Modifier.fillMaxWidth()) {
@@ -250,8 +261,8 @@ private fun SummaryCard(stats: RangeStats, kind: RangeKind, metric: ChartMetric,
             }
             val top = stats.byType.firstOrNull()?.second ?: 0
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                stats.byType.forEach { (id, count) ->
-                    val type = typeById[id] ?: return@forEach
+                stats.byType.forEachIndexed { i, (id, count) ->
+                    val type = typeById[id] ?: return@forEachIndexed
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(exerciseTypeIcon(type), null, Modifier.size(18.dp), tint = secondary)
                         BasicText(
@@ -261,7 +272,7 @@ private fun SummaryCard(stats: RangeStats, kind: RangeKind, metric: ChartMetric,
                         Box(Modifier.weight(1f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(t.neutrals.surfaceMuted.asColor())) {
                             Box(
                                 Modifier.fillMaxHeight().fillMaxWidth(count.toFloat() / top)
-                                    .clip(RoundedCornerShape(5.dp)).background(t.accent.accentChart.asColor()),
+                                    .clip(RoundedCornerShape(5.dp)).background(colors.categories[i % colors.categories.size].asColor()),
                             )
                         }
                         BasicText(count.toString(), Modifier.width(28.dp), style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp, FontWeight.Medium))
@@ -272,7 +283,7 @@ private fun SummaryCard(stats: RangeStats, kind: RangeKind, metric: ChartMetric,
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ChartMetric.entries.forEach { Chip(stringResource(it.label), null, it == metric) { onMetric(it) } }
                 }
-                BarChart(stats, kind, metric)
+                BarChart(stats, kind, metric, colors)
             }
         }
     }
@@ -299,7 +310,7 @@ private fun metricText(metric: ChartMetric, v: Int): String = when (metric) {
 }
 
 @Composable
-private fun BarChart(stats: RangeStats, kind: RangeKind, metric: ChartMetric) {
+private fun BarChart(stats: RangeStats, kind: RangeKind, metric: ChartMetric, colors: ChartColors) {
     val t = LocalThemeTokens.current
     val buckets = stats.buckets
     val values = buckets.map { it.valueOf(metric) }
@@ -309,9 +320,12 @@ private fun BarChart(stats: RangeStats, kind: RangeKind, metric: ChartMetric) {
         BasicText(stringResource(R.string.records_none), Modifier.fillMaxWidth().padding(vertical = 16.dp), style = TextStyle(secondary, 16.sp))
         return
     }
+    // First bucket reaching the maximum is highlighted; ties keep the earliest bar.
+    val maxIndex = maxValueIndex(values)
+    val series = colors.series.asColor()
+    val highlight = colors.highlight.asColor()
     val maxText = metricText(metric, max)
     val desc = stringResource(R.string.records_chart_desc, stringResource(metric.label), maxText)
-    val bar = t.accent.accentChart.asColor()
     val slot = t.neutrals.divider.asColor()
     fun label(i: Int) = buckets[i].start.let { if (kind == RangeKind.YEAR) it.monthValue else it.dayOfMonth }.toString()
     Column(
@@ -328,7 +342,7 @@ private fun BarChart(stats: RangeStats, kind: RangeKind, metric: ChartMetric) {
                 val x = i * slotW + (slotW - barW) / 2
                 val h = if (v == null) minH else (size.height * v / max).coerceAtLeast(4.dp.toPx())
                 drawRoundRect(
-                    if (v == null) slot else bar,
+                    if (v == null) slot else if (i == maxIndex) highlight else series,
                     Offset(x, size.height - h), Size(barW, h), CornerRadius(barW.coerceAtMost(4.dp.toPx())),
                 )
             }

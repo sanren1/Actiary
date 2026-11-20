@@ -109,6 +109,59 @@ class AppearancePreferencesTest {
         assertEquals(RecordsView(RangeKind.WEEK, ChartMetric.CALORIES), records.view.first())
         assertEquals(WeekStart.SUNDAY, general.weekStart.first())
     }
+
+    @Test fun pushRecentDedupesAndCaps() {
+        val base = listOf("#BBBBBB", "#CCCCCC", "#DDDDDD", "#EEEEEE", "#FFFFFF")
+        assertEquals(
+            listOf("#AAAAAA", "#BBBBBB", "#CCCCCC", "#DDDDDD", "#EEEEEE"),
+            pushRecent(base, "#AAAAAA"),
+        )
+        // 已存在的颜色被移到最前并去重
+        assertEquals(
+            listOf("#CCCCCC", "#AAAAAA", "#BBBBBB", "#DDDDDD", "#EEEEEE"),
+            pushRecent(listOf("#AAAAAA", "#BBBBBB", "#CCCCCC", "#DDDDDD", "#EEEEEE"), "#CCCCCC"),
+        )
+    }
+
+    @Test fun pushRecentNormalizesCase() {
+        assertEquals(listOf("#3A7BD5"), pushRecent(emptyList(), "3a7bd5"))
+        assertEquals(listOf("#3A7BD5"), pushRecent(emptyList(), " #3a7bd5 "))
+        assertEquals(listOf("#3A7BD5"), pushRecent(listOf("#3a7bd5"), "#3A7BD5"))
+    }
+
+    @Test fun recentColorsDropsInvalid() = runBlocking {
+        val store = inMemoryPreferencesStore()
+        store.updateData {
+            mutablePreferencesOf(
+                stringPreferencesKey("recent_colors") to
+                    "#111111,garbage,#12345,#222222,#333333,#444444,#555555,#666666",
+            )
+        }
+        val r = AppearanceRepository(store)
+        assertEquals(
+            listOf("#111111", "#222222", "#333333", "#444444", "#555555"),
+            r.recentColors.first(),
+        )
+    }
+
+    @Test fun applyCustomAccentSetsPresetAndRecent() = runBlocking {
+        val r = repo()
+        r.applyCustomAccent("#3a7bd5")
+        val s = r.settings.first()
+        assertEquals(AccentPreset.CUSTOM, s.accentPreset)
+        assertEquals("#3A7BD5", s.customAccentHex)
+        assertEquals(listOf("#3A7BD5"), r.recentColors.first())
+    }
+
+    @Test fun resetKeepsRecentColors() = runBlocking {
+        val r = repo()
+        r.applyCustomAccent("#111111")
+        r.applyCustomAccent("#222222")
+        assertEquals(listOf("#222222", "#111111"), r.recentColors.first())
+        r.resetAppearance()
+        assertEquals(AppearanceSettings(), r.settings.first())
+        assertEquals(listOf("#222222", "#111111"), r.recentColors.first())
+    }
 }
 
 // The file-based DataStore fails its tmp-file rename over an existing file on Windows JVM.
