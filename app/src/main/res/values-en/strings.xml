@@ -60,6 +60,10 @@
     <string name="day_today">Today</string>
     <string name="day_photo">Photo %d</string>
     <string name="record_title">Log workout</string>
+    <string name="record_detail_edit">Edit log</string>
+    <string name="record_detail_empty">No workout data</string>
+    <string name="record_detail_distance">Distance</string>
+    <string name="record_detail_bpm">%d bpm</string>
     <string name="record_cancel">Cancel</string>
     <string name="record_save">Save</string>
     <string name="record_date">Date</string>

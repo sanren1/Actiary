@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
@@ -42,7 +43,8 @@ enum class GlassSampling { Background, Content }
  * The only drawBackdrop call site in the app. [flat] drops the shadow (in-content panels).
  * Degraded profiles skip Backdrop entirely: translucent neutral surface + hairline highlight.
  * [press] (0..1, read in draw phase) turns this into an interactive thumb: at 0 it is a solid surface, and the
- * lens, highlight and shadows grow with it. Ignored when degraded. [layerBlock] goes to drawBackdrop as is.
+ * lens, highlight and shadows grow with it. [thumbRestingColor] is the thumb fill at rest.
+ * Ignored when degraded. [layerBlock] goes to drawBackdrop as is.
  */
 fun Modifier.glass(
     backdrop: Backdrop,
@@ -53,6 +55,7 @@ fun Modifier.glass(
     flat: Boolean = false,
     press: (() -> Float)? = null,
     layerBlock: (GraphicsLayerScope.() -> Unit)? = null,
+    thumbRestingColor: Color? = null,
 ): Modifier {
     val surface = Color(profile.surfaceColor)
     if (profile.degraded) {
@@ -97,12 +100,7 @@ fun Modifier.glass(
         layerBlock = layerBlock,
         exportedBackdrop = exported,
         onDrawSurface = {
-            if (press == null) drawRect(surface)
-            else {
-                val p = press()
-                drawRect(surface.copy(alpha = 1f), alpha = 1f - p)
-                drawRect(surface, alpha = p)
-            }
+            drawRect(if (press == null) surface else lerp(thumbRestingColor ?: surface.copy(alpha = 1f), surface, press()))
         },
     )
 }

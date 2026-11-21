@@ -60,6 +60,10 @@
     <string name="day_today">今天</string>
     <string name="day_photo">照片 %d</string>
     <string name="record_title">记录运动</string>
+    <string name="record_detail_edit">编辑记录</string>
+    <string name="record_detail_empty">未记录运动数据</string>
+    <string name="record_detail_distance">距离</string>
+    <string name="record_detail_bpm">%d 次/分钟</string>
     <string name="record_cancel">取消</string>
     <string name="record_save">保存</string>
     <string name="record_date">日期</string>

@@ -7,48 +7,58 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
+import kotlin.math.abs
 
 /**
- * Reports a press-and-drag without consuming events, so inner clickables still fire. The down is seen on the
- * Initial pass (before children), there is no touch slop, and the gesture is cancelled if another node consumes it.
- * Callbacks are captured once (key = Unit): read changing state through rememberUpdatedState or a state holder.
+ * Leaves taps with the child selectable. Only a horizontal drag beyond touch slop takes ownership.
+ * A scrollable track observes presses without taking ownership from either scroll axis.
  */
-fun Modifier.inspectDragGestures(
-    onDragStart: (down: PointerInputChange) -> Unit = {},
-    onDragEnd: (change: PointerInputChange) -> Unit = {},
-    onDragCancel: () -> Unit = {},
-    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
-): Modifier = pointerInput(Unit) {
+internal fun Modifier.inspectDragGestures(
+    state: PressDragState,
+    allowDrag: Boolean,
+    onPress: (Offset) -> Boolean,
+    onRelease: (dragged: Boolean) -> Unit,
+    onCancel: () -> Unit,
+    onDrag: (dragX: Float) -> Unit,
+): Modifier = pointerInput(state, allowDrag) {
     awaitEachGesture {
-        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val down = awaitFirstDown(requireUnconsumed = false)
-        onDragStart(down)
-        onDrag(down, Offset.Zero)
-        var pointer = down.id
-        while (true) {
-            val event = awaitPointerEvent()
-            val change = event.changes.firstOrNull { it.id == pointer }
-            if (change == null) {
-                onDragCancel()
-                return@awaitEachGesture
-            }
-            if (change.changedToUpIgnoreConsumed()) {
-                val other = event.changes.firstOrNull { it.pressed }
-                if (other == null) {
-                    onDragEnd(change)
-                    return@awaitEachGesture
+        if (!onPress(down.position)) return@awaitEachGesture
+        var dragging = false
+        var released = false
+        try {
+            while (true) {
+                // Compose dispatches cancellation as an up that is already consumed in Initial.
+                val initial = awaitPointerEvent(PointerEventPass.Initial)
+                val initialChange = initial.changes.firstOrNull { it.id == down.id } ?: break
+                if (initialChange.changedToUpIgnoreConsumed() && initialChange.isConsumed) break
+
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (change.changedToUpIgnoreConsumed()) {
+                    // Main dispatches to children first. The selectable consumes a successful tap's up.
+                    released = dragging || change.isConsumed
+                    if (dragging) change.consume()
+                    if (released) onRelease(dragging)
+                    break
                 }
-                pointer = other.id
-            } else if (change.isConsumed) {
-                onDragCancel()
-                return@awaitEachGesture
-            } else if (change.previousPosition != change.position) {
-                onDrag(change, change.positionChange())
+                if (change.isConsumed) break
+                val delta = change.position - down.position
+                if (!dragging && abs(delta.y) > viewConfiguration.touchSlop && abs(delta.y) >= abs(delta.x)) break
+                if (allowDrag && (dragging || abs(delta.x) > viewConfiguration.touchSlop && abs(delta.x) > abs(delta.y))) {
+                    dragging = true
+                    change.consume()
+                    onDrag(delta.x)
+                } else {
+                    // Ancestor horizontal/vertical scrollers consume in Main, after this observer.
+                    val final = awaitPointerEvent(PointerEventPass.Final)
+                    if (final.changes.any { it.id == down.id && it.isConsumed }) break
+                }
             }
+        } finally {
+            if (!released) onCancel()
         }
     }
 }

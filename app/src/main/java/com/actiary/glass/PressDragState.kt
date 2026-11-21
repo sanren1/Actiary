@@ -93,7 +93,7 @@ fun valueFor(index: Int, count: Int): Float = index.coerceIn(0, (count - 1).coer
  * Drives a draggable thumb: [value] follows a spring, [pressProgress] is 0..1 while pressed, [scaleX]/[scaleY]
  * are the lift scale. Getters read Animatable state: call them from draw / graphicsLayer lambdas only.
  * Drag: [press] lifts, [updateValue] tracks, [animateToValue] settles (resting spring) and relaxes after the
- * minimum lift time. Tap: [tapTo] slides on the tracking spring with a short lift and no glass progress.
+ * minimum lift time. Tap: [tapTo] slides on the tracking spring and stays lifted through the travel.
  * A new lift cancels an unlift that has not finished.
  */
 class PressDragState internal constructor(
@@ -134,11 +134,11 @@ class PressDragState internal constructor(
     /** Velocity divided by 10, the scale [deformScale] expects. */
     val normalizedVelocity: Float get() = velocity / 10f
 
-    private fun startLift(glass: Boolean) {
+    private fun startLift() {
         unliftJob?.cancel()
         liftStartNanos = System.nanoTime()
         scope.launch {
-            if (glass) launch { pressAnim.animateTo(1f, liftSpec) }
+            launch { pressAnim.animateTo(1f, liftSpec) }
             launch { scaleXAnim.animateTo(pressedScale, liftSpec) }
             launch { scaleYAnim.animateTo(pressedScale, liftSpec) }
         }
@@ -147,20 +147,19 @@ class PressDragState internal constructor(
     /** Finger down on the thumb: lift with glass progress. */
     fun press() {
         tracker.resetTracking()
-        startLift(glass = true)
+        startLift()
     }
 
     /** Waits for the thumb to settle near its target and for the minimum lift time, then unlifts. */
-    fun release() {
+    fun release(cancelled: Boolean = false) {
         unliftJob?.cancel()
         unliftJob = scope.launch {
-            withFrameNanos { }
-            if (value != targetValue) {
-                val threshold = (range.endInclusive - range.start) * 0.025f
-                snapshotFlow { valueAnim.value }.filter { abs(it - valueAnim.targetValue) < threshold }.first()
+            if (!cancelled) {
+                withFrameNanos { }
+                snapshotFlow { abs(value - targetValue) }.filter { it <= VALUE_THRESHOLD }.first()
+                val remainingMs = (MIN_LIFT_SECONDS * 1000f).toLong() - (System.nanoTime() - liftStartNanos) / 1_000_000L
+                if (remainingMs > 0) delay(remainingMs)
             }
-            val remainingMs = (MIN_LIFT_SECONDS * 1000f).toLong() - (System.nanoTime() - liftStartNanos) / 1_000_000L
-            if (remainingMs > 0) delay(remainingMs)
             launch { pressAnim.animateTo(0f, unliftSpec) }
             launch { scaleXAnim.animateTo(1f, unliftSpec) }
             launch { scaleYAnim.animateTo(1f, unliftSpec) }
@@ -176,23 +175,25 @@ class PressDragState internal constructor(
     /** Drag release: settle on the resting spring, then unlift (the drag already lifted). */
     suspend fun animateToValue(v: Float) {
         mutex.mutate {
+            val lift = liftStartNanos
             coroutineScope {
                 launch { valueAnim.animateTo(v.coerceIn(range), restingSpec) { trackVelocity(flexRestingSpec) } }
                 if (velocity != 0f) launch { velocityAnim.animateTo(0f, flexRestingSpec) }
             }
-            release()
+            if (liftStartNanos == lift) release()
         }
     }
 
-    /** Tap or outside selection change: tracking-spring slide with a short lift, no glass. */
-    suspend fun tapTo(v: Float) {
+    /** Tap or outside selection change: tracking-spring slide with optional lift. */
+    suspend fun tapTo(v: Float, lift: Boolean = true) {
         mutex.mutate {
-            startLift(glass = false)
+            if (lift) press()
+            val liftStartedAt = liftStartNanos
             coroutineScope {
                 launch { valueAnim.animateTo(v.coerceIn(range), trackingSpec) { trackVelocity(flexTrackingSpec) } }
                 if (velocity != 0f) launch { velocityAnim.animateTo(0f, flexRestingSpec) }
             }
-            release()
+            if (lift && liftStartNanos == liftStartedAt) release()
         }
     }
 
@@ -203,7 +204,7 @@ class PressDragState internal constructor(
 
     private fun trackVelocity(spec: SpringSpec<Float>) {
         tracker.addPosition(System.nanoTime() / 1_000_000L, Offset(value, 0f))
-        val target = tracker.calculateVelocity().x / (range.endInclusive - range.start)
+        val target = tracker.calculateVelocity().x / (range.endInclusive - range.start).coerceAtLeast(1f)
         scope.launch { velocityAnim.animateTo(target, spec) }
     }
 

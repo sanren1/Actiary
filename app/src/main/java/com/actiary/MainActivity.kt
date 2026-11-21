@@ -39,6 +39,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -47,8 +48,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.hideFromAccessibility
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -75,6 +76,7 @@ import com.actiary.ui.common.FloatingInsets
 import com.actiary.ui.common.LocalFloatingInsets
 import com.actiary.ui.common.CUSTOM_TYPE_ICONS
 import com.actiary.ui.record.DatePickerDialog
+import com.actiary.ui.record.RecordDetailSheet
 import com.actiary.ui.record.RecordSheet
 import com.actiary.ui.records.RecordsScreen
 import com.actiary.ui.settings.CustomTypeIconPicker
@@ -89,7 +91,7 @@ import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 import java.time.YearMonth
 
-private val BarGap = 12.dp
+private val BarGap = 6.dp
 
 private enum class Tab { CALENDAR, RECORDS, SETTINGS }
 
@@ -120,6 +122,7 @@ class MainActivity : ComponentActivity() {
             AppTheme(tokens) {
                 var selected by rememberSaveable { mutableStateOf(LocalDate.now()) }
                 var editing by rememberSaveable { mutableStateOf<Long?>(null) }
+                var viewing by rememberSaveable { mutableStateOf<Long?>(null) }
                 var scanningUri by rememberSaveable { mutableStateOf<String?>(null) }
                 var screenshot by rememberSaveable { mutableStateOf<WorkoutScreenshot?>(null) }
                 val screenshotPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -165,10 +168,10 @@ class MainActivity : ComponentActivity() {
                 val insets = FloatingInsets(navBar + GlassBottomBarHeight + BarGap)
                 // Behind the sheet: page and base chrome are inert for TalkBack; the base also goes flat (spec 4.1 glass cap).
                 val choosingWorkoutDate = screenshot != null && editing == null
-                val modalOpen = editing != null || pendingTypeRemoval != null || pickingTypeIcon ||
+                val modalOpen = editing != null || viewing != null || pendingTypeRemoval != null || pickingTypeIcon ||
                     scanningUri != null || choosingWorkoutDate || confirmAppearanceReset
-                val baseProfile = if (editing != null || confirmAppearanceReset) profile.copy(degraded = true) else profile
-                val hideBase = Modifier.semantics { if (modalOpen) hideFromAccessibility() }
+                val baseProfile = if (editing != null || viewing != null || confirmAppearanceReset) profile.copy(degraded = true) else profile
+                val hideBase = if (modalOpen) Modifier.clearAndSetSemantics { hideFromAccessibility() } else Modifier
                 val tabs = listOf(
                     GlassTab(Icons.Outlined.CalendarMonth, stringResource(R.string.tab_calendar)),
                     GlassTab(Icons.Outlined.BarChart, stringResource(R.string.tab_records)),
@@ -222,6 +225,20 @@ class MainActivity : ComponentActivity() {
                                     onDismiss = { screenshot = null },
                                     title = stringResource(R.string.home_import_select_date),
                                 )
+                            }
+                            viewing?.let { day ->
+                                key(day) {
+                                    RecordDetailSheet(
+                                        date = LocalDate.ofEpochDay(day),
+                                        repository = container.recordRepository,
+                                        photoStore = container.photoStore,
+                                        onDismiss = { viewing = null },
+                                        onEdit = {
+                                            editing = day
+                                            viewing = null
+                                        },
+                                    )
+                                }
                             }
                             editing?.let { day ->
                                 RecordSheet(
@@ -291,7 +308,7 @@ class MainActivity : ComponentActivity() {
                                 chartPalette = settings.chartPalette,
                                 onKind = { lifecycleScope.launch { container.recordsPrefs.setKind(it) } },
                                 onMetric = { lifecycleScope.launch { container.recordsPrefs.setMetric(it) } },
-                                onEdit = { editing = it.toEpochDay() },
+                                onView = { viewing = it.toEpochDay() },
                             )
                             Tab.SETTINGS -> SettingsScreen(
                                 page = settingsPage,

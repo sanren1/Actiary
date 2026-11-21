@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,8 +28,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.toggleableState
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +43,7 @@ import com.actiary.data.appearance.ThemeMode
 import com.actiary.glass.GlassPanel
 import com.actiary.glass.GlassPreview
 import com.actiary.glass.GlassSegmentedPicker
+import com.actiary.glass.GlassToggle
 import com.actiary.glass.LocalGlassProfile
 import com.actiary.theme.DEFAULT_SEED
 import com.actiary.theme.LocalThemeTokens
@@ -89,7 +86,6 @@ fun AppearanceScreen(
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
-    val a = t.accent
 
     SettingsPageLayout(stringResource(R.string.appearance_title), onBack) {
         GlassPreview(t, LocalGlassProfile.current)
@@ -142,26 +138,14 @@ fun AppearanceScreen(
                     ),
                     settings.glassTintStrength, onGlassTint,
                 )
-                val on = settings.ambientBackground
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                        .semantics { toggleableState = ToggleableState(on) }
-                        .clickable(role = Role.Switch) { onAmbient(!on) },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                val ambientLabel = stringResource(R.string.ambient_title)
+                GlassToggle(
+                    checked = settings.ambientBackground,
+                    onCheckedChange = onAmbient,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = ambientLabel,
                 ) {
-                    BasicText(stringResource(R.string.ambient_title), style = style(n.textPrimary))
-                    Box(
-                        Modifier.size(width = 48.dp, height = 28.dp)
-                            .background(if (on) a.accentAction.asColor() else n.surfaceMuted.asColor(), CircleShape)
-                            .border(1.dp, if (on) a.accentAction.asColor() else n.divider.asColor(), CircleShape)
-                            .padding(3.dp),
-                        contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-                    ) {
-                        Box(
-                            Modifier.size(20.dp).background(if (on) a.onAccentAction.asColor() else n.textSecondary.asColor(), CircleShape),
-                        )
-                    }
+                    BasicText(ambientLabel, style = style(n.textPrimary))
                 }
                 BasicText(stringResource(R.string.chart_palette_title), style = style(n.textSecondary, 14))
                 Segmented(

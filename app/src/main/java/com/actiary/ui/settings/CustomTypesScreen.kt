@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
@@ -47,8 +46,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.toggleableState
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,6 +55,7 @@ import com.actiary.R
 import com.actiary.data.RecordRepository
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassOverlayPanel
+import com.actiary.glass.GlassToggle
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.CUSTOM_TYPE_ICONS
@@ -121,28 +119,14 @@ fun CustomTypesScreen(
                 }
             }
 
-            val on = hasDistance
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    .semantics { toggleableState = ToggleableState(on) }
-                    .clickable(role = Role.Switch) { hasDistance = !hasDistance },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            val distanceLabel = stringResource(R.string.custom_type_has_distance)
+            GlassToggle(
+                checked = hasDistance,
+                onCheckedChange = { hasDistance = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = distanceLabel,
             ) {
-                BasicText(stringResource(R.string.custom_type_has_distance), style = TextStyle(n.textPrimary.asColor(), 16.sp))
-                Box(
-                    Modifier.size(width = 48.dp, height = 28.dp)
-                        .background(if (on) a.accentAction.asColor() else n.surfaceMuted.asColor(), CircleShape)
-                        .border(1.dp, if (on) a.accentAction.asColor() else n.divider.asColor(), CircleShape)
-                        .padding(3.dp),
-                    contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-                ) {
-                    Box(
-                        Modifier.size(20.dp).background(
-                            if (on) a.onAccentAction.asColor() else n.textSecondary.asColor(), CircleShape,
-                        ),
-                    )
-                }
+                BasicText(distanceLabel, style = TextStyle(n.textPrimary.asColor(), 16.sp))
             }
 
             Box(

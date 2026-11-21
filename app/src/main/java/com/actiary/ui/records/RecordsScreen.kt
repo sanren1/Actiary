@@ -47,6 +47,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -64,7 +65,6 @@ import com.actiary.R
 import com.actiary.data.RecordRepository
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.DayWithDetails
-import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.photo.PhotoStore
 import com.actiary.data.appearance.ChartPalette
@@ -87,7 +87,6 @@ import com.actiary.theme.resolveChartColors
 import com.actiary.ui.common.LocalFloatingInsets
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
-import com.actiary.ui.record.formatDistance
 import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -126,7 +125,7 @@ fun RecordsScreen(
     chartPalette: ChartPalette,
     onKind: (RangeKind) -> Unit,
     onMetric: (ChartMetric) -> Unit,
-    onEdit: (LocalDate) -> Unit,
+    onView: (LocalDate) -> Unit,
 ) {
     val t = LocalThemeTokens.current
     val colors = remember(chartPalette, t) { resolveChartColors(chartPalette, t) }
@@ -209,9 +208,10 @@ fun RecordsScreen(
             val present = computeStats(days, range, null).byType.map { it.first }.toSet()
             val filter = filterId?.takeIf { it in present }
             val stats = computeStats(days, range, filter)
-            item { SummaryCard(stats, range.kind, ChartMetric.entries[metricIx], { metricIx = it.ordinal; onMetric(it) }, typeById, colors) }
             item {
-                FilterBar(types.filter { it.id in present }, filter) { filterId = it }
+                SummaryCard(stats, range.kind, ChartMetric.entries[metricIx], { metricIx = it.ordinal; onMetric(it) }, typeById, colors) {
+                    FilterBar(types.filter { it.id in present }, filter) { filterId = it }
+                }
             }
             val timeline = timelineItems(days, range, filter)
             items(timeline, key = { if (it is TimelineItem.Day) it.day.record.epochDay else "m${(it as TimelineItem.Month).month}" }) { item ->
@@ -222,7 +222,7 @@ fun RecordsScreen(
                         style = TextStyle(secondary, 15.sp, FontWeight.SemiBold),
                     )
                     is TimelineItem.Day -> DayCard(item.day, typeById, photoStore, cardDateFmt) {
-                        onEdit(LocalDate.ofEpochDay(item.day.record.epochDay))
+                        onView(LocalDate.ofEpochDay(item.day.record.epochDay))
                     }
                 }
             }
@@ -241,11 +241,20 @@ private fun durationText(minutes: Int): String {
 }
 
 @Composable
-private fun SummaryCard(stats: RangeStats, kind: RangeKind, metric: ChartMetric, onMetric: (ChartMetric) -> Unit, typeById: Map<Long, ExerciseTypeEntity>, colors: ChartColors) {
+private fun SummaryCard(
+    stats: RangeStats,
+    kind: RangeKind,
+    metric: ChartMetric,
+    onMetric: (ChartMetric) -> Unit,
+    typeById: Map<Long, ExerciseTypeEntity>,
+    colors: ChartColors,
+    filter: @Composable () -> Unit,
+) {
     val t = LocalThemeTokens.current
     val secondary = t.neutrals.textSecondary.asColor()
     GlassPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            filter()
             Row(Modifier.fillMaxWidth()) {
                 Stat(Modifier.weight(1f), stringResource(R.string.records_stat_days), stats.exerciseDays.toString())
                 Stat(Modifier.weight(1f), stringResource(R.string.records_stat_count), stats.entryCount.toString())
@@ -361,14 +370,6 @@ private fun FilterBar(present: List<ExerciseTypeEntity>, selected: Long?, onSele
 }
 
 @Composable
-private fun entryMetrics(e: ExerciseEntryEntity, type: ExerciseTypeEntity): String = buildList {
-    e.durationMinutes?.let { add(stringResource(R.string.records_min, it)) }
-    e.calories?.let { add(stringResource(R.string.records_kcal, it)) }
-    val d = formatDistance(e.distanceMeters, type.builtinKey, type.hasDistance)
-    if (d.isNotEmpty()) add(stringResource(if (type.builtinKey == "swimming") R.string.records_m else R.string.records_km, d))
-}.joinToString(" · ")
-
-@Composable
 private fun DayCard(
     day: DayWithDetails,
     typeById: Map<Long, ExerciseTypeEntity>,
@@ -379,6 +380,7 @@ private fun DayCard(
     val t = LocalThemeTokens.current
     val primary = t.neutrals.textPrimary.asColor()
     val secondary = t.neutrals.textSecondary.asColor()
+    val resources = LocalContext.current.resources
     val photo = day.photos.firstOrNull()
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(t.neutrals.surface.asColor())
@@ -400,7 +402,9 @@ private fun DayCard(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Icon(exerciseTypeIcon(type), null, Modifier.size(18.dp), tint = primary)
                         BasicText(exerciseTypeLabel(type), style = TextStyle(primary, 14.sp))
-                        val metrics = entryMetrics(e, type)
+                        val metrics = entryMetrics(e, type) { unit, value -> resources.getString(unit, value) }
+                            .filterNot { (label, _) -> label == R.string.record_heart_rate }
+                            .joinToString(" · ") { it.second }
                         if (metrics.isNotEmpty()) {
                             BasicText(
                                 metrics, Modifier.weight(1f), style = TextStyle(secondary, 13.sp),

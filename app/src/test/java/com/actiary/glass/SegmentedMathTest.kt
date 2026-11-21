@@ -1,8 +1,7 @@
 package com.actiary.glass
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SegmentedMathTest {
@@ -36,11 +35,14 @@ class SegmentedMathTest {
         assertEquals(120f, thumbWidth(0f, listOf(120f)), 1e-4f)
     }
 
-    @Test fun hitsThumbMirrorsInRtl() {
-        assertTrue(hitsThumb(130f, 1f, varied, true))
-        assertFalse(hitsThumb(30f, 1f, varied, true))
-        // RTL: item 1 occupies [80, 180) measured from the left of a 240px row.
-        assertTrue(hitsThumb(100f, 1f, varied, false))
-        assertFalse(hitsThumb(200f, 1f, varied, false))
+    @Test fun pressTargetsTheTouchedOptionWithVariableWidthsAndRtl() {
+        assertEquals(0, segmentIndexAt(30f, varied, true))
+        assertEquals(1, segmentIndexAt(60f, varied, true))
+        assertEquals(2, segmentIndexAt(170f, varied, true))
+        assertEquals(2, segmentIndexAt(30f, varied, false))
+        assertEquals(1, segmentIndexAt(100f, varied, false))
+        assertEquals(0, segmentIndexAt(200f, varied, false))
+        assertNull(segmentIndexAt(-1f, varied, true))
+        assertNull(segmentIndexAt(240f, varied, false))
     }
 }
