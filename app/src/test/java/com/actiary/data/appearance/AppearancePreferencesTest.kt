@@ -162,6 +162,45 @@ class AppearancePreferencesTest {
         assertEquals(AppearanceSettings(), r.settings.first())
         assertEquals(listOf("#222222", "#111111"), r.recentColors.first())
     }
+
+    @Test fun exportImportAppearanceRoundTrip() = runBlocking {
+        val sourceStore = inMemoryPreferencesStore()
+        val source = AppearanceRepository(sourceStore)
+        source.setThemeMode(ThemeMode.DARK)
+        source.setAmbientBackground(false)
+        source.applyCustomAccent("#123456")
+        GeneralPrefsRepository(sourceStore).setWeekStart(WeekStart.SUNDAY)
+
+        val destinationStore = inMemoryPreferencesStore()
+        val destination = AppearanceRepository(destinationStore)
+        destination.setGlassLevel(GlassLevel.CLEAR)
+        destination.applyCustomAccent("#ABCDEF")
+        val records = RecordsPrefsRepository(destinationStore)
+        records.setKind(RangeKind.WEEK)
+        records.setMetric(ChartMetric.CALORIES)
+        val values = source.exportAppearance()
+
+        assertEquals(mapOf(
+            "theme_mode" to "DARK", "ambient_background" to "false",
+            "custom_accent_hex" to "#123456", "accent_preset" to "CUSTOM",
+        ), values)
+        destination.importAppearance(values, replace = false)
+        assertEquals(GlassLevel.CLEAR, destination.settings.first().glassLevel)
+        destination.importAppearance(values, replace = true)
+        assertEquals(source.settings.first(), destination.settings.first())
+        assertEquals(listOf("#ABCDEF"), destination.recentColors.first())
+        assertEquals(RecordsView(RangeKind.WEEK, ChartMetric.CALORIES), records.view.first())
+        assertEquals(WeekStart.SYSTEM, GeneralPrefsRepository(destinationStore).weekStart.first())
+    }
+
+    @Test fun importDropsUnknownEnumValues() = runBlocking {
+        val appearance = repo()
+        appearance.setThemeMode(ThemeMode.DARK)
+        appearance.setAmbientBackground(false)
+        appearance.importAppearance(mapOf("theme_mode" to "PURPLE", "custom_accent_hex" to "bad"), replace = true)
+        assertEquals(emptyMap<String, String>(), appearance.exportAppearance())
+        assertEquals(AppearanceSettings(), appearance.settings.first())
+    }
 }
 
 // The file-based DataStore fails its tmp-file rename over an existing file on Windows JVM.

@@ -77,6 +77,19 @@ private class FakeDao : RecordDao {
         rows.value = rows.value + (record.epochDay to DayWithDetails(record, entries, photos))
     }
     override suspend fun deleteDay(epochDay: Long) { rows.value = rows.value - epochDay }
+    override suspend fun getAllTypes() = error("unused")
+    override suspend fun getAllRecords() = error("unused")
+    override suspend fun getAllEntries() = error("unused")
+    override suspend fun getAllPhotos() = error("unused")
+    override suspend fun getAllPhotoFileNames() = error("unused")
+    override suspend fun insertRecords(records: List<DailyRecordEntity>) = error("unused")
+    override suspend fun deleteAllEntries() = error("unused")
+    override suspend fun deleteAllPhotoRows() = error("unused")
+    override suspend fun deleteAllRecords() = error("unused")
+    override suspend fun deleteCustomTypes() = error("unused")
+    override suspend fun updateBuiltinType(
+        builtinKey: String, name: String?, sortOrder: Int, archived: Boolean, hasDistance: Boolean, iconKey: String?,
+    ) = error("unused")
 }
 
 class RecordRepositoryTest {

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="zh">
     <string name="app_name">Actiary</string>
     <string name="appearance_title">外观</string>
     <string name="theme_mode_light">浅色</string>
@@ -121,6 +121,41 @@
     <string name="nav_back">返回</string>
     <string name="settings_custom_types">运动类型</string>
     <string name="settings_general">通用</string>
+    <string name="settings_data">数据</string>
+    <string name="backup_export">导出备份</string>
+    <string name="backup_import">导入备份</string>
+    <string name="backup_clean_photos">清理孤立照片</string>
+    <string name="backup_merge">合并</string>
+    <string name="backup_merge_summary">保留本机已有日期的整天记录，仅导入新日期。</string>
+    <string name="backup_overwrite">覆盖</string>
+    <string name="backup_overwrite_summary">现有记录、照片、运动类型和外观设置将被备份替换。</string>
+    <string name="backup_delete">删除</string>
+    <string name="backup_exporting">正在导出备份…</string>
+    <string name="backup_reading">正在校验备份…</string>
+    <string name="backup_restoring">正在恢复备份…</string>
+    <string name="backup_scanning_photos">正在检查照片…</string>
+    <string name="backup_cleaning_photos">正在清理照片…</string>
+    <string name="backup_picker_unavailable">无法打开文件选择器。</string>
+    <string name="backup_export_failed">导出失败。</string>
+    <string name="backup_read_failed">备份无效或无法读取。</string>
+    <string name="backup_restore_failed">恢复备份失败。</string>
+    <string name="backup_scan_failed">无法检查孤立照片。</string>
+    <string name="backup_cleanup_failed">清理照片失败。</string>
+    <string name="backup_exported">已导出 %1$s、%2$s</string>
+    <string name="backup_merged">新增 %1$s，跳过 %2$s</string>
+    <string name="backup_restored">已恢复 %1$s</string>
+    <string name="backup_no_orphans">没有孤立照片。</string>
+    <string name="backup_cleanup_confirm">删除 %1$s孤立照片？</string>
+    <string name="backup_cleaned">已删除 %1$s</string>
+    <plurals name="backup_day_count">
+        <item quantity="other">%d 天</item>
+    </plurals>
+    <plurals name="backup_photo_count">
+        <item quantity="other">%d 张照片</item>
+    </plurals>
+    <plurals name="backup_orphan_photo_count">
+        <item quantity="other">%d 张</item>
+    </plurals>
     <string name="settings_week_start">周起始日</string>
     <string name="settings_week_system">跟随系统</string>
     <string name="settings_week_monday">周一</string>

@@ -96,4 +96,42 @@ interface RecordDao {
 
     @Query("DELETE FROM daily_record WHERE epochDay = :epochDay")
     suspend fun deleteDay(epochDay: Long)
+
+    @Query("SELECT * FROM exercise_type ORDER BY sortOrder, id")
+    suspend fun getAllTypes(): List<ExerciseTypeEntity>
+
+    @Query("SELECT * FROM daily_record ORDER BY epochDay")
+    suspend fun getAllRecords(): List<DailyRecordEntity>
+
+    @Query("SELECT * FROM exercise_entry ORDER BY epochDay, sortOrder, id")
+    suspend fun getAllEntries(): List<ExerciseEntryEntity>
+
+    @Query("SELECT * FROM photo_attachment ORDER BY epochDay, sortOrder, id")
+    suspend fun getAllPhotos(): List<PhotoAttachmentEntity>
+
+    @Query("SELECT DISTINCT fileName FROM photo_attachment")
+    suspend fun getAllPhotoFileNames(): List<String>
+
+    @Insert
+    suspend fun insertRecords(records: List<DailyRecordEntity>)
+
+    @Query("DELETE FROM exercise_entry")
+    suspend fun deleteAllEntries()
+
+    @Query("DELETE FROM photo_attachment")
+    suspend fun deleteAllPhotoRows()
+
+    @Query("DELETE FROM daily_record")
+    suspend fun deleteAllRecords()
+
+    @Query("DELETE FROM exercise_type WHERE builtinKey IS NULL")
+    suspend fun deleteCustomTypes()
+
+    @Query("""
+        UPDATE exercise_type SET name = :name, sortOrder = :sortOrder, archived = :archived,
+            hasDistance = :hasDistance, iconKey = :iconKey WHERE builtinKey = :builtinKey
+    """)
+    suspend fun updateBuiltinType(
+        builtinKey: String, name: String?, sortOrder: Int, archived: Boolean, hasDistance: Boolean, iconKey: String?,
+    )
 }

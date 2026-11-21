@@ -121,6 +121,44 @@
     <string name="nav_back">Back</string>
     <string name="settings_custom_types">Workout types</string>
     <string name="settings_general">General</string>
+    <string name="settings_data">Data</string>
+    <string name="backup_export">Export backup</string>
+    <string name="backup_import">Import backup</string>
+    <string name="backup_clean_photos">Clean up orphaned photos</string>
+    <string name="backup_merge">Merge</string>
+    <string name="backup_merge_summary">Keep existing days as they are. Add new days from the backup.</string>
+    <string name="backup_overwrite">Overwrite</string>
+    <string name="backup_overwrite_summary">Replace existing records, photos, workout types, and appearance settings with this backup.</string>
+    <string name="backup_delete">Delete</string>
+    <string name="backup_exporting">Exporting backup…</string>
+    <string name="backup_reading">Checking backup…</string>
+    <string name="backup_restoring">Restoring backup…</string>
+    <string name="backup_scanning_photos">Checking photos…</string>
+    <string name="backup_cleaning_photos">Cleaning up photos…</string>
+    <string name="backup_picker_unavailable">Couldn’t open the file picker.</string>
+    <string name="backup_export_failed">Couldn’t export the backup.</string>
+    <string name="backup_read_failed">The backup is invalid or unreadable.</string>
+    <string name="backup_restore_failed">Couldn’t restore the backup.</string>
+    <string name="backup_scan_failed">Couldn’t check for orphaned photos.</string>
+    <string name="backup_cleanup_failed">Couldn’t clean up photos.</string>
+    <string name="backup_exported">Exported %1$s and %2$s</string>
+    <string name="backup_merged">Added %1$s, skipped %2$s</string>
+    <string name="backup_restored">Restored %1$s</string>
+    <string name="backup_no_orphans">No orphaned photos.</string>
+    <string name="backup_cleanup_confirm">Delete %1$s?</string>
+    <string name="backup_cleaned">Deleted %1$s</string>
+    <plurals name="backup_day_count">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <plurals name="backup_photo_count">
+        <item quantity="one">%d photo</item>
+        <item quantity="other">%d photos</item>
+    </plurals>
+    <plurals name="backup_orphan_photo_count">
+        <item quantity="one">%d orphaned photo</item>
+        <item quantity="other">%d orphaned photos</item>
+    </plurals>
     <string name="settings_week_start">Start of week</string>
     <string name="settings_week_system">System</string>
     <string name="settings_week_monday">Monday</string>

@@ -152,7 +152,8 @@ fun GlassOverlayPanel(
     ) {
         val t = LocalThemeTokens.current
         val shape = RoundedCornerShape(28.dp)
-        Box(Modifier.fillMaxSize().background(ScrimColor).scrim(onDismiss), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.matchParentSize().background(ScrimColor).scrim(onDismiss))
             Column(
                 Modifier
                     .padding(32.dp).widthIn(max = 360.dp)

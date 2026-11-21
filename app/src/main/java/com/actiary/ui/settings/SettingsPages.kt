@@ -41,7 +41,7 @@ import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.LocalFloatingInsets
 
-internal enum class SettingsPage { HOME, APPEARANCE, GENERAL, TYPES, ABOUT, CUSTOM_COLOR }
+internal enum class SettingsPage { HOME, APPEARANCE, GENERAL, TYPES, DATA, ABOUT, CUSTOM_COLOR }
 
 /** Navigation parent used by both the system back handler and in-page back buttons. */
 internal fun SettingsPage.parent(): SettingsPage? = when (this) {
@@ -87,6 +87,7 @@ internal fun SettingsRow(
     label: String,
     icon: ImageVector,
     endIcon: ImageVector? = null,
+    summary: String? = null,
     onClick: () -> Unit,
 ) {
     val n = LocalThemeTokens.current.neutrals
@@ -100,7 +101,10 @@ internal fun SettingsRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(icon, null, tint = n.textPrimary.asColor())
-        BasicText(label, Modifier.weight(1f), style = TextStyle(n.textPrimary.asColor(), 16.sp))
+        Column(Modifier.weight(1f)) {
+            BasicText(label, style = TextStyle(n.textPrimary.asColor(), 16.sp))
+            if (summary != null) BasicText(summary, style = TextStyle(n.textSecondary.asColor(), 14.sp))
+        }
         if (endIcon != null) Icon(endIcon, null, tint = n.textSecondary.asColor())
     }
 }

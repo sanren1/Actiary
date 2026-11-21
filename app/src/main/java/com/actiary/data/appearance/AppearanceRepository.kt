@@ -12,6 +12,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.actiary.theme.normalizeHex
 import com.actiary.theme.parseHex
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 val Context.appearanceDataStore: DataStore<Preferences> by preferencesDataStore(
@@ -25,8 +26,18 @@ private val CUSTOM_ACCENT_HEX = stringPreferencesKey("custom_accent_hex")
 private val GLASS_LEVEL = stringPreferencesKey("glass_level")
 private val GLASS_TINT_STRENGTH = stringPreferencesKey("glass_tint_strength")
 private val CHART_PALETTE = stringPreferencesKey("chart_palette")
-private val AMBIENT_BACKGROUND = booleanPreferencesKey("ambient_background")
+internal val AMBIENT_BACKGROUND = booleanPreferencesKey("ambient_background")
 private val RECENT_COLORS = stringPreferencesKey("recent_colors")
+
+private val appearanceValidators = mapOf<Preferences.Key<String>, (String) -> Boolean>(
+    THEME_MODE to { value -> ThemeMode.entries.any { it.name == value } },
+    ACCENT_PRESET to { value -> AccentPreset.entries.any { it.name == value } },
+    CUSTOM_ACCENT_HEX to { parseHex(it) != null },
+    GLASS_LEVEL to { value -> GlassLevel.entries.any { it.name == value } },
+    GLASS_TINT_STRENGTH to { value -> GlassTintStrength.entries.any { it.name == value } },
+    CHART_PALETTE to { value -> ChartPalette.entries.any { it.name == value } },
+)
+internal val backupAppearanceStringKeys = appearanceValidators.keys
 
 internal inline fun <reified E : Enum<E>> Preferences.enumOr(key: Preferences.Key<String>, default: E): E =
     this[key]?.let { n -> enumValues<E>().firstOrNull { it.name == n } } ?: default
@@ -90,15 +101,39 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
         }
     }
 
-    suspend fun resetAppearance() {
-        store.edit {
-            it.remove(THEME_MODE)
-            it.remove(ACCENT_PRESET)
-            it.remove(CUSTOM_ACCENT_HEX)
-            it.remove(GLASS_LEVEL)
-            it.remove(GLASS_TINT_STRENGTH)
-            it.remove(CHART_PALETTE)
-            it.remove(AMBIENT_BACKGROUND)
+    suspend fun resetAppearance() = restoreAppearance(emptyMap())
+
+    suspend fun exportAppearance(): Map<String, String> {
+        val preferences = store.data.first()
+        return buildMap {
+            for (key in backupAppearanceStringKeys) preferences[key]?.let { put(key.name, it) }
+            preferences[AMBIENT_BACKGROUND]?.let { put(AMBIENT_BACKGROUND.name, it.toString()) }
+        }
+    }
+
+    suspend fun importAppearance(values: Map<String, String>, replace: Boolean) {
+        if (!replace) return
+        val validated = buildMap {
+            for ((key, isValid) in appearanceValidators) {
+                values[key.name]?.takeIf(isValid)?.let { put(key.name, it) }
+            }
+            values[AMBIENT_BACKGROUND.name]?.toBooleanStrictOrNull()?.let {
+                put(AMBIENT_BACKGROUND.name, it.toString())
+            }
+        }
+        restoreAppearance(validated)
+    }
+
+    // Restore the exact local snapshot if a Room commit fails after the DataStore edit.
+    internal suspend fun restoreAppearance(values: Map<String, String>) {
+        store.edit { preferences ->
+            for (key in backupAppearanceStringKeys) {
+                val value = values[key.name]
+                if (value == null) preferences.remove(key) else preferences[key] = value
+            }
+            val ambient = values[AMBIENT_BACKGROUND.name]
+            if (ambient == null) preferences.remove(AMBIENT_BACKGROUND)
+            else preferences[AMBIENT_BACKGROUND] = ambient.toBooleanStrict()
         }
     }
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.time.LocalDate
@@ -42,32 +43,34 @@ class RecordRepository(
     val allTypes: Flow<List<ExerciseTypeEntity>> get() = dao.observeAllTypes()
 
     suspend fun save(draft: DayDraft) = withContext(io) {
-        val epochDay = draft.date.toEpochDay()
-        val original = dao.get(epochDay)
-        val copied = mutableListOf<String>()
-        val names = try {
-            val names = draft.photos.map {
-                when (it) {
-                    is DraftPhoto.Saved -> it.fileName
-                    is DraftPhoto.Picked -> photos.copyIn { openUri(it.uri) }.also(copied::add)
+        photos.mutations.withLock {
+            val epochDay = draft.date.toEpochDay()
+            val original = dao.get(epochDay)
+            val copied = mutableListOf<String>()
+            val names = try {
+                val names = draft.photos.map {
+                    when (it) {
+                        is DraftPhoto.Saved -> it.fileName
+                        is DraftPhoto.Picked -> photos.copyIn { openUri(it.uri) }.also(copied::add)
+                    }
                 }
+                val now = clock()
+                dao.replaceDay(
+                    DailyRecordEntity(epochDay, draft.status, draft.note, now),
+                    draft.entries.mapIndexed { i, e ->
+                        ExerciseEntryEntity(0, epochDay, e.typeId, e.durationMinutes, e.distanceMeters, e.calories, e.avgHeartRate, i)
+                    },
+                    names.mapIndexed { i, n -> PhotoAttachmentEntity(0, epochDay, n, i, now) },
+                )
+                names
+            } catch (e: Throwable) {
+                copied.forEach(photos::delete)
+                throw e
             }
-            val now = clock()
-            dao.replaceDay(
-                DailyRecordEntity(epochDay, draft.status, draft.note, now),
-                draft.entries.mapIndexed { i, e ->
-                    ExerciseEntryEntity(0, epochDay, e.typeId, e.durationMinutes, e.distanceMeters, e.calories, e.avgHeartRate, i)
-                },
-                names.mapIndexed { i, n -> PhotoAttachmentEntity(0, epochDay, n, i, now) },
-            )
-            names
-        } catch (e: Throwable) {
-            copied.forEach(photos::delete)
-            throw e
+            // Only after the commit: drop files the draft no longer references.
+            val kept = names.toSet()
+            original?.photos?.forEach { if (it.fileName !in kept) photos.delete(it.fileName) }
         }
-        // Only after the commit: drop files the draft no longer references.
-        val kept = names.toSet()
-        original?.photos?.forEach { if (it.fileName !in kept) photos.delete(it.fileName) }
     }
 
     suspend fun addType(name: String, hasDistance: Boolean, iconKey: String?): Long = withContext(io) {
@@ -91,9 +94,11 @@ class RecordRepository(
     }
 
     suspend fun clearDay(date: LocalDate) = withContext(io) {
-        val epochDay = date.toEpochDay()
-        val files = dao.get(epochDay)?.photos.orEmpty()
-        dao.deleteDay(epochDay)
-        files.forEach { photos.delete(it.fileName) }
+        photos.mutations.withLock {
+            val epochDay = date.toEpochDay()
+            val files = dao.get(epochDay)?.photos.orEmpty()
+            dao.deleteDay(epochDay)
+            files.forEach { photos.delete(it.fileName) }
+        }
     }
 }

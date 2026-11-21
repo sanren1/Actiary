@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Tune
@@ -42,6 +43,9 @@ internal fun SettingsScreen(
     recent: List<String>,
     onApplyCustomAccent: (String) -> Unit,
     typesContent: @Composable (() -> Unit) -> Unit,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
+    onCleanOrphanPhotos: () -> Unit,
 ) {
     val onBack = {
         val parent = page.parent()
@@ -62,6 +66,9 @@ internal fun SettingsScreen(
                         stringResource(R.string.settings_custom_types), Icons.Outlined.FitnessCenter, chevron,
                     ) { onPage(SettingsPage.TYPES) }
                     SettingsRow(
+                        stringResource(R.string.settings_data), Icons.Outlined.Folder, chevron,
+                    ) { onPage(SettingsPage.DATA) }
+                    SettingsRow(
                         stringResource(R.string.settings_about), Icons.Outlined.Info, chevron,
                     ) { onPage(SettingsPage.ABOUT) }
                 }
@@ -73,6 +80,7 @@ internal fun SettingsScreen(
         )
         SettingsPage.GENERAL -> GeneralScreen(weekStart, onWeekStart, onBack)
         SettingsPage.TYPES -> typesContent(onBack)
+        SettingsPage.DATA -> DataScreen(onBack, onExportBackup, onImportBackup, onCleanOrphanPhotos)
         SettingsPage.ABOUT -> AboutScreen(onBack)
         SettingsPage.CUSTOM_COLOR -> ColorEditorScreen(
             settings = settings,

@@ -51,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.actiary.data.appearance.resolve
@@ -79,6 +80,9 @@ import com.actiary.ui.record.DatePickerDialog
 import com.actiary.ui.record.RecordDetailSheet
 import com.actiary.ui.record.RecordSheet
 import com.actiary.ui.records.RecordsScreen
+import com.actiary.ui.settings.BackupActions
+import com.actiary.ui.settings.BackupOverlay
+import com.actiary.ui.settings.BackupState
 import com.actiary.ui.settings.CustomTypeIconPicker
 import com.actiary.ui.settings.CustomTypesScreen
 import com.actiary.ui.settings.SettingsPage
@@ -90,6 +94,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 
 private val BarGap = 6.dp
 
@@ -99,6 +104,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as ActiaryApp).container
+        val backup = ViewModelProvider(this)[BackupActions::class.java]
         val repository = container.appearanceRepository
         // Tiny local DataStore file: a blocking first read at startup avoids a light-theme flash.
         val initial = runBlocking { repository.settings.first() }
@@ -128,6 +134,12 @@ class MainActivity : ComponentActivity() {
                 val screenshotPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
                     scanningUri = uri?.toString()
                 }
+                val exportPicker = rememberLauncherForActivityResult(
+                    ActivityResultContracts.CreateDocument("application/zip"), backup::exportTo,
+                )
+                val importPicker = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument(), backup::loadFrom,
+                )
                 LaunchedEffect(scanningUri) {
                     val uri = scanningUri ?: return@LaunchedEffect
                     val workout = try {
@@ -162,15 +174,21 @@ class MainActivity : ComponentActivity() {
                     val parent = settingsPage.parent()
                     if (parent != null) settingsPage = parent
                 }
+                BackHandler(backup.state == BackupState.Picking) {}
 
                 val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 // Include the bar, its gap, and the navigation inset in the scroll clearance.
                 val insets = FloatingInsets(navBar + GlassBottomBarHeight + BarGap)
                 // Behind the sheet: page and base chrome are inert for TalkBack; the base also goes flat (spec 4.1 glass cap).
                 val choosingWorkoutDate = screenshot != null && editing == null
+                val backupModal = backup.state != BackupState.Idle
                 val modalOpen = editing != null || viewing != null || pendingTypeRemoval != null || pickingTypeIcon ||
-                    scanningUri != null || choosingWorkoutDate || confirmAppearanceReset
-                val baseProfile = if (editing != null || viewing != null || confirmAppearanceReset) profile.copy(degraded = true) else profile
+                    scanningUri != null || choosingWorkoutDate || confirmAppearanceReset || backupModal
+                val baseProfile = if (editing != null || viewing != null || confirmAppearanceReset || backupModal) {
+                    profile.copy(degraded = true)
+                } else {
+                    profile
+                }
                 val hideBase = if (modalOpen) Modifier.clearAndSetSemantics { hideFromAccessibility() } else Modifier
                 val tabs = listOf(
                     GlassTab(Icons.Outlined.CalendarMonth, stringResource(R.string.tab_calendar)),
@@ -187,7 +205,7 @@ class MainActivity : ComponentActivity() {
                             CompositionLocalProvider(LocalGlassProfile provides baseProfile) { Box(Modifier.fillMaxSize().then(hideBase)) {
                             if (!hideBottomBar) {
                                 GlassBottomBar(
-                                    tabs, tab.ordinal, { tab = Tab.entries[it] },
+                                    tabs, tab.ordinal, { if (!backupModal) tab = Tab.entries[it] },
                                     Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = BarGap),
                                 )
                                 if (onHome) {
@@ -286,6 +304,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onDismiss = { pickingTypeIcon = false },
                             )
+                            BackupOverlay(backup)
                         },
                     ) {
                         CompositionLocalProvider(LocalGlassProfile provides baseProfile) { Box(Modifier.fillMaxSize().then(hideBase)) {
@@ -312,7 +331,7 @@ class MainActivity : ComponentActivity() {
                             )
                             Tab.SETTINGS -> SettingsScreen(
                                 page = settingsPage,
-                                onPage = { settingsPage = it },
+                                onPage = { if (!backupModal) settingsPage = it },
                                 settings = settings,
                                 weekStart = weekStart,
                                 onWeekStart = { lifecycleScope.launch { container.generalPrefs.setWeekStart(it) } },
@@ -336,6 +355,16 @@ class MainActivity : ComponentActivity() {
                                         onRequestRemoval = { pendingTypeRemoval = it },
                                     )
                                 },
+                                onExportBackup = {
+                                    backup.pickDocument {
+                                        val date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE)
+                                        exportPicker.launch("actiary-$date.zip")
+                                    }
+                                },
+                                onImportBackup = {
+                                    backup.pickDocument { importPicker.launch(arrayOf("application/zip", "application/x-zip-compressed")) }
+                                },
+                                onCleanOrphanPhotos = backup::checkOrphanPhotos,
                             )
                         } }
                         } }
