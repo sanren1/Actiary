@@ -1,9 +1,5 @@
 package com.actiary.ui.settings
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.FitnessCenter
@@ -12,9 +8,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.actiary.R
 import com.actiary.data.appearance.AccentPreset
 import com.actiary.data.appearance.AppearanceSettings
@@ -23,7 +17,6 @@ import com.actiary.data.appearance.GlassLevel
 import com.actiary.data.appearance.GlassTintStrength
 import com.actiary.data.appearance.ThemeMode
 import com.actiary.data.appearance.WeekStart
-import com.actiary.glass.GlassPanel
 
 @Composable
 internal fun SettingsScreen(
@@ -54,24 +47,22 @@ internal fun SettingsScreen(
     when (page) {
         SettingsPage.HOME -> SettingsPageLayout(stringResource(R.string.settings_title)) {
             val chevron = Icons.AutoMirrored.Outlined.KeyboardArrowRight
-            GlassPanel(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsRow(
-                        stringResource(R.string.appearance_title), Icons.Outlined.Palette, chevron,
-                    ) { onPage(SettingsPage.APPEARANCE) }
-                    SettingsRow(
-                        stringResource(R.string.settings_general), Icons.Outlined.Tune, chevron,
-                    ) { onPage(SettingsPage.GENERAL) }
-                    SettingsRow(
-                        stringResource(R.string.settings_custom_types), Icons.Outlined.FitnessCenter, chevron,
-                    ) { onPage(SettingsPage.TYPES) }
-                    SettingsRow(
-                        stringResource(R.string.settings_data), Icons.Outlined.Folder, chevron,
-                    ) { onPage(SettingsPage.DATA) }
-                    SettingsRow(
-                        stringResource(R.string.settings_about), Icons.Outlined.Info, chevron,
-                    ) { onPage(SettingsPage.ABOUT) }
-                }
+            SettingsGroup { rowShape ->
+                SettingsRow(
+                    stringResource(R.string.appearance_title), Icons.Outlined.Palette, chevron, shape = rowShape,
+                ) { onPage(SettingsPage.APPEARANCE) }
+                SettingsRow(
+                    stringResource(R.string.settings_general), Icons.Outlined.Tune, chevron, shape = rowShape,
+                ) { onPage(SettingsPage.GENERAL) }
+                SettingsRow(
+                    stringResource(R.string.settings_custom_types), Icons.Outlined.FitnessCenter, chevron, shape = rowShape,
+                ) { onPage(SettingsPage.TYPES) }
+                SettingsRow(
+                    stringResource(R.string.settings_data), Icons.Outlined.Folder, chevron, shape = rowShape,
+                ) { onPage(SettingsPage.DATA) }
+                SettingsRow(
+                    stringResource(R.string.settings_about), Icons.Outlined.Info, chevron, shape = rowShape,
+                ) { onPage(SettingsPage.ABOUT) }
             }
         }
         SettingsPage.APPEARANCE -> AppearanceScreen(

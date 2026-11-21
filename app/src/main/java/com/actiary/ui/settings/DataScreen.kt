@@ -4,9 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,19 +30,22 @@ import com.actiary.R
 import com.actiary.data.backup.ImportMode
 import com.actiary.glass.GlassDialog
 import com.actiary.glass.GlassOverlayPanel
-import com.actiary.glass.GlassPanel
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 
 @Composable
 internal fun DataScreen(onBack: () -> Unit, onExport: () -> Unit, onImport: () -> Unit, onClean: () -> Unit) {
     SettingsPageLayout(stringResource(R.string.settings_data), onBack) {
-        GlassPanel(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingsRow(stringResource(R.string.backup_export), Icons.Outlined.FileDownload, onClick = onExport)
-                SettingsRow(stringResource(R.string.backup_import), Icons.Outlined.FileUpload, onClick = onImport)
-                SettingsRow(stringResource(R.string.backup_clean_photos), Icons.Outlined.CleaningServices, onClick = onClean)
-            }
+        SettingsGroup { rowShape ->
+            SettingsRow(
+                stringResource(R.string.backup_export), Icons.Outlined.FileDownload, shape = rowShape, onClick = onExport,
+            )
+            SettingsRow(
+                stringResource(R.string.backup_import), Icons.Outlined.FileUpload, shape = rowShape, onClick = onImport,
+            )
+            SettingsRow(
+                stringResource(R.string.backup_clean_photos), Icons.Outlined.CleaningServices, shape = rowShape, onClick = onClean,
+            )
         }
     }
 }

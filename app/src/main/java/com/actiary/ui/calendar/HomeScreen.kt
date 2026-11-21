@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -34,22 +33,17 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -65,6 +59,7 @@ import com.actiary.glass.rememberGlassLayer
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.LocalFloatingInsets
+import com.actiary.ui.common.RootTitle
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.map
@@ -73,9 +68,6 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-
-/** What the floating chrome (top bar, record button) living outside the page needs from it. */
-data class HomeChrome(val pastTitle: Boolean = false)
 
 private val BOTTOM_CLEARANCE = 24.dp
 
@@ -86,7 +78,6 @@ fun HomeScreen(
     selected: LocalDate,
     firstDayOfWeek: DayOfWeek,
     onSelect: (LocalDate) -> Unit,
-    onChrome: (HomeChrome) -> Unit,
     onEdit: (LocalDate) -> Unit,
 ) {
     val t = LocalThemeTokens.current
@@ -164,8 +155,6 @@ fun HomeScreen(
         }
     }
     val detailScroll = rememberScrollState()
-    val pastTitle = p >= 0.9f
-    LaunchedEffect(pastTitle) { onChrome(HomeChrome(pastTitle)) }
 
     val calendarLayer = rememberGlassLayer()
     val primary = t.neutrals.textPrimary.asColor()
@@ -179,14 +168,7 @@ fun HomeScreen(
             .padding(start = 16.dp, end = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // The collapsed top bar uses the same title slot, so the title only fades out.
-        BasicText(
-            stringResource(R.string.home_title),
-            Modifier.fillMaxWidth().padding(top = 8.dp, end = 56.dp).heightIn(min = 48.dp).alpha(1f - p)
-                .semantics { if (pastTitle) hideFromAccessibility() else heading() },
-            style = TextStyle(primary, 28.sp, FontWeight.Bold),
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
+        RootTitle(stringResource(R.string.tab_calendar), Modifier.padding(end = 56.dp))
         GlassPanel(Modifier.fillMaxWidth(), exported = calendarLayer) {
             Column(Modifier.padding(12.dp)) {
                 Row(

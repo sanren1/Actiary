@@ -1,10 +1,5 @@
 package com.actiary.glass
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,26 +10,19 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,9 +34,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -459,34 +444,6 @@ private fun TabLabel(tab: GlassTab, color: Color, bold: Boolean, scale: () -> Fl
     ) {
         Icon(tab.icon, null, tint = color, modifier = Modifier.size(24.dp))
         Text(tab.label, color = color, fontSize = 12.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
-    }
-}
-
-/** Samples the content layer: place in GlassHost's overlay slot. */
-@Composable
-fun GlassTopBar(title: String, visible: Boolean, modifier: Modifier = Modifier, actions: @Composable RowScope.() -> Unit = {}) {
-    val t = LocalThemeTokens.current
-    val still = rememberAnimationsOff()
-    AnimatedVisibility(
-        visible, modifier,
-        enter = if (still) EnterTransition.None else fadeIn(),
-        exit = if (still) ExitTransition.None else fadeOut(),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                .heightIn(min = 56.dp)
-                .padding(start = 16.dp, top = 8.dp, end = 72.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            BasicText(
-                title, Modifier.weight(1f).semantics { heading() },
-                style = TextStyle(t.neutrals.textPrimary.asColor(), 28.sp, FontWeight.Bold),
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-            actions()
-        }
     }
 }
 

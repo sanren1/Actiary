@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -85,6 +84,7 @@ import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.theme.resolveChartColors
 import com.actiary.ui.common.LocalFloatingInsets
+import com.actiary.ui.common.RootTitle
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
 import kotlinx.coroutines.flow.map
@@ -167,12 +167,7 @@ fun RecordsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            BasicText(
-                stringResource(R.string.tab_records),
-                Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp).semantics { heading() },
-                style = TextStyle(primary, 28.sp, FontWeight.Bold),
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+            RootTitle(stringResource(R.string.tab_records))
         }
         item {
             GlassSegmentedPicker(

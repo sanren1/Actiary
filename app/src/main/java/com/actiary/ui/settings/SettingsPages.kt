@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -37,9 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.actiary.R
 import com.actiary.glass.GlassIconButton
+import com.actiary.glass.GlassPanel
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.LocalFloatingInsets
+import com.actiary.ui.common.RootTitle
 
 internal enum class SettingsPage { HOME, APPEARANCE, GENERAL, TYPES, DATA, ABOUT, CUSTOM_COLOR }
 
@@ -50,35 +53,50 @@ internal fun SettingsPage.parent(): SettingsPage? = when (this) {
     else -> SettingsPage.HOME
 }
 
+internal fun SettingsPage.showsBottomBar(): Boolean = parent() == null
+
 @Composable
 internal fun SettingsPageLayout(
     title: String,
     onBack: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val n = LocalThemeTokens.current.neutrals
     Column(
         Modifier.fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = LocalFloatingInsets.current.bottom + 24.dp),
+            .padding(start = 16.dp, end = 16.dp, bottom = LocalFloatingInsets.current.bottom + 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onBack != null) {
+        if (onBack == null) {
+            RootTitle(title)
+        } else {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 GlassIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.nav_back), onBack, glass = false)
+                BasicText(
+                    title,
+                    Modifier.weight(1f).semantics { heading() },
+                    style = TextStyle(LocalThemeTokens.current.neutrals.textPrimary.asColor(), 28.sp, FontWeight.Bold),
+                )
             }
-            BasicText(
-                title,
-                Modifier.weight(1f).semantics { heading() },
-                style = TextStyle(n.textPrimary.asColor(), 28.sp, FontWeight.Bold),
-            )
         }
         content()
+    }
+}
+
+private val SettingsGroupRadius = 28.dp
+private val SettingsGroupInset = 8.dp
+
+@Composable
+internal fun SettingsGroup(content: @Composable (rowShape: Shape) -> Unit) {
+    GlassPanel(Modifier.fillMaxWidth(), shape = RoundedCornerShape(SettingsGroupRadius)) {
+        Column(Modifier.padding(SettingsGroupInset), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            content(RoundedCornerShape(SettingsGroupRadius - SettingsGroupInset))
+        }
     }
 }
 
@@ -88,13 +106,14 @@ internal fun SettingsRow(
     icon: ImageVector,
     endIcon: ImageVector? = null,
     summary: String? = null,
+    shape: Shape = RoundedCornerShape(12.dp),
     onClick: () -> Unit,
 ) {
     val n = LocalThemeTokens.current.neutrals
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(n.surface.asColor())
+            .clip(shape)
+            .background(n.surface.asColor(), shape)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

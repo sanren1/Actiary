@@ -41,7 +41,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -65,13 +64,11 @@ import com.actiary.glass.GlassHost
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassOverlayPanel
 import com.actiary.glass.GlassTab
-import com.actiary.glass.GlassTopBar
 import com.actiary.glass.rememberGlassDegraded
 import com.actiary.glass.resolveGlass
 import com.actiary.theme.AppTheme
 import com.actiary.theme.asColor
 import com.actiary.theme.resolveTheme
-import com.actiary.ui.calendar.HomeChrome
 import com.actiary.ui.calendar.HomeScreen
 import com.actiary.ui.common.FloatingInsets
 import com.actiary.ui.common.LocalFloatingInsets
@@ -88,6 +85,7 @@ import com.actiary.ui.settings.CustomTypesScreen
 import com.actiary.ui.settings.SettingsPage
 import com.actiary.ui.settings.SettingsScreen
 import com.actiary.ui.settings.parent
+import com.actiary.ui.settings.showsBottomBar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -167,7 +165,6 @@ class MainActivity : ComponentActivity() {
                 var typeIcon by rememberSaveable { mutableStateOf(defaultTypeIcon) }
                 var pickingTypeIcon by rememberSaveable { mutableStateOf(false) }
                 val holder = rememberSaveableStateHolder()
-                var chrome by remember { mutableStateOf(HomeChrome()) }
                 BackHandler(tab != Tab.CALENDAR) { tab = Tab.CALENDAR }
                 // Overlays register later; back dismisses them before returning to settings home.
                 BackHandler(tab == Tab.SETTINGS && settingsPage != SettingsPage.HOME) {
@@ -176,9 +173,9 @@ class MainActivity : ComponentActivity() {
                 }
                 BackHandler(backup.state == BackupState.Picking) {}
 
+                val showBottomBar = tab != Tab.SETTINGS || settingsPage.showsBottomBar()
                 val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                // Include the bar, its gap, and the navigation inset in the scroll clearance.
-                val insets = FloatingInsets(navBar + GlassBottomBarHeight + BarGap)
+                val insets = FloatingInsets(navBar + if (showBottomBar) GlassBottomBarHeight + BarGap else 0.dp)
                 // Behind the sheet: page and base chrome are inert for TalkBack; the base also goes flat (spec 4.1 glass cap).
                 val choosingWorkoutDate = screenshot != null && editing == null
                 val backupModal = backup.state != BackupState.Idle
@@ -196,31 +193,26 @@ class MainActivity : ComponentActivity() {
                     GlassTab(Icons.Outlined.Settings, stringResource(R.string.tab_settings)),
                 )
                 val onHome = tab == Tab.CALENDAR
-                val hideBottomBar = tab == Tab.SETTINGS &&
-                    (settingsPage == SettingsPage.TYPES || settingsPage == SettingsPage.CUSTOM_COLOR)
                 CompositionLocalProvider(LocalFloatingInsets provides insets) {
                     GlassHost(
                         tokens, profile,
                         overlay = {
                             CompositionLocalProvider(LocalGlassProfile provides baseProfile) { Box(Modifier.fillMaxSize().then(hideBase)) {
-                            if (!hideBottomBar) {
+                            if (showBottomBar) {
                                 GlassBottomBar(
                                     tabs, tab.ordinal, { if (!backupModal) tab = Tab.entries[it] },
                                     Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = BarGap),
                                 )
-                                if (onHome) {
-                                    if (chrome.pastTitle) {
-                                        GlassTopBar(stringResource(R.string.home_title), true, Modifier.align(Alignment.TopCenter))
-                                    }
-                                    GlassIconButton(
-                                        Icons.Outlined.DocumentScanner,
-                                        stringResource(R.string.home_import_screenshot),
-                                        { screenshotPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                                        Modifier.align(Alignment.TopEnd)
-                                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                                            .padding(top = 8.dp, end = 16.dp),
-                                    )
-                                }
+                            }
+                            if (onHome) {
+                                GlassIconButton(
+                                    Icons.Outlined.DocumentScanner,
+                                    stringResource(R.string.home_import_screenshot),
+                                    { screenshotPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                    Modifier.align(Alignment.TopEnd)
+                                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                                        .padding(top = 8.dp, end = 16.dp),
+                                )
                             }
                             } }
                             val scanningLabel = stringResource(R.string.home_recognizing_screenshot)
@@ -316,7 +308,6 @@ class MainActivity : ComponentActivity() {
                                 selected = selected,
                                 firstDayOfWeek = firstDayOfWeek,
                                 onSelect = { selected = it },
-                                onChrome = { chrome = it },
                                 onEdit = { editing = it.toEpochDay() },
                             )
                             Tab.RECORDS -> RecordsScreen(

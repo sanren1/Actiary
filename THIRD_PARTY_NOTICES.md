@@ -1,6 +1,6 @@
 # Third-party notices
 
-## Backdrop (Kyant0/AndroidLiquidGlass, kmp branch)
+## Backdrop
 
 - Version: 2.0.1
 - License: Apache-2.0 (full text below and in `third_party/backdrop/LICENSE`)
@@ -8,21 +8,47 @@
 - Vendored at: `app/src/main/java/com/kyant/backdrop/`
 - Files were modified for Kotlin 2.1 / Compose 1.8 (Android only; expect/actual merged, context parameter and `com.kyant.shapes` dependency removed). Each modified file carries a `// Modified for Actiary:` line.
 - Also includes adapted (rewritten) code from the catalog examples of the same repository (Apache-2.0): `glass/PressDragState.kt`, `glass/InspectDragGestures.kt` and the interactive controls built on them.
-- Spring and deformation parameters (damping ratio / response, minimum lift time, flex limits) reference the documentation of NEORUAA/Glasmio (Apache-2.0); numbers only, no code copied.
+- Project: <https://github.com/Kyant0/AndroidLiquidGlass>
+- Source: <https://github.com/Kyant0/AndroidLiquidGlass/blob/kmp/LICENSE>
 
-## Google ML Kit Text Recognition v2 (bundled Chinese model)
+```
+   Copyright 2025 Kyant
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+```
+
+## Glasmio
+
+- Spring and deformation parameters (damping ratio / response, minimum lift time, flex limits) reference the documentation of NEORUAA/Glasmio (Apache-2.0); numbers only, no code copied.
+- Project: <https://github.com/NEORUAA/Glasmio>
+- Source: <https://github.com/NEORUAA/Glasmio/blob/main/LICENSE>
+
+## Google ML Kit Text Recognition v2
 
 - Version: `com.google.mlkit:text-recognition-chinese:16.0.1`
+- Uses the bundled Chinese model.
 - Provider: Google LLC
 - Terms: ML Kit Terms of Service, incorporating the Google APIs Terms of Service.
 - ML Kit Terms of Service: <https://developers.google.com/ml-kit/terms>
 - Google APIs Terms of Service: <https://developers.google.com/terms>
+- Project: <https://developers.google.com/ml-kit/vision/text-recognition/v2>
 
 ## Calendar (kizitonwose)
 
 - Version: `com.kizitonwose.calendar:compose:2.6.2`
 - License: MIT (full text below)
 - Copyright (c) 2019 Kizito Nwose
+- Project: <https://github.com/kizitonwose/Calendar>
 - Source: <https://github.com/kizitonwose/Calendar/blob/2.6.2/LICENSE.md>
 
 ## Coil
@@ -30,14 +56,38 @@
 - Version: `io.coil-kt.coil3:coil-compose:3.2.0`
 - License: Apache-2.0 (full text below)
 - Copyright 2025 Coil Contributors
+- Project: <https://github.com/coil-kt/coil>
 - Source: <https://github.com/coil-kt/coil/blob/3.2.0/LICENSE.txt>
 
-## AndroidX (Room, DataStore, and Jetpack Compose)
+## AndroidX
 
-- Versions: Room 2.7.1, DataStore 1.1.7, and Compose BOM 2025.06.00
+- Versions: Room 2.7.1, DataStore 1.1.7, Compose BOM 2025.06.00, Material Icons Extended 1.7.8, Activity Compose 1.10.1, Lifecycle 2.8.7, and Core 1.15.0
 - License: Apache-2.0 (full text below)
 - Copyright The Android Open Source Project
+- Project: <https://developer.android.com/jetpack/androidx>
 - Source: <https://android.googlesource.com/platform/frameworks/support/+/androidx-main/LICENSE.txt>
+
+## Kotlin
+
+- Version: `org.jetbrains.kotlin:kotlin-stdlib:2.1.21`
+- License: Apache-2.0 (full text below)
+- Project: <https://kotlinlang.org>
+- Source: <https://github.com/JetBrains/kotlin/blob/v2.1.21/license/LICENSE.txt>
+
+## kotlinx.coroutines
+
+- Version: `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2`
+- License: Apache-2.0 (full text below)
+- Project: <https://github.com/Kotlin/kotlinx.coroutines>
+- Source: <https://github.com/Kotlin/kotlinx.coroutines/blob/1.10.2/LICENSE.txt>
+
+## org.json
+
+- Version: `org.json:json:20240303`
+- Scope: JVM unit tests only. This artifact is not included in the Android app.
+- License: Public Domain (full text below)
+- Project: <https://github.com/stleary/JSON-java>
+- Source: <https://github.com/stleary/JSON-java/blob/20240303/LICENSE>
 
 ## Apache License 2.0
 
@@ -219,7 +269,18 @@
 
    END OF TERMS AND CONDITIONS
 
-   Copyright 2025 Kyant
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -258,4 +319,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+## JSON-java 20240303 License
+
+```
+Public Domain.
 ```
