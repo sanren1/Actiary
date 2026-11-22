@@ -124,6 +124,8 @@ import com.actiary.ui.settings.CustomTypesScreen
 import com.actiary.ui.settings.EditingTypeSaver
 import com.actiary.ui.settings.SettingsPage
 import com.actiary.ui.settings.SettingsScreen
+import com.actiary.ui.settings.StorageDetailsSheet
+import com.actiary.ui.settings.ThirdPartyNoticesSheet
 import com.actiary.ui.settings.parent
 import com.actiary.ui.settings.showsBottomBar
 import com.actiary.widget.TodayWidgetUpdater
@@ -264,6 +266,9 @@ class MainActivity : ComponentActivity() {
                 val defaultTypeIcon = CUSTOM_TYPE_ICONS.first().key
                 var typeIcon by rememberSaveable { mutableStateOf<String?>(defaultTypeIcon) }
                 var pickingTypeIcon by rememberSaveable { mutableStateOf(false) }
+                var storageDetailsOpen by rememberSaveable { mutableStateOf(false) }
+                var storageRefreshKey by rememberSaveable { mutableIntStateOf(0) }
+                var thirdPartyNoticesOpen by rememberSaveable { mutableStateOf(false) }
                 val holder = rememberSaveableStateHolder()
                 val push = rememberPushMotion(settingsPage, reducedMotion)
                 val tabTransition = updateTransition(tab, label = "tabs")
@@ -280,6 +285,7 @@ class MainActivity : ComponentActivity() {
                 fun hasOverlay() = editing != null || viewing != null ||
                     accentEditorOpen || pendingAccentRemoval != null || accentRemovalVisibility.overlayPresent ||
                     pendingTypeRemoval != null || editingTypeOpen || pickingTypeIcon || scanningUri != null ||
+                    storageDetailsOpen || thirdPartyNoticesOpen ||
                     (screenshot != null && editing == null) || confirmAppearanceReset || backup.state != BackupState.Idle ||
                     scanVisibility.overlayPresent || dateVisibility.overlayPresent || resetVisibility.overlayPresent ||
                     removalVisibility.overlayPresent || iconVisibility.overlayPresent
@@ -524,6 +530,17 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = { pickingTypeIcon = false },
                                 visibility = iconVisibility,
                             )
+                            if (storageDetailsOpen) {
+                                StorageDetailsSheet(
+                                    onCacheCleared = { storageRefreshKey++ },
+                                    onDismiss = { storageDetailsOpen = false },
+                                )
+                            }
+                            if (thirdPartyNoticesOpen) {
+                                ThirdPartyNoticesSheet(
+                                    onDismiss = { thirdPartyNoticesOpen = false },
+                                )
+                            }
                             BackupOverlay(backup)
                         },
                     ) {
@@ -643,6 +660,9 @@ class MainActivity : ComponentActivity() {
                                                                 backup.pickDocument { importPicker.launch(arrayOf("application/zip", "application/x-zip-compressed")) }
                                                             },
                                                             onCleanOrphanPhotos = backup::checkOrphanPhotos,
+                                                            onStorageDetails = { if (!hasOverlay()) storageDetailsOpen = true },
+                                                            storageRefreshKey = storageRefreshKey,
+                                                            onOpenNotices = { if (!hasOverlay()) thirdPartyNoticesOpen = true },
                                                         )
                                                     }
                                                 }

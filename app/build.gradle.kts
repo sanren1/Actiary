@@ -13,9 +13,26 @@ android {
         applicationId = "com.actiary"
         minSdk = 31
         targetSdk = 35
-        versionCode = 25
-        versionName = "0.19.0"
+        versionCode = 26
+        versionName = "0.20.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            // Local verification uses the debug keystore so in-place upgrades keep device data;
+            // replace with a dedicated release keystore before publishing a public GitHub release.
+            signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
     }
 
     buildFeatures {

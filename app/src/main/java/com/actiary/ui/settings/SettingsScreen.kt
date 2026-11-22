@@ -41,6 +41,9 @@ internal fun SettingsScreen(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onCleanOrphanPhotos: () -> Unit,
+    onStorageDetails: () -> Unit,
+    storageRefreshKey: Int,
+    onOpenNotices: () -> Unit,
 ) {
     val onBack = {
         val parent = page.parent()
@@ -70,7 +73,7 @@ internal fun SettingsScreen(
             onGlassLevel, onAmbient, onBack, onResetAppearance, onCustomColor, onChartPalette,
         )
         SettingsPage.TYPES -> typesContent(onBack)
-        SettingsPage.DATA -> DataScreen(onBack, onExportBackup, onImportBackup, onCleanOrphanPhotos)
-        SettingsPage.ABOUT -> AboutScreen(onBack)
+        SettingsPage.DATA -> DataScreen(onBack, onExportBackup, onImportBackup, onCleanOrphanPhotos, onStorageDetails, storageRefreshKey)
+        SettingsPage.ABOUT -> AboutScreen(onBack, onOpenNotices)
     }
 }

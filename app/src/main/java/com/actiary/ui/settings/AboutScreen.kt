@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,16 +12,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -42,38 +54,133 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import androidx.core.net.toUri
 import com.actiary.R
+import com.actiary.glass.GlassPanel
+import com.actiary.glass.GlassSheet
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 
 @Composable
-internal fun AboutScreen(onBack: () -> Unit) {
+internal fun AboutScreen(
+    onBack: () -> Unit,
+    onOpenNotices: () -> Unit,
+) {
     val context = LocalContext.current
     val n = LocalThemeTokens.current.neutrals
     val version = remember(context) {
         @Suppress("DEPRECATION")
         context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
     }
+    val iconBitmap = remember(context) {
+        context.packageManager.getApplicationIcon(context.applicationInfo)
+            .toBitmap(128, 128)
+            .asImageBitmap()
+    }
+
+    SettingsPageLayout(stringResource(R.string.settings_about), onBack) {
+        GlassPanel(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Image(
+                    bitmap = iconBitmap,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)),
+                )
+                BasicText(
+                    stringResource(R.string.app_name),
+                    style = TextStyle(n.textPrimary.asColor(), 22.sp, FontWeight.Bold),
+                )
+                BasicText(
+                    stringResource(R.string.settings_about_version, version),
+                    style = TextStyle(n.textSecondary.asColor(), 14.sp, FontWeight.Medium),
+                )
+                BasicText(
+                    stringResource(R.string.about_tagline),
+                    style = TextStyle(n.textSecondary.asColor(), 14.sp),
+                )
+            }
+        }
+        SettingsGroup { rowShape ->
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .clip(rowShape)
+                    .background(n.surface.asColor(), rowShape)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(Icons.Outlined.Devices, null, tint = n.textPrimary.asColor())
+                Column(Modifier.weight(1f)) {
+                    BasicText(stringResource(R.string.about_compatibility), style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                    BasicText(stringResource(R.string.about_compatibility_value), style = TextStyle(n.textSecondary.asColor(), 14.sp))
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .clip(rowShape)
+                    .background(n.surface.asColor(), rowShape)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(Icons.Outlined.Code, null, tint = n.textPrimary.asColor())
+                Column(Modifier.weight(1f)) {
+                    BasicText(stringResource(R.string.about_open_source), style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                    BasicText(stringResource(R.string.about_open_source_summary), style = TextStyle(n.textSecondary.asColor(), 14.sp))
+                }
+            }
+            SettingsRow(
+                label = stringResource(R.string.settings_licenses),
+                icon = Icons.Outlined.Description,
+                endIcon = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                summary = stringResource(R.string.about_third_party_summary),
+                shape = rowShape,
+                onClick = onOpenNotices,
+            )
+        }
+    }
+}
+
+@Composable
+internal fun ThirdPartyNoticesSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val n = LocalThemeTokens.current.neutrals
+    val title = stringResource(R.string.settings_licenses)
     val notices = remember(context) {
         context.resources.openRawResource(R.raw.third_party_notices).bufferedReader().use {
             readNoticeSections(it.readText())
         }
     }
+    var visible by rememberSaveable { mutableStateOf(true) }
     var expandedProject by rememberSaveable { mutableStateOf<String?>(null) }
 
-    SettingsPageLayout(stringResource(R.string.settings_about), onBack) {
-        BasicText(
-            stringResource(R.string.app_name),
-            style = TextStyle(n.textPrimary.asColor(), 22.sp, FontWeight.SemiBold),
-        )
-        BasicText(stringResource(R.string.settings_about_version, version), style = TextStyle(n.textSecondary.asColor(), 16.sp))
-        BasicText(
-            stringResource(R.string.settings_licenses),
-            Modifier.semantics { heading() },
-            style = TextStyle(n.textPrimary.asColor(), 18.sp, FontWeight.SemiBold),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    fun close(): Boolean {
+        visible = false
+        return true
+    }
+
+    GlassSheet(visible, ::close, onDismiss, title) {
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                BasicText(
+                    title,
+                    Modifier.weight(1f).semantics { heading() },
+                    style = TextStyle(n.textPrimary.asColor(), 20.sp, FontWeight.SemiBold),
+                )
+                TextButton(
+                    onClick = { close() },
+                    colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
+                ) { Text(stringResource(R.string.overlay_close)) }
+            }
             for (project in thirdPartyProjects) {
                 val expanded = expandedProject == project.name
                 ThirdPartyProjectRow(project, notices, expanded) {

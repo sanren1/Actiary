@@ -22,7 +22,7 @@
 ## 产品与界面
 
 - 设计源是 `workout_journal_v2_package/README.md` 与 `assets/` 参考图（概念图，非像素稿）；只读不改。与设计冲突的实现先问用户。
-- 应用名 **Actiary**（暂定）。当前形态：Android / Kotlin / Jetpack Compose，单 `app` 模块，包结构见总路线 §4；**minSdk 31，只支持 Android 12 及以上**，不写低版本兼容分支。
+- 应用名 **Actiary**（暂定）。当前形态：Android / Kotlin / Jetpack Compose，单 `app` 模块，包结构见总路线 §4；**minSdk 31，只支持 Android 12 及以上**，不写低版本兼容分支。ABI 仅保留 `arm64-v8a`；后续在 GitHub 发布 Release 时须在 Release 说明中明确标注适配范围为「Android 12+ (`arm64-v8a`)」。
 - 首页方案 A：完整月历常驻顶部，不默认折叠成周历。三态“已锻炼 / 休息日 / 未记录”不得混淆，未记录 = 无记录；状态用形状 + 图标 + 文案表达，不只靠颜色。
 - 积极使用液态玻璃：导航、标题栏、月历面板、详情卡、记录 Sheet、筛选栏、统计摘要、设置分组等容器都用玻璃，并配环境背景；日期格、列表逐项、长文本、照片、图表本体保持清晰实色。具体范围与同屏面数上限以 `docs/superpowers/specs/2026-11-19-glass-expansion-design.md` 为准（覆盖设计源 §2 / §5.3）。所有玻璃经项目内唯一 `GlassRenderer` 接入 Backdrop，不混装其他玻璃引擎；组件只接收已解析的 tokens / profile，不读 DataStore。
 - 外观配置（DataStore）与业务数据（Room）分离；换主题、玻璃等级不得改变记录、照片或统计。
@@ -46,7 +46,7 @@
 
 ## 验证与交付
 
-- 实机测试由用户完成；代理不自行向真实手机安装、运行或调试应用，除非当次明确授权。离线验证不能替代实机的玻璃效果、滚动性能或观感结论。
+- 实机测试由用户完成；代理不自行向真实手机安装、运行或调试应用，除非当次明确授权。离线验证不能替代实机的玻璃效果、滚动性能或观感结论。获授权装机时，优先构建并安装开启了 R8 混淆与资源裁剪 + `arm64-v8a` 的 Release APK（`app-release.apk`）。
 - 先跑相关回归，再按影响扩大检查；验证真实入口和行为，不只验证 helper 或复述实现；不得用错误环境下的失败或模拟结果冒充通过。
 - 常规检查：`gradlew testDebugUnitTest`、`gradlew lintDebug`（不新增 error / warning）、`gradlew assembleDebug`。色彩派生、对比度、日期状态映射、Repository 这类逻辑必须有 JVM 单测；Room schema 变更要导出 schema 并带迁移测试。
 - **版本号**：`versionName` 采用 `主.次.修订`，从 `0.1.0` 开始，唯一来源是 `app/build.gradle.kts`。

@@ -264,4 +264,18 @@
     <string name="widget_action_rest_active">Rested</string>
     <string name="widget_week_streak">%1$d/7 days</string>
     <string name="widget_strip_meta">%1$s · %2$d/7d</string>
+    <string name="data_storage_details">Storage details</string>
+    <string name="data_storage_cache">Cache</string>
+    <string name="data_storage_photo_count">Photo count</string>
+    <string name="data_storage_photo_avg">Average per photo</string>
+    <string name="data_storage_photo_max">Largest photo</string>
+    <string name="data_storage_clear_cache">Clear cache</string>
+    <string name="data_storage_cache_cleared">Cache cleared</string>
+    <string name="data_storage_photos_summary">%1$s · %2$d photos</string>
+    <string name="about_tagline">Offline-first personal workout journal</string>
+    <string name="about_compatibility">Compatibility</string>
+    <string name="about_compatibility_value">Android 12+ · arm64-v8a</string>
+    <string name="about_open_source">Open source</string>
+    <string name="about_open_source_summary">Planned open-source release on GitHub</string>
+    <string name="about_third_party_summary">View open-source libraries and licenses</string>
 </resources>

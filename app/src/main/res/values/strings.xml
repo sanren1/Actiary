@@ -261,4 +261,18 @@
     <string name="widget_action_rest_active">已休息</string>
     <string name="widget_week_streak">近7天 %1$d 天</string>
     <string name="widget_strip_meta">%1$s · 近7天%2$d天</string>
+    <string name="data_storage_details">查看空间明细</string>
+    <string name="data_storage_cache">缓存</string>
+    <string name="data_storage_photo_count">照片数量</string>
+    <string name="data_storage_photo_avg">单张平均</string>
+    <string name="data_storage_photo_max">最大单张</string>
+    <string name="data_storage_clear_cache">清理缓存</string>
+    <string name="data_storage_cache_cleared">缓存已清理</string>
+    <string name="data_storage_photos_summary">%1$s · %2$d 张</string>
+    <string name="about_tagline">离线优先的个人运动记录</string>
+    <string name="about_compatibility">适配环境</string>
+    <string name="about_compatibility_value">Android 12+ · arm64-v8a</string>
+    <string name="about_open_source">开源信息</string>
+    <string name="about_open_source_summary">计划开源至 GitHub</string>
+    <string name="about_third_party_summary">查看开源库列表与许可声明</string>
 </resources>

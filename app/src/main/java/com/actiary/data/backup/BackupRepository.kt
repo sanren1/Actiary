@@ -137,7 +137,7 @@ class BackupRepository(
                 })
                 dao.insertPhotos(backup.photos.filter { it.epochDay in days }.mapNotNull {
                     val source = data.photo(it.fileName) ?: return@mapNotNull null
-                    val name = photos.copyIn(source::inputStream).also(copies::add)
+                    val name = photos.copyRaw(source::inputStream).also(copies::add)
                     PhotoAttachmentEntity(epochDay = it.epochDay, fileName = name, sortOrder = it.sortOrder, addedAt = it.addedAt)
                 })
                 if (overwrite) {

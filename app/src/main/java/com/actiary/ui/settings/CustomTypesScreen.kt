@@ -65,11 +65,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -179,6 +181,7 @@ fun CustomTypesScreen(
     onRequestRemoval: (Long) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     val types by repository.types.collectAsStateWithLifecycle(emptyList())
     val scroll = rememberScrollState()
     val density = LocalDensity.current
@@ -197,6 +200,17 @@ fun CustomTypesScreen(
     val displacement = if (source < 0) 0f else dragDistance + scroll.value - scrollStart
     val rowSizes = if (source < 0) emptyList() else types.map { heights.getValue(it.id) }
     val target = if (source < 0) source else typeDragDestination(source, rowSizes, spacing, displacement)
+    var lastHapticTarget by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(dragId, target) {
+        if (dragId == null) {
+            lastHapticTarget = -1
+        } else if (lastHapticTarget >= 0 && target != lastHapticTarget) {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            lastHapticTarget = target
+        } else {
+            lastHapticTarget = target
+        }
+    }
 
     fun move(id: Long, offset: Int) {
         if (moving || offset == 0) return
@@ -262,6 +276,7 @@ fun CustomTypesScreen(
                             dragDistance = 0f
                             scrollStart = scroll.value
                             dragId = type.id
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
                     },
                     onDrag = { if (dragId == type.id && !moving) dragDistance += it },
@@ -330,6 +345,11 @@ private fun WorkoutTypeRow(
         if (reduced || swiping) snap() else tween(180), label = "Type actions",
     )
     val rowShift by animateFloatAsState(shift, if (dragging || reduced) snap() else tween(120), label = "Type order")
+    val dragScale by animateFloatAsState(
+        if (dragging) 1.03f else 1f,
+        if (reduced) snap() else tween(140),
+        label = "Type drag scale",
+    )
     val beginDrag by rememberUpdatedState(onDragStart)
     val moveDrag by rememberUpdatedState(onDrag)
     val endDrag by rememberUpdatedState(onDragEnd)
@@ -343,7 +363,14 @@ private fun WorkoutTypeRow(
     }
     Box(
         Modifier.fillMaxWidth().onSizeChanged { onHeight(it.height) }.zIndex(if (dragging) 1f else 0f)
-            .offset { IntOffset(0, rowShift.roundToInt()) }.clip(shape),
+            .offset { IntOffset(0, rowShift.roundToInt()) }
+            .graphicsLayer {
+                scaleX = dragScale
+                scaleY = dragScale
+                shadowElevation = if (dragging) 8.dp.toPx() else 0f
+                this.shape = shape
+                clip = true
+            },
     ) {
         Row(
             Modifier.align(Alignment.CenterEnd)

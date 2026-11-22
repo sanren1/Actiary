@@ -74,7 +74,7 @@ class RecordRepository(
                     when (it) {
                         is DraftPhoto.Saved -> it.fileName
                         is DraftPhoto.Picked -> photos.copyIn { openUri(it.uri) }.also(copied::add)
-                        is DraftPhoto.Staged -> photos.copyIn(photos.stagedFile(it.fileName)::inputStream).also(copied::add)
+                        is DraftPhoto.Staged -> photos.copyRaw(photos.stagedFile(it.fileName)::inputStream).also(copied::add)
                     }
                 }
                 val now = clock()
