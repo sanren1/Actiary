@@ -17,6 +17,7 @@ data class DraftEntry(
     val calories: Int? = null,
     val avgHeartRate: Int? = null,
     val id: Long = 0,
+    val metrics: WorkoutMetrics = WorkoutMetrics(),
 )
 
 data class DayDraft(
@@ -71,7 +72,7 @@ data class DayDraft(
                 date = date,
                 status = day.record.status,
                 entries = day.entries.sortedBy { it.sortOrder }
-                    .map { DraftEntry(it.typeId, it.durationMinutes, it.distanceMeters, it.calories, it.avgHeartRate, it.id) },
+                    .map { DraftEntry(it.typeId, it.durationMinutes, it.distanceMeters, it.calories, it.avgHeartRate, it.id, it.metrics) },
                 note = day.record.note,
                 photos = day.photos.sortedBy { it.sortOrder }.map { DraftPhoto.Saved(it.fileName) },
             )

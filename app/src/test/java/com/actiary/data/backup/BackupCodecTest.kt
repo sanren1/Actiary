@@ -1,6 +1,7 @@
 package com.actiary.data.backup
 
 import com.actiary.data.db.DayStatus
+import com.actiary.domain.WorkoutMetrics
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -18,7 +19,7 @@ private const val json = """{
 class BackupCodecTest {
     @Test fun roundTrip() {
         val data = BackupData(
-            1, "0.13.0", 1_700_000_000_000L, mapOf("ambient_background" to "false", "theme_mode" to "DARK"),
+            BACKUP_FORMAT, "0.13.0", 1_700_000_000_000L, mapOf("ambient_background" to "false", "theme_mode" to "DARK"),
             listOf(BackupType(40, null, "攀岩", 0, false, false, null)),
             listOf(BackupRecord(20, DayStatus.EXERCISED, "训练", 123)),
             listOf(BackupEntry(50, 20, 40, 30, null, null, null, 0)),
@@ -34,6 +35,51 @@ class BackupCodecTest {
         assertEquals(BackupEntry(50, 20, 40, 30, null, null, null, 0), parsed.entries.single())
     }
 
+    @Test fun formatOneRoundTripsExtraMetricsAndExplicitlyDisabledTypeFields() {
+        val fixture = JSONObject(json)
+        fixture.getJSONArray("types").getJSONObject(0).put("extraMetricMask", 0)
+        fixture.getJSONArray("entries").getJSONObject(0)
+            .put("durationSeconds", 1799)
+            .put("cadenceSpm", 142)
+            .put("stepCount", 5300)
+            .put("elevationGainCm", 315)
+            .put("poolLengthCm", 2500)
+            .put("lapCount", 44)
+            .put("strokeCount", 511)
+
+        val parsed = parseBackup(fixture.toString())
+        assertEquals(0, parsed.types.single().extraMetricMask)
+        assertEquals(
+            WorkoutMetrics(1799, 142, 5300, 315, 2500, 44, 511),
+            parsed.entries.single().metrics,
+        )
+        assertEquals(parsed, parseBackup(parsed.toJson()))
+    }
+
+    @Test fun rejectsMalformedExtraMetricValues() {
+        val fixture = JSONObject(json)
+        val entry = fixture.getJSONArray("entries").getJSONObject(0)
+        entry.put("lapCount", -1)
+        reject(fixture.toString())
+        entry.put("lapCount", 1.5)
+        reject(fixture.toString())
+        entry.remove("lapCount")
+        fixture.getJSONArray("types").getJSONObject(0).put("extraMetricMask", 64)
+        reject(fixture.toString())
+    }
+
+    @Test fun exactDurationMustRoundToTheSavedMinutes() {
+        val fixture = JSONObject(json)
+        val entry = fixture.getJSONArray("entries").getJSONObject(0)
+        entry.put("durationSeconds", 1829)
+        assertEquals(1829, parseBackup(fixture.toString()).entries.single().metrics.durationSeconds)
+
+        entry.put("durationSeconds", 1830)
+        reject(fixture.toString())
+        entry.remove("durationMinutes")
+        reject(fixture.toString())
+    }
+
     @Test fun unknownExtraFieldsIgnored() {
         val extra = JSONObject(json).put("future", "new")
         extra.getJSONObject("appearance").put("future", true)
@@ -41,8 +87,27 @@ class BackupCodecTest {
         assertEquals(parseBackup(json), parseBackup(extra.toString()))
     }
 
-    @Test fun higherFormatRejected() {
-        reject(json.replace("\"format\": 1", "\"format\": 2"))
+    @Test fun formatsOneAndTwoAcceptedOthersRejected() {
+        assertEquals(1, parseBackup(json).format)
+        assertEquals(2, parseBackup(json.replace("\"format\": 1", "\"format\": 2")).format)
+        reject(json.replace("\"format\": 1", "\"format\": 3"))
+        reject(json.replace("\"format\": 1", "\"format\": 0"))
+    }
+
+    @Test fun exportWritesCurrentFormatAndRoundTrips() {
+        assertEquals(2, BACKUP_FORMAT)
+        val data = parseBackup(json.replace("\"format\": 1", "\"format\": 2"))
+        assertEquals(2, JSONObject(data.toJson()).getInt("format"))
+        assertEquals(data, parseBackup(data.toJson()))
+    }
+
+    @Test fun rejectsMetricsAboveLimit() {
+        for ((key, over) in listOf("cadenceSpm" to 301, "stepCount" to 200_001, "lapCount" to 10_001,
+            "strokeCount" to 100_001, "elevationGainCm" to 2_000_001, "poolLengthCm" to 100_001)) {
+            val fixture = JSONObject(json)
+            fixture.getJSONArray("entries").getJSONObject(0).put(key, over)
+            reject(fixture.toString())
+        }
     }
 
     @Test fun garbageRejected() {

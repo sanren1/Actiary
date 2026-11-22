@@ -6,6 +6,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
+import com.actiary.domain.WorkoutMetrics
 
 enum class DayStatus { EXERCISED, REST }
 
@@ -26,6 +27,7 @@ data class ExerciseTypeEntity(
     val archived: Boolean = false,
     val hasDistance: Boolean = false,
     val iconKey: String? = null,
+    val extraMetricMask: Int? = null,
 )
 
 @Entity(
@@ -55,6 +57,7 @@ data class ExerciseEntryEntity(
     val calories: Int?,
     val avgHeartRate: Int?,
     val sortOrder: Int,
+    @Embedded val metrics: WorkoutMetrics = WorkoutMetrics(),
 )
 
 @Entity(

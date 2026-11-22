@@ -7,6 +7,7 @@ import com.actiary.data.db.DayWithDetails
 import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.db.PhotoAttachmentEntity
+import com.actiary.domain.WorkoutMetrics
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -29,6 +30,8 @@ class RecordDetailModelTest {
             R.string.record_detail_bpm -> "$value bpm"
             R.string.records_m -> "$value m"
             R.string.records_km -> "$value km"
+            R.string.workout_metric_steps_per_min -> "$value steps/min"
+            R.string.workout_metric_pace_km -> "$value /km"
             else -> error("Unexpected metric format $unit")
         }
     }
@@ -72,6 +75,31 @@ class RecordDetailModelTest {
                 DetailEntry(running.id, listOf(R.string.record_detail_distance to "1.25 km")),
             ),
             detail.entries,
+        )
+    }
+
+    @Test fun savedExtrasAndExactPaceRemainVisibleWithInputFieldsDisabled() {
+        val type = running.copy(hasDistance = false, extraMetricMask = 0)
+        val entry = ExerciseEntryEntity(
+            1, 0, type.id, 32, 6000, null, null, 0,
+            WorkoutMetrics(durationSeconds = 1932, cadenceSpm = 172, stepCount = 5820),
+        )
+        val day = DayWithDetails(DailyRecordEntity(0, DayStatus.EXERCISED, "", 0), listOf(entry), emptyList())
+        val detail = buildDetailModel(day, mapOf(type.id to type)) { _, value -> value.toString() }
+        assertEquals(
+            listOf(
+                R.string.records_stat_duration to "32:12",
+                R.string.record_detail_distance to "6",
+                R.string.workout_metric_cadence to "172",
+                R.string.workout_metric_steps to "5820",
+                R.string.workout_metric_pace to "5:22",
+            ),
+            detail.entries.single().metrics,
+        )
+        val legacy = model(entries = listOf(entry.copy(metrics = WorkoutMetrics())))
+        assertEquals(
+            listOf(R.string.records_stat_duration to "32 min", R.string.record_detail_distance to "6 km"),
+            legacy.entries.single().metrics,
         )
     }
 

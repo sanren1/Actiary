@@ -11,7 +11,7 @@ internal const val ACTIARY_DATABASE_NAME = "actiary.db"
 
 @Database(
     entities = [DailyRecordEntity::class, ExerciseTypeEntity::class, ExerciseEntryEntity::class, PhotoAttachmentEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class ActiaryDatabase : RoomDatabase() {
@@ -54,6 +54,17 @@ abstract class ActiaryDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE exercise_type ADD COLUMN extraMetricMask INTEGER")
+                val fields = listOf(
+                    "durationSeconds", "cadenceSpm", "stepCount", "elevationGainCm",
+                    "poolLengthCm", "lapCount", "strokeCount",
+                )
+                for (field in fields) db.execSQL("ALTER TABLE exercise_entry ADD COLUMN $field INTEGER")
+            }
+        }
+
         fun seedBuiltinTypes(db: SupportSQLiteDatabase) {
             BUILTIN_TYPE_KEYS.forEachIndexed { i, key ->
                 val hasDistance = if (key in DISTANCE_TYPE_KEYS) 1 else 0
@@ -68,5 +79,10 @@ fun ActiaryDatabase.Companion.build(context: Context): ActiaryDatabase =
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) = ActiaryDatabase.seedBuiltinTypes(db)
         })
-        .addMigrations(ActiaryDatabase.MIGRATION_1_2, ActiaryDatabase.MIGRATION_2_3, ActiaryDatabase.MIGRATION_3_4)
+        .addMigrations(
+            ActiaryDatabase.MIGRATION_1_2,
+            ActiaryDatabase.MIGRATION_2_3,
+            ActiaryDatabase.MIGRATION_3_4,
+            ActiaryDatabase.MIGRATION_4_5,
+        )
         .build()

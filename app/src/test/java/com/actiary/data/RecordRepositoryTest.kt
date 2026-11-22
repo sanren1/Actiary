@@ -11,6 +11,9 @@ import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DayState
 import com.actiary.domain.DraftEntry
+import com.actiary.domain.WorkoutMetric
+import com.actiary.domain.WorkoutMetrics
+import com.actiary.domain.effectiveWorkoutMetricMask
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -67,10 +70,10 @@ private class FakeDao : RecordDao {
     override suspend fun setTypeSortOrder(id: Long, sortOrder: Int) {
         typeRows.value = typeRows.value.map { if (it.id == id) it.copy(sortOrder = sortOrder) else it }
     }
-    override suspend fun updateType(id: Long, name: String?, hasDistance: Boolean, iconKey: String?): Int {
+    override suspend fun updateType(id: Long, name: String?, hasDistance: Boolean, iconKey: String?, extraMetricMask: Int?): Int {
         val type = typeRows.value.firstOrNull { it.id == id && !it.archived } ?: return 0
         typeRows.value = typeRows.value.map {
-            if (it == type) it.copy(name = name, hasDistance = hasDistance, iconKey = iconKey) else it
+            if (it == type) it.copy(name = name, hasDistance = hasDistance, iconKey = iconKey, extraMetricMask = extraMetricMask) else it
         }
         return 1
     }
@@ -96,6 +99,7 @@ private class FakeDao : RecordDao {
     override suspend fun deleteCustomTypes() = error("unused")
     override suspend fun updateBuiltinType(
         builtinKey: String, name: String?, sortOrder: Int, archived: Boolean, hasDistance: Boolean, iconKey: String?,
+        extraMetricMask: Int?,
     ) = error("unused")
 }
 
@@ -204,6 +208,36 @@ class RecordRepositoryTest {
         val e = dao.get(date.toEpochDay())!!.entries.single()
         assertEquals(320, e.calories)
         assertEquals(145, e.avgHeartRate)
+    }
+
+    @Test fun editingTypeMetricSelectionKeepsExistingWorkoutValues() = runBlocking {
+        val repository = repo()
+        val mask = WorkoutMetric.POOL_LENGTH.bit or WorkoutMetric.LAPS.bit or WorkoutMetric.STROKES.bit
+        val id = repository.addType("Pool", true, null, extraMetricMask = mask)
+        val metrics = WorkoutMetrics(durationSeconds = 59, poolLengthCm = 2500, lapCount = 4, strokeCount = 82)
+        val entry = DraftEntry(id, durationMinutes = 1, distanceMeters = 100, metrics = metrics)
+        repository.save(draft().copy(entries = listOf(entry)))
+
+        assertEquals(mask, repository.types.first().single().extraMetricMask)
+        repository.updateType(id, "Pool", true, null, extraMetricMask = 0)
+        val reopened = DayDraft.from(date, repository.observeDay(date).first())
+        repository.save(reopened.withNote("same session"))
+
+        assertEquals(0, repository.types.first().single().extraMetricMask)
+        assertEquals(metrics, repository.observeDay(date).first()!!.entries.single().metrics)
+    }
+
+    @Test fun legacyMetricSelectionDefaultsBySportButExplicitZeroDisablesIt() {
+        assertEquals(
+            WorkoutMetric.CADENCE.bit or WorkoutMetric.STEPS.bit or WorkoutMetric.ELEVATION_GAIN.bit,
+            effectiveWorkoutMetricMask("running", null),
+        )
+        assertEquals(
+            WorkoutMetric.POOL_LENGTH.bit or WorkoutMetric.LAPS.bit or WorkoutMetric.STROKES.bit,
+            effectiveWorkoutMetricMask("swimming", null),
+        )
+        assertEquals(0, effectiveWorkoutMetricMask(null, null))
+        assertEquals(0, effectiveWorkoutMetricMask("running", 0))
     }
 
     @Test fun addTypeAppendsSortedTrimsAndClearsBuiltinKey() = runBlocking {

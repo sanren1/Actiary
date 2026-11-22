@@ -7,8 +7,12 @@ import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.domain.DateRange
 import com.actiary.domain.RangeStats
+import com.actiary.domain.WorkoutMetric
 import com.actiary.domain.computeStats
+import com.actiary.ui.common.labelId
 import com.actiary.ui.record.formatDistance
+import com.actiary.ui.record.formatWorkoutClock
+import com.actiary.ui.record.paceSeconds
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -32,15 +36,43 @@ fun splitMinutes(total: Int): Pair<Int, Int> = total / 60 to total % 60
 internal fun entryMetrics(
     entry: ExerciseEntryEntity,
     type: ExerciseTypeEntity,
+    includeOptional: Boolean = false,
     format: (Int, Any) -> String,
 ): List<Pair<Int, String>> = buildList {
-    entry.durationMinutes?.let { add(R.string.records_stat_duration to format(R.string.records_min, it)) }
+    val seconds = entry.metrics.durationSeconds
+    if (seconds != null) {
+        add(R.string.records_stat_duration to formatWorkoutClock(seconds.toLong()))
+    } else {
+        entry.durationMinutes?.let { add(R.string.records_stat_duration to format(R.string.records_min, it)) }
+    }
     entry.calories?.let { add(R.string.records_stat_calories to format(R.string.records_kcal, it)) }
     entry.avgHeartRate?.let { add(R.string.record_heart_rate to format(R.string.record_detail_bpm, it)) }
-    val distance = formatDistance(entry.distanceMeters, type.builtinKey, type.hasDistance)
+    val distance = formatDistance(entry.distanceMeters, type.builtinKey, includeOptional || type.hasDistance)
     if (distance.isNotEmpty()) {
         val unit = if (type.builtinKey == "swimming") R.string.records_m else R.string.records_km
         add(R.string.record_detail_distance to format(unit, distance))
+    }
+    if (includeOptional) {
+        WorkoutMetric.entries.forEach { metric ->
+            val value = metric.value(entry.metrics) ?: return@forEach
+            val display = when (metric) {
+                WorkoutMetric.CADENCE -> format(R.string.workout_metric_steps_per_min, value)
+                WorkoutMetric.ELEVATION_GAIN, WorkoutMetric.POOL_LENGTH ->
+                    format(R.string.workout_metric_decimal_meters, value / 100.0)
+                else -> value.toString()
+            }
+            add(metric.labelId to display)
+        }
+        if (type.builtinKey in setOf("running", "swimming")) {
+            val swimming = type.builtinKey == "swimming"
+            val pace = paceSeconds(seconds, entry.distanceMeters, if (swimming) 100 else 1000)
+            if (pace != null) {
+                val unit = if (swimming) R.string.workout_metric_pace_100m else R.string.workout_metric_pace_km
+                add(R.string.workout_metric_pace to format(unit, formatWorkoutClock(pace)))
+            }
+        } else if (seconds != null && seconds > 0 && entry.distanceMeters != null && entry.distanceMeters > 0) {
+            add(R.string.workout_metric_speed to format(R.string.workout_metric_speed_kph, entry.distanceMeters * 3.6 / seconds))
+        }
     }
 }
 

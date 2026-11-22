@@ -66,7 +66,10 @@ import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DraftEntry
 import com.actiary.domain.DraftPhoto
+import com.actiary.domain.WorkoutMetric
+import com.actiary.domain.WorkoutMetrics
 import com.actiary.domain.WorkoutScreenshot
+import com.actiary.domain.effectiveWorkoutMetricMask
 import com.actiary.domain.withRecognizedWorkout
 import com.actiary.glass.GlassDialog
 import com.actiary.glass.GlassSegmentedPicker
@@ -77,6 +80,8 @@ import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
+import com.actiary.ui.common.isLength
+import com.actiary.ui.common.labelId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -106,6 +111,18 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
             ArrayList(d.entries.map { it.calories ?: -1 }),
             ArrayList(d.entries.map { it.avgHeartRate ?: -1 }),
             ArrayList(d.entries.map { it.id }),
+            ArrayList(d.entries.map { entry ->
+                val metrics = entry.metrics
+                arrayListOf(
+                    metrics.durationSeconds ?: -1,
+                    metrics.cadenceSpm ?: -1,
+                    metrics.stepCount ?: -1,
+                    metrics.elevationGainCm ?: -1,
+                    metrics.poolLengthCm ?: -1,
+                    metrics.lapCount ?: -1,
+                    metrics.strokeCount ?: -1,
+                )
+            }),
         )
     },
     restore = { v ->
@@ -117,10 +134,13 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
             val cal = l.getOrElse(7) { emptyList<Int>() } as List<Int>
             val hr = l.getOrElse(8) { emptyList<Int>() } as List<Int>
             val entryIds = l.getOrElse(9) { emptyList<Long>() } as List<Long>
+            val metrics = l.getOrElse(10) { emptyList<List<Int>>() } as List<List<Int>>
             DayDraft(
                 date = LocalDate.ofEpochDay(l[0] as Long),
                 status = DayStatus.valueOf(l[1] as String),
                 entries = ids.mapIndexed { i, id ->
+                    val values = metrics.getOrNull(i)
+                    fun metric(index: Int) = values?.getOrNull(index)?.takeIf { it >= 0 }
                     DraftEntry(
                         id,
                         dur[i].takeIf { it >= 0 },
@@ -128,6 +148,7 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
                         cal.getOrElse(i) { -1 }.takeIf { it >= 0 },
                         hr.getOrElse(i) { -1 }.takeIf { it >= 0 },
                         entryIds.getOrElse(i) { -i.toLong() - 1 },
+                        WorkoutMetrics(metric(0), metric(1), metric(2), metric(3), metric(4), metric(5), metric(6)),
                     )
                 },
                 note = l[2] as String,
@@ -652,7 +673,24 @@ private fun EntryFields(
     var calories by rememberSaveable { mutableStateOf(formatCalories(entry.calories)) }
     var heartRate by rememberSaveable { mutableStateOf(formatHeartRate(entry.avgHeartRate)) }
 
-    fun report() = onValidity(!entryInputInvalid(distance, hasDistance, swimming, calories, heartRate))
+    val metricMask = effectiveWorkoutMetricMask(type.builtinKey, type.extraMetricMask)
+    var metricInputs by rememberSaveable {
+        mutableStateOf(WorkoutMetric.entries.map { metric ->
+            val value = metric.value(entry.metrics)
+            if (metric.isLength) formatCentimeters(value) else value?.toString().orEmpty()
+        })
+    }
+    val visibleMetrics = WorkoutMetric.entries.filter { metric ->
+        (metricMask and metric.bit) != 0 || metricInputs[metric.ordinal].isNotEmpty()
+    }
+
+    fun report() {
+        val invalidMetric = WorkoutMetric.entries.any { metric ->
+            val text = metricInputs[metric.ordinal]
+            text.isNotEmpty() && parseWorkoutMetric(metric, text) == null
+        }
+        onValidity(!invalidMetric && !entryInputInvalid(distance, hasDistance, swimming, calories, heartRate))
+    }
     LaunchedEffect(Unit) { report() }
 
     Column(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -661,13 +699,21 @@ private fun EntryFields(
                 exerciseTypeLabel(type), Modifier.width(72.dp).padding(bottom = 12.dp),
                 style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp, FontWeight.Medium), maxLines = 1,
             )
-            NumberField(R.string.record_duration, minutes, Modifier.weight(1f), KeyboardType.Number) {
-                minutes = sanitizeMinutes(it)
-                onChange(entry.copy(durationMinutes = parseMinutes(minutes)))
+            val durationLabel = stringResource(R.string.record_duration)
+            val exactTime = entry.metrics.durationSeconds?.let { formatWorkoutClock(it.toLong()) }
+            NumberField(
+                if (exactTime == null) durationLabel else stringResource(R.string.workout_duration_exact, durationLabel, exactTime),
+                minutes, Modifier.weight(1f), KeyboardType.Number,
+            ) {
+                val edited = sanitizeMinutes(it)
+                if (edited != minutes) {
+                    minutes = edited
+                    onChange(entry.copy(durationMinutes = parseMinutes(minutes), metrics = entry.metrics.copy(durationSeconds = null)))
+                }
             }
             if (hasDistance) {
                 NumberField(
-                    if (swimming) R.string.record_distance_meters else R.string.record_distance,
+                    stringResource(if (swimming) R.string.record_distance_meters else R.string.record_distance),
                     distance, Modifier.weight(1f),
                     if (swimming) KeyboardType.Number else KeyboardType.Decimal,
                 ) {
@@ -685,25 +731,56 @@ private fun EntryFields(
                     }
                 }
             }
-            NumberField(R.string.record_calories, calories, Modifier.weight(1f), KeyboardType.Number) {
+            NumberField(stringResource(R.string.record_calories), calories, Modifier.weight(1f), KeyboardType.Number) {
                 calories = sanitizeCalories(it)
                 onChange(entry.copy(calories = parseCalories(calories)))
                 report()
             }
-            NumberField(R.string.record_heart_rate, heartRate, Modifier.weight(1f), KeyboardType.Number) {
+            NumberField(stringResource(R.string.record_heart_rate), heartRate, Modifier.weight(1f), KeyboardType.Number) {
                 heartRate = sanitizeHeartRate(it)
                 onChange(entry.copy(avgHeartRate = parseHeartRate(heartRate)))
                 report()
+            }
+        }
+        visibleMetrics.chunked(2).forEach { row ->
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                row.forEach { metric ->
+                    key(metric) {
+                        val label = stringResource(metric.labelId)
+                        val labelWithUnit = when {
+                            metric.isLength -> stringResource(R.string.workout_metric_label_meters, label)
+                            metric == WorkoutMetric.CADENCE -> stringResource(R.string.workout_metric_label_steps_per_min, label)
+                            else -> label
+                        }
+                        NumberField(
+                            labelWithUnit, metricInputs[metric.ordinal], Modifier.weight(1f),
+                            if (metric.isLength) KeyboardType.Decimal else KeyboardType.Number,
+                        ) { input ->
+                            val text = input.filter { char -> char in '0'..'9' || (metric.isLength && char in ".,") }
+                            metricInputs = metricInputs.toMutableList().apply { set(metric.ordinal, text) }
+                            val value = parseWorkoutMetric(metric, text)
+                            if (value != null || text.isEmpty()) {
+                                onChange(entry.copy(metrics = metric.withValue(entry.metrics, value)))
+                            }
+                            report()
+                        }
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun NumberField(label: Int, value: String, modifier: Modifier, keyboard: KeyboardType, onChange: (String) -> Unit) {
+private fun NumberField(label: String, value: String, modifier: Modifier, keyboard: KeyboardType, onChange: (String) -> Unit) {
     val t = LocalThemeTokens.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        BasicText(stringResource(label), style = TextStyle(t.neutrals.textSecondary.asColor(), 11.sp), maxLines = 1)
+        BasicText(label, style = TextStyle(t.neutrals.textSecondary.asColor(), 11.sp))
         BasicTextField(
             value = value, onValueChange = onChange, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = keyboard),

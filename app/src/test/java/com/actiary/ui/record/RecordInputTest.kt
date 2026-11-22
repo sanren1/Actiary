@@ -1,5 +1,6 @@
 package com.actiary.ui.record
 
+import com.actiary.domain.WorkoutMetric
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -100,5 +101,36 @@ class RecordInputTest {
         assertEquals("", formatHeartRate(null))
         assertEquals("5000", formatMeters(5000))
         assertEquals("", formatMeters(null))
+    }
+
+    @Test fun metricCentimetersPreserveFractionalMeters() {
+        assertEquals(2505, parseCentimeters("25,05"))
+        assertEquals("25.05", formatCentimeters(2505))
+        assertEquals(0, parseCentimeters("0"))
+        assertNull(parseCentimeters("1.125"))
+        assertNull(parseCentimeters("."))
+        assertNull(parseCentimeters("-1"))
+        assertNull(parseCentimeters("21474836.48"))
+    }
+
+    @Test fun workoutMetricLimits() {
+        assertEquals(300, parseWorkoutMetric(WorkoutMetric.CADENCE, "300"))
+        assertNull(parseWorkoutMetric(WorkoutMetric.CADENCE, "301"))
+        assertEquals(200_000, parseWorkoutMetric(WorkoutMetric.STEPS, "200000"))
+        assertNull(parseWorkoutMetric(WorkoutMetric.STEPS, "200001"))
+        assertNull(parseWorkoutMetric(WorkoutMetric.LAPS, "10001"))
+        assertNull(parseWorkoutMetric(WorkoutMetric.STROKES, "100001"))
+        assertEquals(2_000_000, parseWorkoutMetric(WorkoutMetric.ELEVATION_GAIN, "20000"))
+        assertNull(parseWorkoutMetric(WorkoutMetric.ELEVATION_GAIN, "20000.01"))
+        assertEquals(100_000, parseWorkoutMetric(WorkoutMetric.POOL_LENGTH, "1000"))
+        assertNull(parseWorkoutMetric(WorkoutMetric.POOL_LENGTH, "1000,01"))
+    }
+
+    @Test fun precisePaceUsesExactTimeAndPositiveDistance() {
+        assertEquals("1:01:01", formatWorkoutClock(3661))
+        assertEquals("5:22", formatWorkoutClock(paceSeconds(1932, 6000, 1000)!!))
+        assertEquals("1:40", formatWorkoutClock(paceSeconds(1500, 1500, 100)!!))
+        assertNull(paceSeconds(null, 6000, 1000))
+        assertNull(paceSeconds(1932, 0, 1000))
     }
 }

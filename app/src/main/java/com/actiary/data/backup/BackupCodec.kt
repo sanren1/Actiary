@@ -5,6 +5,10 @@ import com.actiary.data.appearance.backupAppearanceStringKeys
 import com.actiary.data.db.ActiaryDatabase
 import com.actiary.data.db.DayStatus
 import com.actiary.domain.DayDraft
+import com.actiary.domain.WORKOUT_METRIC_MASK
+import com.actiary.domain.WorkoutMetric
+import com.actiary.domain.WorkoutMetrics
+import com.actiary.domain.roundedWorkoutMinutes
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -27,7 +31,8 @@ fun BackupData.toJson(): String = obj(
     },
     "types" to types.encode {
         obj("id" to it.id, "builtinKey" to it.builtinKey, "name" to it.name, "sortOrder" to it.sortOrder,
-            "archived" to it.archived, "hasDistance" to it.hasDistance, "iconKey" to it.iconKey)
+            "archived" to it.archived, "hasDistance" to it.hasDistance, "iconKey" to it.iconKey,
+            "extraMetricMask" to it.extraMetricMask)
     },
     "records" to records.encode {
         obj("epochDay" to it.epochDay, "status" to it.status.name, "note" to it.note, "updatedAt" to it.updatedAt)
@@ -35,7 +40,10 @@ fun BackupData.toJson(): String = obj(
     "entries" to entries.encode {
         obj("id" to it.id, "epochDay" to it.epochDay, "typeId" to it.typeId, "durationMinutes" to it.durationMinutes,
             "distanceMeters" to it.distanceMeters, "calories" to it.calories, "avgHeartRate" to it.avgHeartRate,
-            "sortOrder" to it.sortOrder)
+            "sortOrder" to it.sortOrder, "durationSeconds" to it.metrics.durationSeconds,
+            "cadenceSpm" to it.metrics.cadenceSpm, "stepCount" to it.metrics.stepCount,
+            "elevationGainCm" to it.metrics.elevationGainCm, "poolLengthCm" to it.metrics.poolLengthCm,
+            "lapCount" to it.metrics.lapCount, "strokeCount" to it.metrics.strokeCount)
     },
     "photos" to photos.encode {
         obj("epochDay" to it.epochDay, "fileName" to it.fileName, "sortOrder" to it.sortOrder, "addedAt" to it.addedAt)
@@ -72,11 +80,12 @@ fun parseBackup(json: String): BackupData {
         val root = tokens.nextValue() as? JSONObject ?: invalid("Expected a backup object")
         if (tokens.nextClean() != '\u0000' || '\u0000' in json) invalid("Invalid content after backup object")
         val format = root.int("format")
-        if (format != BACKUP_FORMAT) invalid("Unsupported backup format: $format")
+        if (format !in 1..BACKUP_FORMAT) invalid("Unsupported backup format: $format")
 
         val types = root.rows("types") {
             BackupType(id("id"), optionalString("builtinKey"), optionalString("name"), int("sortOrder"),
-                bool("archived"), bool("hasDistance"), optionalString("iconKey"))
+                bool("archived"), bool("hasDistance"), optionalString("iconKey"),
+                metric("extraMetricMask")?.also { if ((it and WORKOUT_METRIC_MASK) != it) invalid("Unknown workout metric selection") })
         }
         val typeIds = unique(types.map { it.id }, "type IDs")
         unique(types.mapNotNull { it.builtinKey }, "built-in type keys")
@@ -92,8 +101,24 @@ fun parseBackup(json: String): BackupData {
             val day = epochDay()
             val type = id("typeId")
             if (day !in days || type !in typeIds) invalid("Entry references an unknown date or type")
-            BackupEntry(id("id"), day, type, metric("durationMinutes"), metric("distanceMeters"),
-                metric("calories"), metric("avgHeartRate"), int("sortOrder"))
+            val durationMinutes = metric("durationMinutes")
+            val durationSeconds = metric("durationSeconds")
+            if (durationSeconds != null && roundedWorkoutMinutes(durationSeconds) != durationMinutes) {
+                invalid("Workout duration does not match its rounded minutes")
+            }
+            BackupEntry(id("id"), day, type, durationMinutes, metric("distanceMeters"),
+                metric("calories"), metric("avgHeartRate"), int("sortOrder"),
+                WorkoutMetrics(
+                    durationSeconds = durationSeconds,
+                    cadenceSpm = metric("cadenceSpm"),
+                    stepCount = metric("stepCount"),
+                    elevationGainCm = metric("elevationGainCm"),
+                    poolLengthCm = metric("poolLengthCm"),
+                    lapCount = metric("lapCount"),
+                    strokeCount = metric("strokeCount"),
+                ).also { m ->
+                    if (WorkoutMetric.entries.any { (it.value(m) ?: 0) > it.max }) invalid("Workout metric out of range")
+                })
         }
         unique(entries.map { it.id }, "entry IDs")
 

@@ -80,7 +80,9 @@ class RecordRepository(
                 dao.replaceDay(
                     DailyRecordEntity(epochDay, draft.status, draft.note, now),
                     draft.entries.mapIndexed { i, e ->
-                        ExerciseEntryEntity(0, epochDay, e.typeId, e.durationMinutes, e.distanceMeters, e.calories, e.avgHeartRate, i)
+                        ExerciseEntryEntity(
+                            0, epochDay, e.typeId, e.durationMinutes, e.distanceMeters, e.calories, e.avgHeartRate, i, e.metrics,
+                        )
                     },
                     names.mapIndexed { i, n -> PhotoAttachmentEntity(0, epochDay, n, i, now) },
                 )
@@ -95,7 +97,7 @@ class RecordRepository(
         }
     }
 
-    suspend fun addType(name: String, hasDistance: Boolean, iconKey: String?): Long = withContext(io) {
+    suspend fun addType(name: String, hasDistance: Boolean, iconKey: String?, extraMetricMask: Int? = null): Long = withContext(io) {
         dao.appendType(
             ExerciseTypeEntity(
                 builtinKey = null,
@@ -103,6 +105,7 @@ class RecordRepository(
                 sortOrder = 0,
                 hasDistance = hasDistance,
                 iconKey = iconKey,
+                extraMetricMask = extraMetricMask,
             ),
         )
     }
@@ -111,8 +114,10 @@ class RecordRepository(
         dao.moveType(id, offset)
     }
 
-    internal suspend fun updateType(id: Long, name: String?, hasDistance: Boolean, iconKey: String?) = withContext(io) {
-        check(dao.updateType(id, name?.trim()?.takeIf(String::isNotEmpty), hasDistance, iconKey) == 1)
+    internal suspend fun updateType(
+        id: Long, name: String?, hasDistance: Boolean, iconKey: String?, extraMetricMask: Int? = null,
+    ) = withContext(io) {
+        check(dao.updateType(id, name?.trim()?.takeIf(String::isNotEmpty), hasDistance, iconKey, extraMetricMask) == 1)
     }
 
     suspend fun removeType(id: Long) = withContext(io) {

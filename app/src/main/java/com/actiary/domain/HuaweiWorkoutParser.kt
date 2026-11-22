@@ -21,7 +21,13 @@ internal data class ParsedWorkout(
     val distanceMeters: Int?,
     val calories: Int?,
     val avgHeartRate: Int?,
-) : Serializable
+    val metrics: WorkoutMetrics? = null,
+) : Serializable {
+    private companion object {
+        // Preserve an OCR draft restored from the previous app version.
+        private const val serialVersionUID = -5438490480273137410L
+    }
+}
 
 private const val DURATION_LABEL = "运动时间"
 private const val CALORIES_LABEL = "总消耗热量"
@@ -34,6 +40,8 @@ private val totalCalories = Regex("""([0-9]+)-?(?:千卡|干卡)?""")
 private val averageHeartRate = Regex("""([0-9]+)(?:次/分钟)?""")
 private val headlineNumber = Regex("""([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)[.-]?(公里|米)?""")
 private val distanceUnits = setOf("公里", "米")
+private val groupedCount = Regex("""(?:[0-9]+|[0-9]{1,3}(?:[,，][0-9]{3})+)""")
+private val metricMetres = Regex("""([0-9]+)(?:\.([0-9]{1,2}))?""")
 
 internal fun parseHuaweiWorkout(lines: List<RecognizedLine>): ParsedWorkout? {
     val ordered = lines.map { it.copy(text = it.text.filterNot(Char::isWhitespace)) }.sortedBy { it.top }
@@ -44,7 +52,8 @@ internal fun parseHuaweiWorkout(lines: List<RecognizedLine>): ParsedWorkout? {
         else workoutTypes.entries.firstOrNull { line.text.endsWith(it.key) }?.let { line to it.value }
     }
     val typeKey = title?.second
-    val duration = ordered.metricValue(DURATION_LABEL)?.let(::parseDuration)
+    val durationSeconds = ordered.metricValue(DURATION_LABEL)?.let(::parseDurationSeconds)
+    val duration = durationSeconds?.let { parseMinutes(roundedWorkoutMinutes(it).toString()) }
     val calories = ordered.metricValue(CALORIES_LABEL)?.let {
         totalCalories.matchEntire(it)?.groupValues?.get(1)?.let(::parseCalories)
     }
@@ -54,7 +63,23 @@ internal fun parseHuaweiWorkout(lines: List<RecognizedLine>): ParsedWorkout? {
     val firstMetric = ordered.firstOrNull { it.text in metricLabels }
     val distance = if (typeKey == "freeform") null else ordered.headlineDistance(typeKey, dateLine ?: title?.first, firstMetric)
     if (typeKey == null && duration == null && distance == null && calories == null && heartRate == null) return null
-    return ParsedWorkout(date, typeKey, duration, distance, calories, heartRate)
+    val seconds = durationSeconds.takeIf { duration != null }
+    val metrics = when (typeKey) {
+        "running" -> WorkoutMetrics(
+            durationSeconds = seconds,
+            cadenceSpm = ordered.metricInUnit("平均步频", "步/分钟")?.let(::parseGroupedCount),
+            stepCount = ordered.metricInUnit("步数", "步")?.let(::parseGroupedCount),
+            elevationGainCm = ordered.metricInUnit("累计爬升", "米")?.let(::parseCentimetres),
+        )
+        "swimming" -> WorkoutMetrics(
+            durationSeconds = seconds,
+            poolLengthCm = ordered.metricInUnit("泳池长度", "米")?.let(::parseCentimetres)?.takeIf { it > 0 },
+            lapCount = ordered.metricValue("趟数")?.removeSuffix("趟")?.let(::parseGroupedCount),
+            strokeCount = ordered.metricInUnit("划水次数", "次")?.let(::parseGroupedCount),
+        )
+        else -> WorkoutMetrics(durationSeconds = seconds)
+    }
+    return ParsedWorkout(date, typeKey, duration, distance, calories, heartRate, metrics.takeUnless { it == WorkoutMetrics() })
 }
 
 private fun parseDate(text: String): LocalDate? {
@@ -66,13 +91,34 @@ private fun parseDate(text: String): LocalDate? {
     }
 }
 
-private fun parseDuration(text: String): Int? {
+private fun parseDurationSeconds(text: String): Int? {
     val (hours, minutes, seconds) = elapsedTime.matchEntire(text)?.destructured ?: return null
-    val roundedMinutes = hours.toInt() * 60 + minutes.toInt() + (seconds.toInt() + 30) / 60
-    return parseMinutes(roundedMinutes.toString())
+    return hours.toInt() * 3600 + minutes.toInt() * 60 + seconds.toInt()
 }
 
-private fun List<RecognizedLine>.metricValue(labelText: String): String? {
+private fun parseGroupedCount(text: String): Int? =
+    text.takeIf(groupedCount::matches)?.replace(",", "")?.replace("，", "")?.toIntOrNull()
+
+private fun parseCentimetres(text: String): Int? {
+    val (whole, fraction) = metricMetres.matchEntire(text)?.destructured ?: return null
+    val metres = whole.toIntOrNull() ?: return null
+    val centimetres = metres * 100L + fraction.padEnd(2, '0').toInt()
+    return centimetres.takeIf { it <= Int.MAX_VALUE }?.toInt()
+}
+
+private fun List<RecognizedLine>.metricInUnit(labelText: String, unit: String): String? {
+    val value = metricLine(labelText) ?: return null
+    if (value.text.endsWith(unit)) return value.text.removeSuffix(unit)
+    val besideUnit = any { line ->
+        line.text == unit && line.left in value.right..(value.right + value.height) &&
+            line.top < value.bottom && line.bottom > value.top
+    }
+    return value.text.takeIf { besideUnit }
+}
+
+private fun List<RecognizedLine>.metricValue(labelText: String): String? = metricLine(labelText)?.text
+
+private fun List<RecognizedLine>.metricLine(labelText: String): RecognizedLine? {
     val label = firstOrNull { it.text == labelText } ?: return null
     // The freeform total sits in a taller box immediately to the right of its label.
     val beside = filter { line ->
@@ -81,7 +127,7 @@ private fun List<RecognizedLine>.metricValue(labelText: String): String? {
     val below = firstOrNull { line ->
         line.top in label.bottom..(label.bottom + 2 * label.height) && abs(line.left - label.left) <= label.height
     }
-    return (beside ?: below)?.text
+    return beside ?: below
 }
 
 private fun List<RecognizedLine>.headlineDistance(

@@ -47,12 +47,13 @@ class BackupRepository(
                 BackupData(
                     BACKUP_FORMAT, appVersion, System.currentTimeMillis(), appearance.exportAppearance(),
                     dao.getAllTypes().map {
-                        BackupType(it.id, it.builtinKey, it.name, it.sortOrder, it.archived, it.hasDistance, it.iconKey)
+                        BackupType(it.id, it.builtinKey, it.name, it.sortOrder, it.archived, it.hasDistance, it.iconKey,
+                            it.extraMetricMask)
                     },
                     dao.getAllRecords().map { BackupRecord(it.epochDay, it.status, it.note, it.updatedAt) },
                     dao.getAllEntries().map {
                         BackupEntry(it.id, it.epochDay, it.typeId, it.durationMinutes, it.distanceMeters,
-                            it.calories, it.avgHeartRate, it.sortOrder)
+                            it.calories, it.avgHeartRate, it.sortOrder, it.metrics)
                     },
                     dao.getAllPhotos().map { BackupPhoto(it.epochDay, it.fileName, it.sortOrder, it.addedAt) },
                 )
@@ -112,14 +113,14 @@ class BackupRepository(
                             dao.insertType(ExerciseTypeEntity(
                                 builtinKey = type.builtinKey, name = if (type.builtinKey == null) type.name?.trim() else type.name,
                                 sortOrder = type.sortOrder, archived = type.archived, hasDistance = type.hasDistance,
-                                iconKey = type.iconKey,
+                                iconKey = type.iconKey, extraMetricMask = type.extraMetricMask,
                             ))
                         }
                         is TypeTarget.Existing -> {
                             if (overwrite) {
                                 val type = typesById.getValue(oldId)
                                 dao.updateBuiltinType(requireNotNull(type.builtinKey), type.name, type.sortOrder,
-                                    type.archived, type.hasDistance, type.iconKey)
+                                    type.archived, type.hasDistance, type.iconKey, type.extraMetricMask)
                             }
                             target.id
                         }
@@ -132,7 +133,7 @@ class BackupRepository(
                 dao.insertEntries(backup.entries.filter { it.epochDay in days }.map {
                     ExerciseEntryEntity(epochDay = it.epochDay, typeId = typeIds.getValue(it.typeId),
                         durationMinutes = it.durationMinutes, distanceMeters = it.distanceMeters,
-                        calories = it.calories, avgHeartRate = it.avgHeartRate, sortOrder = it.sortOrder)
+                        calories = it.calories, avgHeartRate = it.avgHeartRate, sortOrder = it.sortOrder, metrics = it.metrics)
                 })
                 dao.insertPhotos(backup.photos.filter { it.epochDay in days }.mapNotNull {
                     val source = data.photo(it.fileName) ?: return@mapNotNull null

@@ -22,7 +22,7 @@ internal fun buildDetailModel(
 ): DetailModel = DetailModel(
     status = day.record.status,
     entries = day.entries.sortedBy { it.sortOrder }.mapNotNull { entry ->
-        types[entry.typeId]?.let { DetailEntry(entry.typeId, entryMetrics(entry, it, format)) }
+        types[entry.typeId]?.let { DetailEntry(entry.typeId, entryMetrics(entry, it, includeOptional = true, format = format)) }
     },
     note = day.record.note,
     photos = day.photos.sortedBy { it.sortOrder }.map { it.fileName },

@@ -1,8 +1,9 @@
 package com.actiary.data.backup
 
 import com.actiary.data.db.DayStatus
+import com.actiary.domain.WorkoutMetrics
 
-const val BACKUP_FORMAT = 1
+const val BACKUP_FORMAT = 2
 
 data class BackupData(
     val format: Int,
@@ -23,6 +24,7 @@ data class BackupType(
     val archived: Boolean,
     val hasDistance: Boolean,
     val iconKey: String?,
+    val extraMetricMask: Int? = null,
 )
 
 data class BackupRecord(val epochDay: Long, val status: DayStatus, val note: String, val updatedAt: Long)
@@ -36,6 +38,7 @@ data class BackupEntry(
     val calories: Int?,
     val avgHeartRate: Int?,
     val sortOrder: Int,
+    val metrics: WorkoutMetrics = WorkoutMetrics(),
 )
 
 data class BackupPhoto(val epochDay: Long, val fileName: String, val sortOrder: Int, val addedAt: Long)

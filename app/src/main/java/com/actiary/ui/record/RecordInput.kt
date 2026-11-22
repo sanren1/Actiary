@@ -1,5 +1,9 @@
 package com.actiary.ui.record
 
+import com.actiary.domain.WorkoutMetric
+import com.actiary.ui.common.isLength
+import java.math.BigDecimal
+
 private const val MAX_MINUTES = 100_000
 private const val MAX_KM_HUNDREDTHS = 1_000_000 // 10,000 km
 private const val MAX_CALORIES = 9999
@@ -69,4 +73,35 @@ fun parseMeters(text: String): Int? =
 fun formatDistance(meters: Int?, typeKey: String?, hasDistance: Boolean): String {
     if (!hasDistance || meters == null) return ""
     return if (typeKey == "swimming") formatMeters(meters) else formatKm(meters)
+}
+
+private val decimalMeters = Regex("(?:[0-9]+(?:[.,][0-9]{0,2})?|[.,][0-9]{1,2})")
+
+internal fun parseCentimeters(text: String): Int? {
+    if (!decimalMeters.matches(text)) return null
+    val normalized = text.replace(',', '.')
+    val meters = normalized.substringBefore('.').ifEmpty { "0" }.toIntOrNull() ?: return null
+    val fraction = normalized.substringAfter('.', "").padEnd(2, '0').toInt()
+    return (meters.toLong() * 100 + fraction).takeIf { it <= Int.MAX_VALUE }?.toInt()
+}
+
+/** Null when [text] is malformed or above the metric's limit. */
+internal fun parseWorkoutMetric(metric: WorkoutMetric, text: String): Int? =
+    (if (metric.isLength) parseCentimeters(text) else text.toIntOrNull()?.takeIf { it >= 0 })?.takeIf { it <= metric.max }
+
+internal fun formatCentimeters(value: Int?): String = value?.let {
+    BigDecimal.valueOf(it.toLong(), 2).stripTrailingZeros().toPlainString()
+}.orEmpty()
+
+internal fun formatWorkoutClock(totalSeconds: Long): String {
+    val seconds = (totalSeconds % 60).toString().padStart(2, '0')
+    val minutes = totalSeconds / 60
+    if (minutes < 60) return "$minutes:$seconds"
+    return "${minutes / 60}:${(minutes % 60).toString().padStart(2, '0')}:$seconds"
+}
+
+internal fun paceSeconds(durationSeconds: Int?, distanceMeters: Int?, distanceUnit: Int): Long? {
+    val time = durationSeconds?.takeIf { it > 0 } ?: return null
+    val distance = distanceMeters?.takeIf { it > 0 } ?: return null
+    return (time.toLong() * distanceUnit + distance / 2) / distance
 }

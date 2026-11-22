@@ -55,8 +55,11 @@ interface RecordDao {
     @Query("UPDATE exercise_type SET sortOrder = :sortOrder WHERE id = :id")
     suspend fun setTypeSortOrder(id: Long, sortOrder: Int)
 
-    @Query("UPDATE exercise_type SET name = :name, hasDistance = :hasDistance, iconKey = :iconKey WHERE id = :id AND archived = 0")
-    suspend fun updateType(id: Long, name: String?, hasDistance: Boolean, iconKey: String?): Int
+    @Query("""
+        UPDATE exercise_type SET name = :name, hasDistance = :hasDistance, iconKey = :iconKey,
+            extraMetricMask = :extraMetricMask WHERE id = :id AND archived = 0
+    """)
+    suspend fun updateType(id: Long, name: String?, hasDistance: Boolean, iconKey: String?, extraMetricMask: Int?): Int
 
     @Transaction
     suspend fun moveType(id: Long, offset: Int) {
@@ -132,9 +135,10 @@ interface RecordDao {
 
     @Query("""
         UPDATE exercise_type SET name = :name, sortOrder = :sortOrder, archived = :archived,
-            hasDistance = :hasDistance, iconKey = :iconKey WHERE builtinKey = :builtinKey
+            hasDistance = :hasDistance, iconKey = :iconKey, extraMetricMask = :extraMetricMask WHERE builtinKey = :builtinKey
     """)
     suspend fun updateBuiltinType(
         builtinKey: String, name: String?, sortOrder: Int, archived: Boolean, hasDistance: Boolean, iconKey: String?,
+        extraMetricMask: Int? = null,
     )
 }

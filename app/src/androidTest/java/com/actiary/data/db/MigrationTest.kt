@@ -4,6 +4,8 @@ import androidx.room.Room
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.actiary.domain.WorkoutMetric
+import com.actiary.domain.WorkoutMetrics
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -114,7 +116,7 @@ class MigrationTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
             ActiaryDatabase::class.java,
             TEST_DB,
-        ).build()
+        ).addMigrations(ActiaryDatabase.MIGRATION_4_5).build()
         try {
             val dao = room.recordDao()
             assertEquals(
@@ -137,6 +139,43 @@ class MigrationTest {
                 ),
                 day.entries.sortedBy { it.sortOrder },
             )
+        } finally {
+            room.close()
+        }
+    }
+
+    @Test
+    fun migrate4To5KeepsExistingSessionsAndSavesOptionalMeasurements() = runBlocking {
+        helper.createDatabase(TEST_DB, 4).use { db ->
+            db.execSQL("INSERT INTO exercise_type (id, builtinKey, sortOrder, archived, hasDistance) VALUES (5, 'running', 0, 0, 1)")
+            db.execSQL("INSERT INTO daily_record (epochDay, status, note, updatedAt) VALUES (100, 'EXERCISED', 'old workout', 1234)")
+            db.execSQL(
+                "INSERT INTO exercise_entry (id, epochDay, typeId, durationMinutes, distanceMeters, calories, avgHeartRate, sortOrder) " +
+                    "VALUES (20, 100, 5, 30, 5000, 320, 145, 0)",
+            )
+            db.execSQL("INSERT INTO photo_attachment (id, epochDay, fileName, sortOrder, addedAt) VALUES (31, 100, 'a.jpg', 0, 1234)")
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 5, true, ActiaryDatabase.MIGRATION_4_5).close()
+        val room = Room.databaseBuilder(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            ActiaryDatabase::class.java,
+            TEST_DB,
+        ).build()
+        try {
+            val dao = room.recordDao()
+            val original = dao.get(100)!!
+            assertEquals("old workout", original.record.note)
+            assertEquals(ExerciseEntryEntity(20, 100, 5, 30, 5000, 320, 145, 0), original.entries.single())
+            assertEquals(listOf(PhotoAttachmentEntity(31, 100, "a.jpg", 0, 1234)), original.photos)
+            assertNull(dao.getActiveTypes().single().extraMetricMask)
+
+            val mask = WorkoutMetric.CADENCE.bit or WorkoutMetric.STEPS.bit or WorkoutMetric.ELEVATION_GAIN.bit
+            assertEquals(1, dao.updateType(5, null, true, null, mask))
+            assertEquals(mask, dao.getActiveTypes().single().extraMetricMask)
+            val metrics = WorkoutMetrics(durationSeconds = 1805, cadenceSpm = 172, stepCount = 8600, elevationGainCm = 240)
+            dao.replaceDay(original.record, listOf(original.entries.single().copy(metrics = metrics)), original.photos)
+            assertEquals(metrics, dao.get(100)!!.entries.single().metrics)
         } finally {
             room.close()
         }

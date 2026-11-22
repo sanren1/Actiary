@@ -98,6 +98,8 @@ import com.actiary.ActiaryApp
 import com.actiary.R
 import com.actiary.data.RecordRepository
 import com.actiary.data.db.ExerciseTypeEntity
+import com.actiary.domain.WorkoutMetric
+import com.actiary.domain.effectiveWorkoutMetricMask
 import com.actiary.glass.GlassOverlayPanel
 import com.actiary.glass.GlassSheet
 import com.actiary.glass.overlayInteraction
@@ -109,6 +111,7 @@ import com.actiary.theme.asColor
 import com.actiary.ui.common.CUSTOM_TYPE_ICONS
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
+import com.actiary.ui.common.labelId
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlin.math.abs
@@ -120,14 +123,14 @@ internal class AddTypeActions(application: Application) : AndroidViewModel(appli
     var state by mutableStateOf(State.Idle)
         private set
 
-    fun save(typeId: Long?, name: String?, hasDistance: Boolean, iconKey: String?) {
+    fun save(typeId: Long?, name: String?, hasDistance: Boolean, iconKey: String?, extraMetricMask: Int?) {
         if (state == State.Saving || state == State.Saved) return
         state = State.Saving
         viewModelScope.launch {
             try {
                 val repository = (getApplication<Application>() as ActiaryApp).container.recordRepository
-                if (typeId == null) repository.addType(requireNotNull(name), hasDistance, iconKey)
-                else repository.updateType(typeId, name, hasDistance, iconKey)
+                if (typeId == null) repository.addType(requireNotNull(name), hasDistance, iconKey, extraMetricMask)
+                else repository.updateType(typeId, name, hasDistance, iconKey, extraMetricMask)
                 state = State.Saved
             } catch (e: CancellationException) {
                 throw e
@@ -143,13 +146,21 @@ internal class AddTypeActions(application: Application) : AndroidViewModel(appli
 }
 
 internal val EditingTypeSaver = Saver<ExerciseTypeEntity?, Bundle>(
-    save = { type -> type?.let {
-        bundleOf("id" to it.id, "builtin" to it.builtinKey, "name" to it.name, "distance" to it.hasDistance, "icon" to it.iconKey)
-    } },
+    save = { type ->
+        type?.let {
+            bundleOf(
+                "id" to it.id, "builtin" to it.builtinKey, "name" to it.name,
+                "distance" to it.hasDistance, "icon" to it.iconKey,
+            ).apply {
+                it.extraMetricMask?.let { mask -> putInt("extraMetrics", mask) }
+            }
+        }
+    },
     restore = {
         ExerciseTypeEntity(
             id = it.getLong("id"), builtinKey = it.getString("builtin"), name = it.getString("name"),
             sortOrder = 0, hasDistance = it.getBoolean("distance"), iconKey = it.getString("icon"),
+            extraMetricMask = if (it.containsKey("extraMetrics")) it.getInt("extraMetrics") else null,
         )
     },
 )
@@ -403,6 +414,8 @@ internal fun AddTypeSheet(
     var visible by rememberSaveable { mutableStateOf(true) }
     var name by rememberSaveable { mutableStateOf(initialName) }
     var hasDistance by rememberSaveable { mutableStateOf(editingType?.hasDistance ?: false) }
+    val initialMetricMask = effectiveWorkoutMetricMask(editingType?.builtinKey, editingType?.extraMetricMask)
+    var metricMask by rememberSaveable { mutableIntStateOf(initialMetricMask) }
     val saving = actions.state == AddTypeActions.State.Saving || actions.state == AddTypeActions.State.Saved
     val selectedIcon = CUSTOM_TYPE_ICONS.firstOrNull { it.key == iconKey }
     val savedName = name.trim().takeUnless { builtinName != null && (it.isEmpty() || it == builtinName) }
@@ -481,14 +494,36 @@ internal fun AddTypeSheet(
                 }
             }
 
-            val distanceLabel = stringResource(R.string.custom_type_has_distance)
-            GlassToggle(
-                checked = hasDistance,
-                onCheckedChange = { if (!saving) hasDistance = it },
-                modifier = Modifier.fillMaxWidth().overlayInteraction(!saving),
-                label = distanceLabel,
-            ) {
-                BasicText(distanceLabel, style = TextStyle(n.textPrimary.asColor(), 16.sp))
+            Column(Modifier.fillMaxWidth()) {
+                BasicText(
+                    stringResource(R.string.workout_metric_options),
+                    Modifier.semantics { heading() },
+                    style = TextStyle(n.textSecondary.asColor(), 14.sp),
+                )
+                val distanceLabel = stringResource(R.string.custom_type_has_distance)
+                GlassToggle(
+                    checked = hasDistance,
+                    onCheckedChange = { if (!saving) hasDistance = it },
+                    modifier = Modifier.fillMaxWidth().overlayInteraction(!saving),
+                    label = distanceLabel,
+                ) {
+                    BasicText(distanceLabel, style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                }
+                WorkoutMetric.entries.forEach { metric ->
+                    val label = stringResource(metric.labelId)
+                    GlassToggle(
+                        checked = (metricMask and metric.bit) != 0,
+                        onCheckedChange = { checked ->
+                            if (!saving) {
+                                metricMask = if (checked) metricMask or metric.bit else metricMask and metric.bit.inv()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().overlayInteraction(!saving),
+                        label = label,
+                    ) {
+                        BasicText(label, style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                    }
+                }
             }
             if (actions.state == AddTypeActions.State.Failed) {
                 BasicText(
@@ -503,7 +538,8 @@ internal fun AddTypeSheet(
                     .background(if (canSave) t.accent.accentAction.asColor() else n.surfaceMuted.asColor())
                     .clickable(enabled = canSave, role = Role.Button) {
                         focus.clearFocus()
-                        actions.save(editingType?.id, savedName, hasDistance, iconKey)
+                        val savedMetricMask = if (metricMask == initialMetricMask) editingType?.extraMetricMask else metricMask
+                        actions.save(editingType?.id, savedName, hasDistance, iconKey, savedMetricMask)
                     }
                     .padding(12.dp),
                 contentAlignment = Alignment.Center,

@@ -5,6 +5,7 @@ import com.actiary.data.db.DayStatus
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DraftEntry
 import com.actiary.domain.DraftPhoto
+import com.actiary.domain.WorkoutMetrics
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDate
@@ -39,6 +40,24 @@ class DraftSaverTest {
     @Test fun stagedPhotoReferencesSurviveProcessRecreation() {
         val draft = DayDraft(date, DayStatus.EXERCISED, emptyList(), "", listOf(DraftPhoto.Staged("draft.jpg")))
         assertEquals(draft, roundTrip(draft))
+    }
+
+    @Test fun optionalMetricsSurviveProcessRecreation() {
+        val first = DraftEntry(1, 32, 6000, id = 1, metrics = WorkoutMetrics(
+            durationSeconds = 1932, cadenceSpm = 172, stepCount = 5820, elevationGainCm = 2505,
+        ))
+        val second = DraftEntry(2, id = 2, metrics = WorkoutMetrics(poolLengthCm = 2500, lapCount = 60, strokeCount = 390))
+        val draft = DayDraft(date, DayStatus.EXERCISED, listOf(first, second), "", emptyList())
+        assertEquals(draft, roundTrip(draft))
+    }
+
+    @Test fun legacyDraftRestoresWithoutExtraMetrics() {
+        val old = arrayListOf<Any>(
+            date.toEpochDay(), DayStatus.EXERCISED.name, "", arrayListOf(1L),
+            arrayListOf(30), arrayListOf(5000), arrayListOf<String>(),
+            arrayListOf(95), arrayListOf(130), arrayListOf(9L),
+        )
+        assertEquals(DraftEntry(1, 30, 5000, 95, 130, id = 9), DraftSaver.restore(old)?.entries?.single())
     }
 
     @Test fun nullsStayNull() {
