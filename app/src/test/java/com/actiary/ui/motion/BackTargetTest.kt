@@ -8,13 +8,13 @@ import org.junit.Test
 class BackTargetTest {
     @Test
     fun overlayFirst() {
-        assertEquals(BackTarget.CloseOverlay, backTarget(true, Tab.SETTINGS, SettingsPage.CUSTOM_COLOR))
+        assertEquals(BackTarget.CloseOverlay, backTarget(true, Tab.SETTINGS, SettingsPage.APPEARANCE))
         assertEquals(BackTarget.CloseOverlay, backTarget(true, Tab.CALENDAR, SettingsPage.HOME))
     }
 
     @Test
     fun settingsSubpageBeforeTab() {
-        assertEquals(BackTarget.SettingsParent, backTarget(false, Tab.SETTINGS, SettingsPage.CUSTOM_COLOR))
+        assertEquals(BackTarget.SettingsParent, backTarget(false, Tab.SETTINGS, SettingsPage.TYPES))
         assertEquals(BackTarget.SettingsParent, backTarget(false, Tab.SETTINGS, SettingsPage.APPEARANCE))
     }
 

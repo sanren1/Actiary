@@ -126,4 +126,26 @@ class RecordDaoTest {
         listOf(9L, 10L, 12L, 13L).forEach { dao.replaceDay(record(it), emptyList(), emptyList()) }
         assertEquals(listOf(10L, 12L), dao.observeRange(10, 12).first().map { it.record.epochDay })
     }
+
+    @Test
+    fun updateTypeModifiesActiveRowAndIgnoresArchivedRow() = runBlocking {
+        val activeId = dao.insertType(ExerciseTypeEntity(builtinKey = null, name = "Pilates", sortOrder = 10, hasDistance = false))
+        val archivedId = dao.insertType(ExerciseTypeEntity(builtinKey = null, name = "Old", sortOrder = 11, archived = true))
+
+        val updatedActive = dao.updateType(activeId, "Core", true, "stretch", 7)
+        val updatedArchived = dao.updateType(archivedId, "Renamed", true, "climb", 3)
+
+        assertEquals(1, updatedActive)
+        assertEquals(0, updatedArchived)
+
+        val active = dao.observeAllTypes().first().single { it.id == activeId }
+        assertEquals("Core", active.name)
+        assertTrue(active.hasDistance)
+        assertEquals("stretch", active.iconKey)
+        assertEquals(7, active.extraMetricMask)
+
+        val archived = dao.observeAllTypes().first().single { it.id == archivedId }
+        assertEquals("Old", archived.name)
+        assertNull(archived.iconKey)
+    }
 }

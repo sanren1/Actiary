@@ -204,6 +204,8 @@
     <string name="notice_coroutines_use">Asynchronous tasks and data streams</string>
     <string name="notice_json_use">Backup JSON handling in JVM unit tests only</string>
     <string name="custom_type_name">Type name</string>
+    <string name="custom_type_name_too_long">Name can be at most %1$d characters</string>
+    <string name="custom_type_name_duplicate">A workout type with this name already exists</string>
     <string name="custom_type_add_title">Add workout type</string>
     <string name="custom_type_edit_title">Edit workout type</string>
     <string name="custom_type_edit_named">Edit %1$s</string>

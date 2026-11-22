@@ -146,7 +146,6 @@ class MainActivity : ComponentActivity() {
         window.setBackgroundDrawable(ColorDrawable(resolveTheme(initial, systemDark).neutrals.background))
         setContent {
             val settings by repository.settings.collectAsStateWithLifecycle(initial)
-            val recent by repository.recentColors.collectAsStateWithLifecycle(emptyList())
             val accentColors by repository.accentColors.collectAsStateWithLifecycle(emptyList())
             val weekStart by container.generalPrefs.weekStart.collectAsStateWithLifecycle(initialWeekStart)
             val firstDayOfWeek = weekStart.resolve()
@@ -457,9 +456,11 @@ class MainActivity : ComponentActivity() {
                                 visibility = removalVisibility,
                             )
                             if (editingTypeOpen) {
+                                val activeTypes by container.recordRepository.types.collectAsStateWithLifecycle(emptyList())
                                 AddTypeSheet(
                                     actions = typeActions,
                                     editingType = editingType,
+                                    existingTypes = activeTypes,
                                     iconKey = typeIcon,
                                     covered = iconVisibility.overlayPresent,
                                     onRequestIconPicker = { pickingTypeIcon = true },
@@ -556,8 +557,6 @@ class MainActivity : ComponentActivity() {
                                                                 }
                                                             },
                                                             onChartPalette = { lifecycleScope.launch { repository.setChartPalette(it) } },
-                                                            recent = recent,
-                                                            onApplyCustomAccent = { hex -> lifecycleScope.launch { repository.savePaletteAccent(hex) } },
                                                             typesContent = { onBack ->
                                                                 CustomTypesScreen(
                                                                     repository = container.recordRepository,

@@ -32,8 +32,6 @@ internal fun SettingsScreen(
     onResetAppearance: () -> Unit,
     onCustomColor: (String?) -> Unit,
     onChartPalette: (ChartPalette) -> Unit,
-    recent: List<String>,
-    onApplyCustomAccent: (String) -> Unit,
     typesContent: @Composable (() -> Unit) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
@@ -72,11 +70,5 @@ internal fun SettingsScreen(
         SettingsPage.TYPES -> typesContent(onBack)
         SettingsPage.DATA -> DataScreen(onBack, onExportBackup, onImportBackup, onCleanOrphanPhotos)
         SettingsPage.ABOUT -> AboutScreen(onBack)
-        SettingsPage.CUSTOM_COLOR -> ColorEditorScreen(
-            settings = settings,
-            recent = recent,
-            onApply = onApplyCustomAccent,
-            onBack = onBack,
-        )
     }
 }

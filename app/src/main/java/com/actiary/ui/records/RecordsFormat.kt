@@ -6,6 +6,7 @@ import com.actiary.data.db.DayWithDetails
 import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.domain.DateRange
+import com.actiary.domain.RangeKind
 import com.actiary.domain.RangeStats
 import com.actiary.domain.WorkoutMetric
 import com.actiary.domain.computeStats
@@ -32,6 +33,18 @@ internal fun recordsPresentation(range: DateRange, days: List<DayWithDetails>, f
     RecordsPresentation(range, filter, computeStats(days, range, filter), timelineItems(days, range, filter))
 
 fun splitMinutes(total: Int): Pair<Int, Int> = total / 60 to total % 60
+
+internal fun chartAxisTicks(kind: RangeKind, count: Int): List<Int> {
+    if (count <= 0) return emptyList()
+    if (count == 1) return listOf(0)
+    val last = count - 1
+    val raw = when (kind) {
+        RangeKind.WEEK -> listOf(0, 2, 4, last)
+        RangeKind.MONTH -> listOf(0, 9, 19, last)
+        RangeKind.YEAR -> listOf(0, 2, 5, 8, last)
+    }
+    return raw.filter { it in 0..last }.distinct().sorted()
+}
 
 internal fun entryMetrics(
     entry: ExerciseEntryEntity,

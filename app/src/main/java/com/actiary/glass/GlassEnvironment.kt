@@ -30,6 +30,7 @@ internal class GlassAnchoredMenuItem(
 internal class GlassAnchoredMenuState {
     var request by mutableStateOf<Request?>(null)
         private set
+    internal var present by mutableStateOf(false)
 
     class Request(val anchor: Rect, val items: List<GlassAnchoredMenuItem>)
 
@@ -70,6 +71,7 @@ fun GlassHost(
     val layers = remember(bg, combined) { GlassLayers(background = bg, content = combined) }
     val menu = remember { GlassAnchoredMenuState() }
     val menuVisibility = rememberOverlayVisibility(menu.request != null)
+    menu.present = menuVisibility.overlayPresent
     CompositionLocalProvider(
         LocalThemeTokens provides tokens,
         LocalGlassProfile provides profile,

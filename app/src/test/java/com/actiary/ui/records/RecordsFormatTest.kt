@@ -60,4 +60,15 @@ class RecordsFormatTest {
         assertEquals((1..12).toList(), result.stats.buckets.map { it.start.monthValue })
         assertEquals(emptyList<TimelineItem>(), result.timeline)
     }
+
+    @Test fun chartAxisTicksForWeekMonthYear() {
+        assertEquals(listOf(0, 2, 4, 6), chartAxisTicks(RangeKind.WEEK, 7))
+        assertEquals(listOf(0, 9, 19, 27), chartAxisTicks(RangeKind.MONTH, 28))
+        assertEquals(listOf(0, 9, 19, 28), chartAxisTicks(RangeKind.MONTH, 29))
+        assertEquals(listOf(0, 9, 19, 29), chartAxisTicks(RangeKind.MONTH, 30))
+        assertEquals(listOf(0, 9, 19, 30), chartAxisTicks(RangeKind.MONTH, 31))
+        assertEquals(listOf(0, 2, 5, 8, 11), chartAxisTicks(RangeKind.YEAR, 12))
+        assertEquals(emptyList<Int>(), chartAxisTicks(RangeKind.WEEK, 0))
+        assertEquals(listOf(0), chartAxisTicks(RangeKind.WEEK, 1))
+    }
 }

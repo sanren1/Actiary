@@ -30,7 +30,7 @@ fun deriveAmbient(seed: Int, n: NeutralTokens, dark: Boolean): AmbientTokens {
     val shifted = Oklch(o.l, o.c, (o.h + 40) % 360).toArgb()
     return AmbientTokens(
         base = n.background,
-        blobA = mix(n.background, seed, if (dark) 0.28 else 0.20),
-        blobB = mix(n.background, shifted, if (dark) 0.19 else 0.14),
+        blobA = mix(n.background, seed, if (dark) 0.20 else 0.12),
+        blobB = mix(n.background, shifted, if (dark) 0.14 else 0.08),
     )
 }

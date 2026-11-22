@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import com.actiary.glass.headerBackdropBlur
+import com.actiary.glass.headerBackdropScrim
 
 private enum class PageSlot { Header, Body }
 
@@ -32,6 +33,7 @@ internal fun PinnedScrollPage(
         val headerPlaceable = subcompose(PageSlot.Header) {
             Box(
                 Modifier.fillMaxWidth()
+                    .headerBackdropScrim(scrollOffset)
                     .semantics {
                         isTraversalGroup = true
                         traversalIndex = -1f

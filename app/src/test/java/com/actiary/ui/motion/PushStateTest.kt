@@ -1,8 +1,8 @@
 package com.actiary.ui.motion
 
 import com.actiary.ui.settings.SettingsPage.APPEARANCE
-import com.actiary.ui.settings.SettingsPage.CUSTOM_COLOR
 import com.actiary.ui.settings.SettingsPage.HOME
+import com.actiary.ui.settings.SettingsPage.TYPES
 import com.actiary.ui.settings.showsBottomBar
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,23 +32,23 @@ class PushStateTest {
 
     @Test
     fun doubleBackFinishesTheFirstPopBeforeMovingTheNextPair() {
-        val motion = PushMotion(CUSTOM_COLOR)
-        motion.navigate(APPEARANCE)
+        val motion = PushMotion(APPEARANCE)
+        motion.navigate(HOME)
         val firstPop = motion.state as PushState.Animating
         motion.update(firstPop, 0.4f)
 
         motion.drag(0.2f)
         assertSame(firstPop, motion.state)
-        motion.navigate(HOME)
+        motion.navigate(TYPES)
         assertSame(firstPop, motion.state)
         assertEquals(0.4f, motion.coverage, 0f)
 
         motion.finish(firstPop)
-        val nextPop = motion.state as PushState.Animating
-        assertEquals(HOME, nextPop.lower)
-        assertEquals(APPEARANCE, nextPop.upper)
-        assertEquals(HOME, nextPop.top)
-        assertEquals(1f, nextPop.startCoverage, 0f)
+        val nextPush = motion.state as PushState.Animating
+        assertEquals(HOME, nextPush.lower)
+        assertEquals(TYPES, nextPush.upper)
+        assertEquals(TYPES, nextPush.top)
+        assertEquals(0f, nextPush.startCoverage, 0f)
     }
 
     @Test
@@ -69,11 +69,8 @@ class PushStateTest {
     }
 
     @Test
-    fun dragThenCommitShowsBarOnlyOnReturningToSettingsHome() {
-        val appearance = PushState.Idle(CUSTOM_COLOR).dragTo(0.8f).settle(commit = true)
-        assertEquals(APPEARANCE, appearance.top)
-        assertFalse(appearance.top.showsBottomBar())
-        val home = appearance.dragTo(0.8f).settle(commit = true)
+    fun dragThenCommitShowsBarOnReturningToSettingsHome() {
+        val home = PushState.Idle(APPEARANCE).dragTo(0.8f).settle(commit = true)
         assertEquals(HOME, home.top)
         assertTrue(home.top.showsBottomBar())
     }

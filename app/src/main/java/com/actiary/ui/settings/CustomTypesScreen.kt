@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
@@ -78,6 +79,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -343,7 +345,7 @@ private fun WorkoutTypeRow(
         }
         Row(
             Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                .offset { IntOffset(-reveal.roundToInt(), 0) }
+                .absoluteOffset { IntOffset((reveal * direction).roundToInt(), 0) }
                 .background(n.surface.asColor(), shape)
                 .draggable(
                     rememberDraggableState { delta -> swipeDistance = (swipeDistance + delta * direction).coerceIn(0f, width) },
@@ -396,10 +398,36 @@ private fun TypeAction(icon: ImageVector, label: String, background: androidx.co
     }
 }
 
+internal const val MAX_TYPE_NAME_LENGTH = 20
+
+internal enum class TypeNameError { BLANK, TOO_LONG, DUPLICATE }
+
+/**
+ * Validates a workout type name against active (non-archived) types.
+ * [existingLabels] pairs each active type's id with its display or built-in label.
+ * When editing a built-in type ([allowBlank] = true), a blank input restores its default name.
+ */
+internal fun validateTypeName(
+    name: String,
+    existingLabels: List<Pair<Long, String>>,
+    currentId: Long?,
+    allowBlank: Boolean = false,
+): TypeNameError? {
+    val trimmed = name.trim()
+    if (trimmed.isEmpty()) return if (allowBlank) null else TypeNameError.BLANK
+    if (trimmed.length > MAX_TYPE_NAME_LENGTH) return TypeNameError.TOO_LONG
+    val duplicate = existingLabels.any { (id, label) ->
+        id != currentId && label.trim().equals(trimmed, ignoreCase = true)
+    }
+    if (duplicate) return TypeNameError.DUPLICATE
+    return null
+}
+
 @Composable
 internal fun AddTypeSheet(
     actions: AddTypeActions,
     editingType: ExerciseTypeEntity?,
+    existingTypes: List<ExerciseTypeEntity>,
     iconKey: String?,
     covered: Boolean,
     onRequestIconPicker: () -> Unit,
@@ -418,8 +446,22 @@ internal fun AddTypeSheet(
     var metricMask by rememberSaveable { mutableIntStateOf(initialMetricMask) }
     val saving = actions.state == AddTypeActions.State.Saving || actions.state == AddTypeActions.State.Saved
     val selectedIcon = CUSTOM_TYPE_ICONS.firstOrNull { it.key == iconKey }
+    val existingLabels = existingTypes.flatMap { type ->
+        buildList {
+            add(type.id to exerciseTypeLabel(type))
+            if (type.builtinKey != null) {
+                add(type.id to exerciseTypeLabel(type.copy(name = null)))
+            }
+        }
+    }
+    val nameError = validateTypeName(name, existingLabels, editingType?.id, allowBlank = builtinName != null)
+    val visibleNameError = when (nameError) {
+        TypeNameError.TOO_LONG -> stringResource(R.string.custom_type_name_too_long, MAX_TYPE_NAME_LENGTH)
+        TypeNameError.DUPLICATE -> stringResource(R.string.custom_type_name_duplicate)
+        else -> null
+    }
     val savedName = name.trim().takeUnless { builtinName != null && (it.isEmpty() || it == builtinName) }
-    val canSave = !saving && (builtinName != null || !savedName.isNullOrEmpty())
+    val canSave = !saving && nameError == null
 
     fun close(): Boolean {
         if (saving) return false
@@ -454,6 +496,7 @@ internal fun AddTypeSheet(
 
             val nameLabel = stringResource(R.string.custom_type_name)
             BasicText(nameLabel, style = TextStyle(n.textSecondary.asColor(), 14.sp))
+            val fieldShape = RoundedCornerShape(12.dp)
             BasicTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -462,11 +505,25 @@ internal fun AddTypeSheet(
                 textStyle = TextStyle(n.textPrimary.asColor(), 16.sp),
                 cursorBrush = SolidColor(t.accent.accentAction.asColor()),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(fieldShape)
                     .background(n.surfaceMuted.asColor())
-                    .semantics { contentDescription = nameLabel }
+                    .then(
+                        if (visibleNameError != null) Modifier.border(2.dp, t.accent.accentStroke.asColor(), fieldShape)
+                        else Modifier
+                    )
+                    .semantics {
+                        contentDescription = nameLabel
+                        if (visibleNameError != null) error(visibleNameError)
+                    }
                     .padding(horizontal = 12.dp, vertical = 12.dp),
             )
+            if (visibleNameError != null) {
+                BasicText(
+                    visibleNameError,
+                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    style = TextStyle(t.accent.accentAction.asColor(), 13.sp),
+                )
+            }
 
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp)

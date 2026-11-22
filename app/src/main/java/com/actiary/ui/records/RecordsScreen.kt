@@ -56,6 +56,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
+import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -477,9 +479,37 @@ private fun BarChart(chart: RecordsChart, colors: ChartColors, reduced: Boolean,
                 )
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            BasicText(label(0), style = TextStyle(secondary, 12.sp))
-            BasicText(label(buckets.size - 1), style = TextStyle(secondary, 12.sp))
+        val ticks = chartAxisTicks(chart.range.kind, buckets.size)
+        Layout(
+            content = {
+                ticks.forEach { tick ->
+                    BasicText(label(tick), style = TextStyle(secondary, 12.sp), maxLines = 1)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { measurables, constraints ->
+            val childConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+            val placeables = measurables.map { it.measure(childConstraints) }
+            val width = constraints.maxWidth
+            val height = placeables.maxOfOrNull { it.height } ?: 0
+            val slotW = if (buckets.isEmpty()) 0f else width.toFloat() / buckets.size
+            val rtl = layoutDirection == LayoutDirection.Rtl
+            layout(width, height) {
+                ticks.forEachIndexed { idx, tick ->
+                    val placeable = placeables[idx]
+                    val maxX = (width - placeable.width).coerceAtLeast(0)
+                    val x = when (tick) {
+                        0 -> if (rtl) maxX else 0
+                        buckets.lastIndex -> if (rtl) 0 else maxX
+                        else -> {
+                            val visualIndex = if (rtl) buckets.lastIndex - tick else tick
+                            val center = (visualIndex + 0.5f) * slotW
+                            (center - placeable.width / 2f).roundToInt().coerceIn(0, maxX)
+                        }
+                    }
+                    placeable.place(x, 0)
+                }
+            }
         }
     }
 }

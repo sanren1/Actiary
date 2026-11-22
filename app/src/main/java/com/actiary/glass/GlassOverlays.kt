@@ -382,8 +382,9 @@ fun GlassSheet(
         }
     }
 
+    val effectiveCovered = covered || LocalGlassAnchoredMenu.current.present
     val present = visible || !exitNotified
-    val interactive = visible && !covered
+    val interactive = visible && !effectiveCovered
     var offset by remember { mutableFloatStateOf(0f) }
     var backProgress by remember { mutableFloatStateOf(0f) }
     var heightPx by remember { mutableIntStateOf(0) }
@@ -410,7 +411,7 @@ fun GlassSheet(
     }
 
     PredictiveBack(
-        enabled = present,
+        enabled = present && !effectiveCovered,
         onProgress = {
             if (interactive && !reduced) {
                 settle?.cancel()
@@ -442,9 +443,13 @@ fun GlassSheet(
                 Modifier.fillMaxWidth().heightIn(max = maxSheetHeight)
                     .onSizeChanged { heightPx = it.height }
                     .graphicsLayer {
-                        if (!reduced) {
-                            translationY = (1f - openProgress.value) * size.height +
+                        translationY = if (!reduced) {
+                            (1f - openProgress.value) * size.height +
                                 offset + size.height * SheetBackShift * backProgress
+                        } else {
+                            offset
+                        }
+                        if (!reduced) {
                             scaleX = 1f - SheetBackScale * backProgress
                             scaleY = scaleX
                             transformOrigin = TransformOrigin(0.5f, 1f)

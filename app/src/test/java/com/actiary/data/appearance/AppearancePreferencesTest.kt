@@ -153,14 +153,26 @@ class AppearancePreferencesTest {
         assertEquals(listOf("#3A7BD5"), r.recentColors.first())
     }
 
-    @Test fun resetKeepsRecentColors() = runBlocking {
+    @Test fun resetClearsRecentColorsAndRestoresDefaultPalette() = runBlocking {
         val r = repo()
+        val defaultPalette = r.accentColors.first()
         r.applyCustomAccent("#111111")
         r.applyCustomAccent("#222222")
         assertEquals(listOf("#222222", "#111111"), r.recentColors.first())
         r.resetAppearance()
         assertEquals(AppearanceSettings(), r.settings.first())
-        assertEquals(listOf("#222222", "#111111"), r.recentColors.first())
+        assertEquals(emptyList<String>(), r.recentColors.first())
+        assertEquals(defaultPalette, r.accentColors.first())
+    }
+
+    @Test fun removingAllPaletteColorsFallsBackToDefaultActiveAccent() = runBlocking {
+        val r = repo()
+        val initial = r.accentColors.first()
+        for (hex in initial) {
+            r.removePaletteAccent(hex)
+        }
+        assertEquals(emptyList<String>(), r.accentColors.first())
+        assertEquals(AppearanceSettings().activeAccentHex(), r.settings.first().activeAccentHex())
     }
 
     @Test fun paletteEditsPreserveOrderAndUpdateOnlyActiveSwatch() = runBlocking {

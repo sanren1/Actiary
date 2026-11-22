@@ -17,6 +17,12 @@ class PhotoStore(private val dir: File) {
 
     fun stagedFile(fileName: String): File = File(draftDir, fileName)
 
+    fun clearDrafts() {
+        draftDir.listFiles()?.forEach { it.delete() }
+    }
+
+    fun listDraftFileNames(): List<String> = draftDir.listFiles()?.filter { it.isFile }?.map { it.name }.orEmpty()
+
     private fun copyTo(directory: File, open: () -> InputStream): String {
         val name = "${UUID.randomUUID()}.jpg"
         val target = File(directory, name)

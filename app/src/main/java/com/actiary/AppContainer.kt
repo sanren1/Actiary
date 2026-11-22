@@ -32,4 +32,8 @@ class AppContainer(private val context: Context) {
             { context.contentResolver.openInputStream(Uri.parse(it)) ?: throw FileNotFoundException(it) },
         )
     }
+
+    init {
+        photoStore.clearDrafts()
+    }
 }

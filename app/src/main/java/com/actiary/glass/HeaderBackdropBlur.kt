@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.asColor
 
 private const val MAX_BLUR_RADIUS_PX = 40
 
@@ -60,6 +62,28 @@ internal fun Modifier.headerBackdropBlur(headerHeight: Dp, scrollOffset: () -> I
             val reveal = (scrollOffset() / extensionPx).coerceIn(0f, 1f)
             if (reveal > 0f) {
                 drawRect(mask, size = maskSize, alpha = reveal, blendMode = BlendMode.DstOut)
+            }
+        }
+    }
+}
+
+/** Soft vertical neutral scrim behind the pinned header while content scrolls underneath. */
+@Composable
+internal fun Modifier.headerBackdropScrim(scrollOffset: () -> Int): Modifier {
+    val bg = LocalThemeTokens.current.neutrals.background.asColor()
+    val extensionPx = with(LocalDensity.current) { 34.dp.toPx() }
+    return drawWithCache {
+        val scrim = Brush.verticalGradient(
+            0f to bg.copy(alpha = 0.72f),
+            0.72f to bg.copy(alpha = 0.42f),
+            1f to Color.Transparent,
+            startY = 0f,
+            endY = size.height,
+        )
+        onDrawBehind {
+            val reveal = (scrollOffset() / extensionPx).coerceIn(0f, 1f)
+            if (reveal > 0f) {
+                drawRect(scrim, alpha = reveal)
             }
         }
     }

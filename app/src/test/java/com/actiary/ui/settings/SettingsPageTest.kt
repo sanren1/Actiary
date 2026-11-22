@@ -29,16 +29,4 @@ class SettingsPageTest {
             assertTrue(parent.showsBottomBar())
         }
     }
-
-    @Test
-    fun customColorKeepsBottomBarHiddenOnReturnToAppearance() {
-        val page = SettingsPage.CUSTOM_COLOR
-        assertFalse(page.showsBottomBar())
-        val appearance = requireNotNull(page.parent())
-        assertEquals(SettingsPage.APPEARANCE, appearance)
-        assertFalse(appearance.showsBottomBar())
-        val home = requireNotNull(appearance.parent())
-        assertEquals(SettingsPage.HOME, home)
-        assertTrue(home.showsBottomBar())
-    }
 }

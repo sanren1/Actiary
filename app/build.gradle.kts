@@ -13,8 +13,8 @@ android {
         applicationId = "com.actiary"
         minSdk = 31
         targetSdk = 35
-        versionCode = 22
-        versionName = "0.16.0"
+        versionCode = 23
+        versionName = "0.17.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

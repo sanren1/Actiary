@@ -86,21 +86,6 @@ private val ColorDraftSaver = Saver<ColorDraft, ArrayList<String>>(
 )
 
 @Composable
-internal fun ColorEditorScreen(
-    settings: AppearanceSettings,
-    recent: List<String>,
-    onApply: (String) -> Unit,
-    onBack: () -> Unit,
-) {
-    SettingsPageLayout(stringResource(R.string.custom_color_title), onBack) {
-        ColorEditorContent(settings, settings.activeAccentHex(), recent) { hex ->
-            onApply(hex)
-            onBack()
-        }
-    }
-}
-
-@Composable
 internal fun ColorEditorSheet(
     settings: AppearanceSettings,
     initialHex: String?,
@@ -134,7 +119,7 @@ internal fun ColorEditorSheet(
                     androidx.compose.material3.Text(stringResource(R.string.record_cancel))
                 }
             }
-            ColorEditorContent(settings, initialHex ?: settings.activeAccentHex(), emptyList()) { hex ->
+            ColorEditorContent(settings, initialHex ?: settings.activeAccentHex()) { hex ->
                 onApply(hex)
                 close()
             }
@@ -146,7 +131,6 @@ internal fun ColorEditorSheet(
 private fun ColorEditorContent(
     settings: AppearanceSettings,
     initialHex: String,
-    recent: List<String>,
     onApply: (String) -> Unit,
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -242,25 +226,6 @@ private fun ColorEditorContent(
             ),
             onValueChange = { setHsv(hsv.copy(v = (it / 100f).toDouble())) },
         )
-
-        if (recent.isNotEmpty()) {
-            BasicText(stringResource(R.string.color_recent), style = TextStyle(n.textSecondary.asColor(), 14.sp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                recent.take(5).forEach { hex ->
-                    val color = parseHex(hex)
-                    if (color != null) {
-                        Box(
-                            Modifier.size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(color), CircleShape)
-                                .border(1.dp, n.divider.asColor(), CircleShape)
-                                .clickable(role = Role.Button) { draft = draft.withInput(hex) }
-                                .semantics { contentDescription = hex },
-                        )
-                    }
-                }
-            }
-        }
 
         Box(
             Modifier.fillMaxWidth().heightIn(min = 48.dp)

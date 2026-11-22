@@ -72,7 +72,7 @@ internal fun <T> SelectionMenuRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BasicText(
-                    options.first { it.first == selected }.second,
+                    options.firstOrNull { it.first == selected }?.second.orEmpty(),
                     Modifier.weight(1f, fill = false).padding(vertical = 8.dp),
                     TextStyle(secondary, 14.sp),
                 )

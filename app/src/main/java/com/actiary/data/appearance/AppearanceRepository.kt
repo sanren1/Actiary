@@ -169,7 +169,7 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
         }
     }
 
-    suspend fun resetAppearance() = restoreAppearance(emptyMap())
+    suspend fun resetAppearance() = restoreAppearance(emptyMap(), clearRecent = true)
 
     suspend fun exportAppearance(): Map<String, String> {
         val preferences = store.data.first()
@@ -193,7 +193,7 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
     }
 
     // Restore the exact local snapshot if a Room commit fails after the DataStore edit.
-    internal suspend fun restoreAppearance(values: Map<String, String>) {
+    internal suspend fun restoreAppearance(values: Map<String, String>, clearRecent: Boolean = false) {
         store.edit { preferences ->
             for (key in backupAppearanceStringKeys) {
                 val value = values[key.name]
@@ -202,6 +202,7 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
             val ambient = values[AMBIENT_BACKGROUND.name]
             if (ambient == null) preferences.remove(AMBIENT_BACKGROUND)
             else preferences[AMBIENT_BACKGROUND] = ambient.toBooleanStrict()
+            if (clearRecent) preferences.remove(RECENT_COLORS)
         }
     }
 }

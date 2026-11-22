@@ -201,6 +201,8 @@
     <string name="notice_coroutines_use">异步任务和数据流</string>
     <string name="notice_json_use">备份 JSON 处理，仅用于 JVM 单元测试</string>
     <string name="custom_type_name">类型名称</string>
+    <string name="custom_type_name_too_long">名称最多 %1$d 个字符</string>
+    <string name="custom_type_name_duplicate">已有同名运动类型</string>
     <string name="custom_type_add_title">添加运动类型</string>
     <string name="custom_type_edit_title">编辑运动类型</string>
     <string name="custom_type_edit_named">编辑%1$s</string>

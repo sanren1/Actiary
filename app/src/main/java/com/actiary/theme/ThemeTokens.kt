@@ -7,7 +7,7 @@ data class NeutralTokens(
 
 val LightNeutrals = NeutralTokens(
     background = 0xFFF8F8F6.toInt(), surface = 0xFFFFFFFF.toInt(), surfaceMuted = 0xFFF0F1F0.toInt(),
-    textPrimary = 0xFF22262A.toInt(), textSecondary = 0xFF6B737B.toInt(),
+    textPrimary = 0xFF22262A.toInt(), textSecondary = 0xFF586068.toInt(),
     divider = 0xFFDEE1E2.toInt(), glassNeutralTint = 0xFFFFFFFF.toInt(),
 )
 
