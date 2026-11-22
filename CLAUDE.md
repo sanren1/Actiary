@@ -34,11 +34,13 @@
 - 中英文案成对维护（`res/values/strings.xml` 中文默认、`res/values-en/strings.xml` 英文），键保持一致；不在代码里写死用户可见文案。
 - 离线优先：不引入账号、云端配置、网络权限或联网依赖。
 - 第三方库版本开工时验证后锁定在 `gradle/libs.versions.toml`；不虚构库 API 或参数名，接入前先查官方示例。
+- **优先复用成熟开源项目**：所需功能若已有维护良好的开源库或参考实现，规划时先调研并优先引用 / 移植，不重复造轮子；自写须在设计里说明理由。引用的前提：许可证兼容（Apache-2.0 / MIT / BSD 等宽松许可）；符合离线优先（无网络权限、无遥测，必要时在清单里移除）；版本已验证并锁定；移植代码保留来源与许可说明。每引入或移植一项，同步登记到 `THIRD_PARTY_NOTICES.md` 与应用内 `res/raw/third_party_notices.txt`，并显示在设置“关于”页的开源信息里（库名、用途、许可证、项目地址）。新增依赖需联网下载时仍先问用户。
 
 ## 本地环境
 
 - 本机无全局 JDK / Android SDK / Gradle。**已确认**直接用 `F:\Program\AnPod\.tmp-jdk17\jdk-17.0.20.1+1`（JDK 17）与 `F:\Program\AnPod\.tmp-android-sdk35`（platform 35、build-tools 34.0.0）；`sdk.dir` 写在已忽略的 `local.properties`，`JAVA_HOME` 只在命令内设置。不得删除或修改 AnPod 下任何文件。需要新 SDK 组件时先问用户。
 - `GRADLE_USER_HOME` 用默认 `~/.gradle`（已缓存 Gradle 8.9、AGP 8.7.3、Kotlin 2.1.21、compose-bom 2025.06.00），构建优先 `--offline`；升级版本或新增依赖需联网下载时先问用户。
+- `adb` 在 `F:\Download\platform-tools-latest-windows\platform-tools\adb.exe`（用户提供）；只在用户当次明确授权时用于安装、运行或跑真机测试（`connectedDebugAndroidTest` 需把该目录加入命令内的 `Path`）。
 - Gradle 一律通过仓库内 `gradlew` 运行。Node 为用户级安装，PowerShell 中先合并用户与系统 `Path`。
 - 用 Bash heredoc 写入中文或反斜杠容易出错：多处替换写成脚本文件再运行，按文件实际换行符处理，每处替换断言恰好匹配一次。
 
