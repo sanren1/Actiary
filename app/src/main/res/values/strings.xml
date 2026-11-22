@@ -248,4 +248,17 @@
     <string name="data_storage_photos">照片存储</string>
     <string name="record_move_photo_earlier">将照片前移</string>
     <string name="record_move_photo_later">将照片后移</string>
+    <string name="widget_today_label">今日运动</string>
+    <string name="widget_today_description">查看今日运动与近 7 天打卡，快速记录或标记休息日</string>
+    <string name="widget_today_empty_summary">今天还没有运动记录</string>
+    <string name="widget_today_rest_summary">今天已标记为休息日</string>
+    <string name="widget_today_date_pattern">M月d日 E</string>
+    <string name="widget_today_date_short_pattern">M/d</string>
+    <string name="widget_action_record">记录运动</string>
+    <string name="widget_action_record_short">记录</string>
+    <string name="widget_action_rest">休息日</string>
+    <string name="widget_action_rest_short">休息</string>
+    <string name="widget_action_rest_active">已休息</string>
+    <string name="widget_week_streak">近7天 %1$d 天</string>
+    <string name="widget_strip_meta">%1$s · 近7天%2$d天</string>
 </resources>

@@ -182,23 +182,30 @@ internal fun PushHost(
     val pages = if (lower != null && upper != null) listOf(lower, upper) else listOf(state.top)
     Box(Modifier.fillMaxSize().clipToBounds()) {
         for (page in pages) key(page) {
-            val transform = when (page) {
-                upper -> Modifier.zIndex(1f).graphicsLayer {
-                    translationX = direction * size.width * (1f - motion.coverage.coerceIn(0f, 1f))
-                }
-                lower -> Modifier.graphicsLayer {
-                    translationX = direction * parallaxOffsetPx(motion.coverage.coerceIn(0f, 1f), size.width)
-                }.drawWithContent {
-                    val coverage = motion.coverage.coerceIn(0f, 1f)
-                    // Clip to the portion of the parent still uncovered by the moving, translucent child.
-                    val extent = size.width * (1f - coverage) - parallaxOffsetPx(coverage, size.width)
-                    clipRect(left = if (ltr) 0f else size.width - extent, right = if (ltr) extent else size.width) {
-                        this@drawWithContent.drawContent()
-                        drawRect(Color.Black.copy(alpha = dimAlpha(coverage)))
+            val isUpper = page == upper
+            val isLower = page == lower
+            val transform = Modifier
+                .zIndex(if (isUpper) 1f else 0f)
+                .graphicsLayer {
+                    translationX = when {
+                        isUpper -> direction * size.width * (1f - motion.coverage.coerceIn(0f, 1f))
+                        isLower -> direction * parallaxOffsetPx(motion.coverage.coerceIn(0f, 1f), size.width)
+                        else -> 0f
                     }
                 }
-                else -> Modifier
-            }
+                .drawWithContent {
+                    if (isLower) {
+                        val coverage = motion.coverage.coerceIn(0f, 1f)
+                        // Clip to the portion of the parent still uncovered by the moving, translucent child.
+                        val extent = size.width * (1f - coverage) - parallaxOffsetPx(coverage, size.width)
+                        clipRect(left = if (ltr) 0f else size.width - extent, right = if (ltr) extent else size.width) {
+                            this@drawWithContent.drawContent()
+                            drawRect(Color.Black.copy(alpha = dimAlpha(coverage)))
+                        }
+                    } else {
+                        drawContent()
+                    }
+                }
             Box(
                 Modifier.fillMaxSize().then(transform)
                     .then(if (page != state.top) Modifier.inactiveNavigation() else Modifier),

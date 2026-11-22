@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.SportsVolleyball
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Surfing
 import androidx.compose.material.icons.outlined.Terrain
+import android.content.res.Resources
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -33,18 +34,25 @@ import androidx.compose.ui.res.stringResource
 import com.actiary.R
 import com.actiary.data.db.ExerciseTypeEntity
 
-@Composable
-fun exerciseTypeLabel(type: ExerciseTypeEntity): String = type.name ?: when (type.builtinKey) {
-    "running" -> stringResource(R.string.type_running)
-    "strength" -> stringResource(R.string.type_strength)
-    "cycling" -> stringResource(R.string.type_cycling)
-    "swimming" -> stringResource(R.string.type_swimming)
-    "yoga" -> stringResource(R.string.type_yoga)
-    "hiking" -> stringResource(R.string.type_hiking)
-    "ball" -> stringResource(R.string.type_ball)
-    "freeform" -> stringResource(R.string.type_freeform)
-    else -> ""
+@StringRes
+internal fun builtinTypeLabelRes(builtinKey: String?): Int? = when (builtinKey) {
+    "running" -> R.string.type_running
+    "strength" -> R.string.type_strength
+    "cycling" -> R.string.type_cycling
+    "swimming" -> R.string.type_swimming
+    "yoga" -> R.string.type_yoga
+    "hiking" -> R.string.type_hiking
+    "ball" -> R.string.type_ball
+    "freeform" -> R.string.type_freeform
+    else -> null
 }
+
+fun exerciseTypeLabel(type: ExerciseTypeEntity, resources: Resources): String =
+    type.name ?: builtinTypeLabelRes(type.builtinKey)?.let(resources::getString).orEmpty()
+
+@Composable
+fun exerciseTypeLabel(type: ExerciseTypeEntity): String =
+    type.name ?: builtinTypeLabelRes(type.builtinKey)?.let { stringResource(it) }.orEmpty()
 
 class TypeIcon(val key: String, val vector: ImageVector, @StringRes val label: Int)
 

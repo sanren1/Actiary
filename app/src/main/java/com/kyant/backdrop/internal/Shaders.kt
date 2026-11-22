@@ -172,7 +172,7 @@ half4 main(float2 coord) {
     float2 grad = gradSdRoundedRect(centeredCoord, halfSize, gradRadius);
     float2 normal = float2(cos(angle), sin(angle));
     float d = dot(grad, normal);
-    float intensity = pow(abs(d), falloff);
+    float intensity = mix(0.30, 1.0, pow(abs(d), falloff));
     return color * intensity;
 }"""
 

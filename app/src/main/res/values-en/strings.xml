@@ -251,4 +251,17 @@
     <string name="data_storage_photos">Photo storage</string>
     <string name="record_move_photo_earlier">Move photo earlier</string>
     <string name="record_move_photo_later">Move photo later</string>
+    <string name="widget_today_label">Today\'s Workout</string>
+    <string name="widget_today_description">View today\'s status and 7-day streak, log a workout or mark a rest day</string>
+    <string name="widget_today_empty_summary">No workout logged today</string>
+    <string name="widget_today_rest_summary">Marked as rest day</string>
+    <string name="widget_today_date_pattern">MMM d, EEE</string>
+    <string name="widget_today_date_short_pattern">M/d</string>
+    <string name="widget_action_record">Log workout</string>
+    <string name="widget_action_record_short">Log</string>
+    <string name="widget_action_rest">Rest day</string>
+    <string name="widget_action_rest_short">Rest</string>
+    <string name="widget_action_rest_active">Rested</string>
+    <string name="widget_week_streak">%1$d/7 days</string>
+    <string name="widget_strip_meta">%1$s · %2$d/7d</string>
 </resources>

@@ -103,23 +103,31 @@ private fun MutablePreferences.activatePaletteColor(hex: String) {
     if (preset == AccentPreset.CUSTOM) this[CUSTOM_ACCENT_HEX] = hex
 }
 
-class AppearanceRepository(private val store: DataStore<Preferences>) {
+class AppearanceRepository(
+    private val store: DataStore<Preferences>,
+    private val onChanged: () -> Unit = {},
+) {
     val settings: Flow<AppearanceSettings> = store.data.map { it.toAppearanceSettings() }
     val recentColors: Flow<List<String>> = store.data.map { parseRecent(it[RECENT_COLORS]) }
     val accentColors: Flow<List<String>> = store.data.map { it.palette() }
 
-    suspend fun setThemeMode(m: ThemeMode) { store.edit { it[THEME_MODE] = m.name } }
-    suspend fun setAccentPreset(p: AccentPreset) { store.edit { it[ACCENT_PRESET] = p.name } }
-    suspend fun setGlassLevel(l: GlassLevel) { store.edit { it[GLASS_LEVEL] = l.name } }
-    suspend fun setGlassTintStrength(s: GlassTintStrength) { store.edit { it[GLASS_TINT_STRENGTH] = s.name } }
-    suspend fun setChartPalette(p: ChartPalette) { store.edit { it[CHART_PALETTE] = p.name } }
-    suspend fun setAmbientBackground(enabled: Boolean) { store.edit { it[AMBIENT_BACKGROUND] = enabled } }
-    suspend fun setAmoledBlack(enabled: Boolean) { store.edit { it[AMOLED_BLACK] = enabled } }
-    suspend fun selectDynamicAccent() { store.edit { it[ACCENT_PRESET] = AccentPreset.DYNAMIC.name } }
+    private suspend fun editAndNotify(block: (MutablePreferences) -> Unit) {
+        store.edit(block)
+        onChanged()
+    }
+
+    suspend fun setThemeMode(m: ThemeMode) { editAndNotify { it[THEME_MODE] = m.name } }
+    suspend fun setAccentPreset(p: AccentPreset) { editAndNotify { it[ACCENT_PRESET] = p.name } }
+    suspend fun setGlassLevel(l: GlassLevel) { editAndNotify { it[GLASS_LEVEL] = l.name } }
+    suspend fun setGlassTintStrength(s: GlassTintStrength) { editAndNotify { it[GLASS_TINT_STRENGTH] = s.name } }
+    suspend fun setChartPalette(p: ChartPalette) { editAndNotify { it[CHART_PALETTE] = p.name } }
+    suspend fun setAmbientBackground(enabled: Boolean) { editAndNotify { it[AMBIENT_BACKGROUND] = enabled } }
+    suspend fun setAmoledBlack(enabled: Boolean) { editAndNotify { it[AMOLED_BLACK] = enabled } }
+    suspend fun selectDynamicAccent() { editAndNotify { it[ACCENT_PRESET] = AccentPreset.DYNAMIC.name } }
 
     suspend fun setCustomAccent(hex: String) {
         require(parseHex(hex) != null) { "Invalid hex color: $hex" }
-        store.edit {
+        editAndNotify {
             it[CUSTOM_ACCENT_HEX] = hex.uppercase()
             it[ACCENT_PRESET] = AccentPreset.CUSTOM.name
         }
@@ -127,7 +135,7 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
 
     suspend fun applyCustomAccent(hex: String) {
         val normalized = normalizeHex(hex) ?: throw IllegalArgumentException("Invalid hex color: $hex")
-        store.edit {
+        editAndNotify {
             it[CUSTOM_ACCENT_HEX] = normalized
             it[ACCENT_PRESET] = AccentPreset.CUSTOM.name
             it[RECENT_COLORS] = pushRecent(parseRecent(it[RECENT_COLORS]), normalized).joinToString(",")
@@ -135,16 +143,16 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun selectPaletteAccent(hex: String) {
-        store.edit { prefs ->
+        editAndNotify { prefs ->
             if (hex in prefs.palette()) prefs.activatePaletteColor(hex)
         }
     }
 
     suspend fun savePaletteAccent(hex: String, previous: String? = null) {
         val normalized = requireNotNull(normalizeHex(hex)) { "Invalid hex color: $hex" }
-        store.edit { prefs ->
+        editAndNotify { prefs ->
             val colors = prefs.palette()
-            if (previous != null && previous !in colors) return@edit
+            if (previous != null && previous !in colors) return@editAndNotify
             val next = when {
                 previous == null -> (colors + normalized).distinct()
                 normalized == previous -> colors
@@ -162,9 +170,9 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
     }
 
     suspend fun removePaletteAccent(hex: String) {
-        store.edit { prefs ->
+        editAndNotify { prefs ->
             val colors = prefs.palette()
-            if (hex !in colors) return@edit
+            if (hex !in colors) return@editAndNotify
             val next = colors - hex
             prefs[ACCENT_COLORS] = next.joinToString(",")
             prefs[RECENT_COLORS] = (parseRecent(prefs[RECENT_COLORS]) - hex).joinToString(",")
@@ -204,7 +212,7 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
 
     // Restore the exact local snapshot if a Room commit fails after the DataStore edit.
     internal suspend fun restoreAppearance(values: Map<String, String>, clearRecent: Boolean = false) {
-        store.edit { preferences ->
+        editAndNotify { preferences ->
             for (key in backupAppearanceStringKeys) {
                 val value = values[key.name]
                 if (value == null) preferences.remove(key) else preferences[key] = value

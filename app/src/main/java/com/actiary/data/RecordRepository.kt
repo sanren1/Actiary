@@ -29,6 +29,7 @@ class RecordRepository(
     private val openUri: (String) -> InputStream,
     private val clock: () -> Long = System::currentTimeMillis,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val onChanged: () -> Unit = {},
 ) {
     fun observeMonth(month: YearMonth): Flow<Map<LocalDate, DayState>> =
         dao.observeRange(month.atDay(1).toEpochDay(), month.atEndOfMonth().toEpochDay()).map { days ->
@@ -95,6 +96,7 @@ class RecordRepository(
             val kept = names.toSet()
             original?.photos?.forEach { if (it.fileName !in kept) photos.delete(it.fileName) }
         }
+        onChanged()
     }
 
     suspend fun addType(name: String, hasDistance: Boolean, iconKey: String?, extraMetricMask: Int? = null): Long = withContext(io) {
@@ -118,10 +120,12 @@ class RecordRepository(
         id: Long, name: String?, hasDistance: Boolean, iconKey: String?, extraMetricMask: Int? = null,
     ) = withContext(io) {
         check(dao.updateType(id, name?.trim()?.takeIf(String::isNotEmpty), hasDistance, iconKey, extraMetricMask) == 1)
+        onChanged()
     }
 
     suspend fun removeType(id: Long) = withContext(io) {
         dao.removeType(id)
+        onChanged()
     }
 
     suspend fun clearDay(date: LocalDate) = withContext(io) {
@@ -131,5 +135,6 @@ class RecordRepository(
             dao.deleteDay(epochDay)
             files.forEach { photos.delete(it.fileName) }
         }
+        onChanged()
     }
 }

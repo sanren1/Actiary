@@ -7,8 +7,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -63,7 +65,18 @@ fun Modifier.glass(
         val edge = Color.White.copy(alpha = if (dark) 0.18f else 0.30f)
         return background(surface, shape).border(0.5.dp, edge, shape).clip(shape)
     }
-    return drawBackdrop(
+    val base = if (flat) {
+        shadow(
+            elevation = if (dark) 6.dp else 4.dp,
+            shape = shape,
+            clip = false,
+            ambientColor = Color.Black.copy(alpha = if (dark) 0.35f else 0.14f),
+            spotColor = Color.Black.copy(alpha = if (dark) 0.45f else 0.18f),
+        )
+    } else {
+        this
+    }
+    return base.drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
         effects = {
@@ -88,22 +101,21 @@ fun Modifier.glass(
         highlight = {
             // Default highlight needs the runtime shader (API 33+); 31-32 use the flat stroke.
             Highlight(
+                width = 0.5.dp,
                 alpha = profile.highlightAlpha * (press?.invoke() ?: 1f),
                 style = if (isRuntimeShaderSupported()) {
-                    HighlightStyle.Default(color = Color.White.copy(alpha = 0.34f), falloff = 0.45f)
+                    HighlightStyle.Default(
+                        color = Color.White.copy(alpha = if (dark) 0.24f else 0.72f),
+                        blendMode = DrawScope.DefaultBlendMode,
+                        falloff = 0.65f,
+                    )
                 } else {
                     HighlightStyle.Plain
                 },
             )
         },
         shadow = when {
-            flat -> ({
-                Shadow(
-                    radius = 12.dp,
-                    offset = DpOffset(0.dp, 2.dp),
-                    color = Color.Black.copy(alpha = if (dark) 0.24f else 0.06f),
-                )
-            })
+            flat -> null
             press == null -> ({ Shadow.Default })
             else -> ({ Shadow(alpha = press()) })
         },
@@ -113,9 +125,5 @@ fun Modifier.glass(
         onDrawSurface = {
             drawRect(if (press == null) surface else lerp(thumbRestingColor ?: surface.copy(alpha = 1f), surface, press()))
         },
-    ).border(
-        0.85.dp,
-        if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.11f),
-        shape,
     )
 }

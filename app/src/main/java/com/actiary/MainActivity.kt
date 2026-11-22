@@ -1,6 +1,7 @@
 package com.actiary
 
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.ColorDrawable
@@ -57,6 +58,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -124,6 +126,7 @@ import com.actiary.ui.settings.SettingsPage
 import com.actiary.ui.settings.SettingsScreen
 import com.actiary.ui.settings.parent
 import com.actiary.ui.settings.showsBottomBar
+import com.actiary.widget.TodayWidgetUpdater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -138,12 +141,28 @@ private val BarGap = 6.dp
 internal enum class Tab { CALENDAR, RECORDS, SETTINGS }
 
 class MainActivity : ComponentActivity() {
+    private var openTodayRequest by mutableIntStateOf(0)
+
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguagePrefs.wrapContext(newBase))
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeOpenTodayExtra(intent)
+    }
+
+    private fun consumeOpenTodayExtra(target: Intent?) {
+        if (target?.getBooleanExtra(EXTRA_OPEN_RECORD_TODAY, false) == true) {
+            target.removeExtra(EXTRA_OPEN_RECORD_TODAY)
+            openTodayRequest++
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) consumeOpenTodayExtra(intent)
         val initialLanguage = AppLanguagePrefs.load(this)
         val container = (application as ActiaryApp).container
         val backup = ViewModelProvider(this)[BackupActions::class.java]
@@ -225,6 +244,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 var tab by rememberSaveable { mutableStateOf(Tab.CALENDAR) }
+                LaunchedEffect(openTodayRequest) {
+                    if (openTodayRequest > 0) {
+                        val today = LocalDate.now()
+                        tab = Tab.CALENDAR
+                        selected = today
+                        viewing = null
+                        editing = today.toEpochDay()
+                    }
+                }
                 var settingsPage by rememberSaveable { mutableStateOf(SettingsPage.HOME) }
                 var confirmAppearanceReset by rememberSaveable { mutableStateOf(false) }
                 var accentEditorOpen by rememberSaveable { mutableStateOf(false) }
@@ -558,6 +586,7 @@ class MainActivity : ComponentActivity() {
                                                             onAppLanguage = { lang ->
                                                                 if (lang != initialLanguage) {
                                                                     AppLanguagePrefs.save(this@MainActivity, lang)
+                                                                    TodayWidgetUpdater.refresh(this@MainActivity)
                                                                     recreate()
                                                                 }
                                                             },
@@ -632,5 +661,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_RECORD_TODAY = "com.actiary.EXTRA_OPEN_RECORD_TODAY"
     }
 }

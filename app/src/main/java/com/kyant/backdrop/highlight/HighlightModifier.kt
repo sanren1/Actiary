@@ -93,7 +93,26 @@ internal class HighlightNode(
         drawContent()
 
         val highlightLayer = highlightLayer
-        if (highlightLayer != null) {
+        if (highlight.style.blendMode == DrawScope.DefaultBlendMode) {
+            val size = size
+            val density: Density = this
+            val layoutDirection = layoutDirection
+            val outline = shapeProvider.shape.createOutline(size, layoutDirection, density)
+            val clipPath =
+                if (outline is Outline.Rounded) {
+                    clipPath ?: Path().also { clipPath = it }
+                } else {
+                    null
+                }
+            configurePaint(highlight)
+            paint.alpha = (highlight.alpha * highlight.style.color.alpha).coerceIn(0f, 1f)
+            val canvas = drawContext.canvas
+            canvas.save()
+            canvas.clipOutline(outline, clipPath)
+            canvas.drawOutline(outline, paint)
+            canvas.restore()
+            paint.alpha = 1f
+        } else if (highlightLayer != null) {
             val size = size
             val density: Density = this
             val layoutDirection = layoutDirection
