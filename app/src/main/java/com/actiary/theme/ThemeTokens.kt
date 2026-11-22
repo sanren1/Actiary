@@ -17,6 +17,12 @@ val DarkNeutrals = NeutralTokens(
     divider = 0xFF383D43.toInt(), glassNeutralTint = 0xFF333941.toInt(),
 )
 
+val AmoledDarkNeutrals = NeutralTokens(
+    background = 0xFF000000.toInt(), surface = 0xFF101214.toInt(), surfaceMuted = 0xFF1B1E22.toInt(),
+    textPrimary = 0xFFF1F2F2.toInt(), textSecondary = 0xFFADB4BC.toInt(),
+    divider = 0xFF2B3036.toInt(), glassNeutralTint = 0xFF1D2126.toInt(),
+)
+
 data class AccentTokens(
     val accentSeed: Int, val accentAction: Int, val onAccentAction: Int, val accentSubtle: Int,
     val accentStroke: Int, val accentChart: Int, val glassAccentTint: Int,

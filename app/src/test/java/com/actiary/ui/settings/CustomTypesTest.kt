@@ -1,5 +1,7 @@
 package com.actiary.ui.settings
 
+import com.actiary.domain.WorkoutMetric
+import com.actiary.domain.availableWorkoutMetrics
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -51,5 +53,22 @@ class CustomTypesTest {
         assertNull(validateTypeName("Yoga", existing, currentId = 3L))
         assertNull(validateTypeName("YOGA", existing, currentId = 3L))
         assertNull(validateTypeName("Pilates", existing, currentId = null))
+    }
+
+    @Test
+    fun availableWorkoutMetricsMatchesSportCategories() {
+        assertEquals(
+            listOf(WorkoutMetric.CADENCE, WorkoutMetric.STEPS, WorkoutMetric.ELEVATION_GAIN),
+            availableWorkoutMetrics("running"),
+        )
+        assertEquals(listOf(WorkoutMetric.ELEVATION_GAIN), availableWorkoutMetrics("cycling"))
+        assertEquals(listOf(WorkoutMetric.STEPS, WorkoutMetric.ELEVATION_GAIN), availableWorkoutMetrics("hiking"))
+        assertEquals(
+            listOf(WorkoutMetric.POOL_LENGTH, WorkoutMetric.LAPS, WorkoutMetric.STROKES),
+            availableWorkoutMetrics("swimming"),
+        )
+        assertEquals(listOf(WorkoutMetric.STEPS), availableWorkoutMetrics("ball"))
+        assertEquals(listOf(WorkoutMetric.STEPS), availableWorkoutMetrics("freeform"))
+        assertEquals(listOf(WorkoutMetric.STEPS), availableWorkoutMetrics(null))
     }
 }

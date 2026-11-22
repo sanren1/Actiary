@@ -5,6 +5,7 @@ import com.actiary.data.appearance.AccentPreset
 val DEFAULT_SEED = 0xFF77879D.toInt()
 
 fun AccentPreset.seed(): Int? = when (this) {
+    AccentPreset.DYNAMIC -> null
     AccentPreset.MIST_TEAL -> 0xFF758B84.toInt()
     AccentPreset.SLATE_BLUE -> 0xFF77879D.toInt()
     AccentPreset.SAGE -> 0xFF8C9683.toInt()

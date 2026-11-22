@@ -17,7 +17,6 @@ class SettingsPageTest {
     fun subpagesHideBottomBarUntilBackToHome() {
         val subpages = listOf(
             SettingsPage.APPEARANCE,
-            SettingsPage.GENERAL,
             SettingsPage.TYPES,
             SettingsPage.DATA,
             SettingsPage.ABOUT,

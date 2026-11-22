@@ -63,6 +63,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -87,6 +88,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -101,6 +103,7 @@ import com.actiary.R
 import com.actiary.data.RecordRepository
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.domain.WorkoutMetric
+import com.actiary.domain.availableWorkoutMetrics
 import com.actiary.domain.effectiveWorkoutMetricMask
 import com.actiary.glass.GlassOverlayPanel
 import com.actiary.glass.GlassSheet
@@ -316,7 +319,8 @@ private fun WorkoutTypeRow(
     val down = stringResource(R.string.custom_type_move_down, label)
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val direction = if (rtl) 1f else -1f
-    val width = with(LocalDensity.current) { (if (onRemove == null) 48.dp else 96.dp).toPx() }
+    val density = LocalDensity.current
+    val width = with(density) { (if (onRemove == null) 56.dp else 110.dp).toPx() }
     val reduced = rememberMotionReduced()
     var swiping by remember { mutableStateOf(false) }
     var swipeDistance by remember { mutableFloatStateOf(0f) }
@@ -330,22 +334,40 @@ private fun WorkoutTypeRow(
     val moveDrag by rememberUpdatedState(onDrag)
     val endDrag by rememberUpdatedState(onDragEnd)
     val shape = RoundedCornerShape(12.dp)
+    val deleteBg = if (t.dark) androidx.compose.ui.graphics.Color(0xFF4D1F1D) else androidx.compose.ui.graphics.Color(0xFFFDE8E6)
+    val deleteTint = if (t.dark) androidx.compose.ui.graphics.Color(0xFFFFB4AB) else androidx.compose.ui.graphics.Color(0xFFB3261E)
+    val revealProgress = if (reduced) {
+        if (reveal > 0f) 1f else 0f
+    } else {
+        (reveal / width).coerceIn(0f, 1f)
+    }
     Box(
         Modifier.fillMaxWidth().onSizeChanged { onHeight(it.height) }.zIndex(if (dragging) 1f else 0f)
             .offset { IntOffset(0, rowShift.roundToInt()) }.clip(shape),
     ) {
         Row(
-            Modifier.align(Alignment.CenterEnd).then(if (open) Modifier else Modifier.clearAndSetSemantics { hideFromAccessibility() }),
+            Modifier.align(Alignment.CenterEnd)
+                .padding(start = 6.dp)
+                .then(if (open) Modifier else Modifier.clearAndSetSemantics { hideFromAccessibility() }),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TypeAction(Icons.Outlined.Edit, edit, t.accent.accentSubtle.asColor(), n.textPrimary.asColor(), open, onEdit)
+            TypeAction(
+                Icons.Outlined.Edit, edit,
+                t.accent.accentSubtle.asColor(), t.accent.accentStroke.asColor(), t.accent.accentAction.asColor(),
+                revealProgress, open, onEdit,
+            )
             if (onRemove != null) {
-                TypeAction(Icons.Outlined.DeleteOutline, remove, n.surfaceMuted.asColor(), n.textPrimary.asColor(), open, onRemove)
+                TypeAction(
+                    Icons.Outlined.DeleteOutline, remove,
+                    deleteBg, deleteTint.copy(alpha = 0.45f), deleteTint,
+                    revealProgress, open, onRemove,
+                )
             }
         }
         Row(
             Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                .absoluteOffset { IntOffset((reveal * direction).roundToInt(), 0) }
+                .padding(end = with(density) { reveal.toDp() })
                 .background(n.surface.asColor(), shape)
                 .draggable(
                     rememberDraggableState { delta -> swipeDistance = (swipeDistance + delta * direction).coerceIn(0f, width) },
@@ -365,7 +387,13 @@ private fun WorkoutTypeRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(exerciseTypeIcon(type), null, Modifier.size(24.dp), tint = n.textPrimary.asColor())
-            BasicText(label, Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp), TextStyle(n.textPrimary.asColor(), 16.sp))
+            BasicText(
+                label,
+                Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
+                style = TextStyle(n.textPrimary.asColor(), 16.sp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Box(
                 Modifier.size(48.dp)
                     .onGloballyPositioned { handleTop = it.positionInWindow().y }
@@ -388,9 +416,28 @@ private fun WorkoutTypeRow(
 }
 
 @Composable
-private fun TypeAction(icon: ImageVector, label: String, background: androidx.compose.ui.graphics.Color, tint: androidx.compose.ui.graphics.Color, enabled: Boolean, onClick: () -> Unit) {
+private fun TypeAction(
+    icon: ImageVector,
+    label: String,
+    background: androidx.compose.ui.graphics.Color,
+    border: androidx.compose.ui.graphics.Color,
+    tint: androidx.compose.ui.graphics.Color,
+    revealProgress: Float,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val actionShape = RoundedCornerShape(12.dp)
+    val scale = 0.72f + 0.28f * revealProgress
     Box(
-        Modifier.size(width = 48.dp, height = 56.dp).background(background)
+        Modifier.size(width = 48.dp, height = 52.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                alpha = revealProgress
+            }
+            .clip(actionShape)
+            .background(background, actionShape)
+            .border(1.dp, border, actionShape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -566,7 +613,9 @@ internal fun AddTypeSheet(
                 ) {
                     BasicText(distanceLabel, style = TextStyle(n.textPrimary.asColor(), 16.sp))
                 }
-                WorkoutMetric.entries.forEach { metric ->
+                val offeredMetrics = availableWorkoutMetrics(editingType?.builtinKey)
+                val shownMetrics = WorkoutMetric.entries.filter { it in offeredMetrics || (metricMask and it.bit) != 0 }
+                shownMetrics.forEach { metric ->
                     val label = stringResource(metric.labelId)
                     GlassToggle(
                         checked = (metricMask and metric.bit) != 0,

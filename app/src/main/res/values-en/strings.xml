@@ -2,10 +2,16 @@
 <resources>
     <string name="app_name">Actiary</string>
     <string name="appearance_title">Appearance</string>
+    <string name="appearance_preview">Preview</string>
+    <string name="settings_language">Language</string>
+    <string name="language_system">Follow system</string>
+    <string name="language_zh">简体中文</string>
+    <string name="language_en">English</string>
     <string name="appearance_theme_mode">Theme mode</string>
     <string name="appearance_glass_style">Glass style</string>
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_dark">Dark</string>
+    <string name="theme_amoled_black">AMOLED pure black</string>
     <string name="theme_mode_system">System</string>
     <string name="accent_title">Accent</string>
     <string name="glass_level_title">Liquid glass</string>
@@ -13,6 +19,7 @@
     <string name="glass_level_balanced">Balanced</string>
     <string name="glass_level_clear">Clear</string>
     <string name="ambient_title">Ambient background</string>
+    <string name="preset_dynamic">Wallpaper Color</string>
     <string name="preset_mist_teal">Mist Teal</string>
     <string name="preset_slate_blue">Slate Blue</string>
     <string name="preset_sage">Sage</string>
@@ -210,7 +217,7 @@
     <string name="custom_type_edit_title">Edit workout type</string>
     <string name="custom_type_edit_named">Edit %1$s</string>
     <string name="custom_type_default_icon">Default icon</string>
-    <string name="custom_type_has_distance">Track distance</string>
+    <string name="custom_type_has_distance">Distance</string>
     <string name="custom_type_icon">Icon</string>
     <string name="custom_type_choose_icon">Choose an icon</string>
     <string name="icon_gym">Gym</string>

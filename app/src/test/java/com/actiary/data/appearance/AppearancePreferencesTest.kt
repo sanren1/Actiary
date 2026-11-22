@@ -246,6 +246,28 @@ class AppearancePreferencesTest {
         assertEquals(emptyMap<String, String>(), appearance.exportAppearance())
         assertEquals(AppearanceSettings(), appearance.settings.first())
     }
+
+    @Test fun amoledBlackAndDynamicAccentRoundTripAndReset() = runBlocking {
+        val r = repo()
+        r.setAmoledBlack(true)
+        r.selectDynamicAccent()
+        val s = r.settings.first()
+        assertEquals(true, s.amoledBlack)
+        assertEquals(AccentPreset.DYNAMIC, s.accentPreset)
+
+        val exported = r.exportAppearance()
+        assertEquals("true", exported["amoled_black"])
+        assertEquals("DYNAMIC", exported["accent_preset"])
+
+        val dst = repo()
+        dst.importAppearance(exported, replace = true)
+        assertEquals(true, dst.settings.first().amoledBlack)
+        assertEquals(AccentPreset.DYNAMIC, dst.settings.first().accentPreset)
+
+        r.resetAppearance()
+        assertEquals(false, r.settings.first().amoledBlack)
+        assertEquals(AccentPreset.SLATE_BLUE, r.settings.first().accentPreset)
+    }
 }
 
 // The file-based DataStore fails its tmp-file rename over an existing file on Windows JVM.

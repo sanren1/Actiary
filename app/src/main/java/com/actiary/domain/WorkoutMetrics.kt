@@ -49,6 +49,15 @@ enum class WorkoutMetric(val bit: Int, val max: Int) {
 
 const val WORKOUT_METRIC_MASK = 0b11_1111
 
+/** Optional metrics offered when configuring a workout type. */
+fun availableWorkoutMetrics(builtinKey: String?): List<WorkoutMetric> = when (builtinKey) {
+    "running" -> listOf(WorkoutMetric.CADENCE, WorkoutMetric.STEPS, WorkoutMetric.ELEVATION_GAIN)
+    "cycling" -> listOf(WorkoutMetric.ELEVATION_GAIN)
+    "hiking" -> listOf(WorkoutMetric.STEPS, WorkoutMetric.ELEVATION_GAIN)
+    "swimming" -> listOf(WorkoutMetric.POOL_LENGTH, WorkoutMetric.LAPS, WorkoutMetric.STROKES)
+    else -> listOf(WorkoutMetric.STEPS)
+}
+
 /** A null preference uses sport defaults. An explicit zero hides all optional input fields. */
 fun effectiveWorkoutMetricMask(builtinKey: String?, extraMetricMask: Int?): Int =
     extraMetricMask ?: when (builtinKey) {

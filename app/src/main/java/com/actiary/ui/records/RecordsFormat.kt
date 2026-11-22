@@ -46,6 +46,99 @@ internal fun chartAxisTicks(kind: RangeKind, count: Int): List<Int> {
     return raw.filter { it in 0..last }.distinct().sorted()
 }
 
+internal data class ChartBarSpec(
+    val centerNorm: Float,
+    val widthNorm: Float,
+    val fraction: Float,
+    val isMax: Boolean,
+    val alpha: Float = 1f,
+)
+
+internal fun buildBarSpecs(values: List<Int?>, maxIndex: Int?, rtl: Boolean): List<ChartBarSpec> {
+    if (values.isEmpty()) return emptyList()
+    val max = values.filterNotNull().maxOrNull()
+    val count = values.size
+    val slotNorm = 1f / count
+    val widthNorm = slotNorm * 0.6f
+    return values.indices.map { i ->
+        val visualIndex = if (rtl) count - 1 - i else i
+        val v = values[i]
+        ChartBarSpec(
+            centerNorm = (visualIndex + 0.5f) * slotNorm,
+            widthNorm = widthNorm,
+            fraction = if (v == null || max == null || max <= 0) 0f else v.toFloat() / max,
+            isMax = i == maxIndex,
+        )
+    }
+}
+
+/** Picks [small] strictly increasing indices in `0 until large` distributed evenly by position. */
+internal fun matchedBarIndices(small: Int, large: Int): List<Int> {
+    if (small <= 0 || large <= 0) return emptyList()
+    require(small <= large)
+    return List(small) { i -> ((i + 0.5f) * large / small).toInt().coerceIn(0, large - 1) }
+}
+
+internal fun interpolateBars(from: List<ChartBarSpec>, to: List<ChartBarSpec>, progress: Float): List<ChartBarSpec> {
+    if (to.isEmpty()) return emptyList()
+    if (from.isEmpty() || progress >= 1f) return to
+    val p = progress.coerceIn(0f, 1f)
+    fun lerp(a: Float, b: Float) = a + (b - a) * p
+    return when {
+        from.size == to.size -> from.indices.map { i ->
+            val a = from[i]
+            val b = to[i]
+            ChartBarSpec(
+                centerNorm = lerp(a.centerNorm, b.centerNorm),
+                widthNorm = lerp(a.widthNorm, b.widthNorm),
+                fraction = lerp(a.fraction, b.fraction),
+                isMax = b.isMax,
+                alpha = lerp(a.alpha, b.alpha),
+            )
+        }
+        from.size < to.size -> {
+            val targetToSource = matchedBarIndices(from.size, to.size)
+                .withIndex().associate { (srcIdx, dstIdx) -> dstIdx to srcIdx }
+            to.indices.map { j ->
+                val b = to[j]
+                val srcIdx = targetToSource[j]
+                if (srcIdx != null) {
+                    val a = from[srcIdx]
+                    ChartBarSpec(
+                        centerNorm = lerp(a.centerNorm, b.centerNorm),
+                        widthNorm = lerp(a.widthNorm, b.widthNorm),
+                        fraction = lerp(a.fraction, b.fraction),
+                        isMax = b.isMax,
+                        alpha = 1f,
+                    )
+                } else {
+                    b.copy(fraction = b.fraction * p, alpha = p)
+                }
+            }
+        }
+        else -> {
+            val sourceToTarget = matchedBarIndices(to.size, from.size)
+                .withIndex().associate { (dstIdx, srcIdx) -> srcIdx to dstIdx }
+            from.indices.map { i ->
+                val a = from[i]
+                val dstIdx = sourceToTarget[i]
+                if (dstIdx != null) {
+                    val b = to[dstIdx]
+                    ChartBarSpec(
+                        centerNorm = lerp(a.centerNorm, b.centerNorm),
+                        widthNorm = lerp(a.widthNorm, b.widthNorm),
+                        fraction = lerp(a.fraction, b.fraction),
+                        isMax = b.isMax,
+                        alpha = 1f,
+                    )
+                } else {
+                    a.copy(fraction = a.fraction * (1f - p), alpha = a.alpha * (1f - p))
+                }
+            }
+        }
+    }
+}
+
 internal fun entryMetrics(
     entry: ExerciseEntryEntity,
     type: ExerciseTypeEntity,

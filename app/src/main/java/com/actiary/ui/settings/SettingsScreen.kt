@@ -6,10 +6,10 @@ import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.actiary.R
+import com.actiary.data.appearance.AppLanguage
 import com.actiary.data.appearance.AppearanceSettings
 import com.actiary.data.appearance.ChartPalette
 import com.actiary.data.appearance.GlassLevel
@@ -21,10 +21,15 @@ internal fun SettingsScreen(
     page: SettingsPage,
     onPage: (SettingsPage) -> Unit,
     settings: AppearanceSettings,
+    dynamicSeed: Int,
+    appLanguage: AppLanguage,
+    onAppLanguage: (AppLanguage) -> Unit,
     weekStart: WeekStart,
     onWeekStart: (WeekStart) -> Unit,
     onThemeMode: (ThemeMode) -> Unit,
+    onAmoledBlack: (Boolean) -> Unit,
     accentColors: List<String>,
+    onSelectDynamicAccent: () -> Unit,
     onSelectAccent: (String) -> Unit,
     onRemoveAccent: (String) -> Unit,
     onGlassLevel: (GlassLevel) -> Unit,
@@ -49,9 +54,6 @@ internal fun SettingsScreen(
                     stringResource(R.string.appearance_title), Icons.Outlined.Palette, chevron, shape = rowShape,
                 ) { onPage(SettingsPage.APPEARANCE) }
                 SettingsRow(
-                    stringResource(R.string.settings_general), Icons.Outlined.Tune, chevron, shape = rowShape,
-                ) { onPage(SettingsPage.GENERAL) }
-                SettingsRow(
                     stringResource(R.string.settings_custom_types), Icons.Outlined.FitnessCenter, chevron, shape = rowShape,
                 ) { onPage(SettingsPage.TYPES) }
                 SettingsRow(
@@ -63,10 +65,10 @@ internal fun SettingsScreen(
             }
         }
         SettingsPage.APPEARANCE -> AppearanceScreen(
-            settings, onThemeMode, accentColors, onSelectAccent, onRemoveAccent,
+            settings, dynamicSeed, appLanguage, onAppLanguage, weekStart, onWeekStart, onThemeMode, onAmoledBlack,
+            accentColors, onSelectDynamicAccent, onSelectAccent, onRemoveAccent,
             onGlassLevel, onAmbient, onBack, onResetAppearance, onCustomColor, onChartPalette,
         )
-        SettingsPage.GENERAL -> GeneralScreen(weekStart, onWeekStart, onBack)
         SettingsPage.TYPES -> typesContent(onBack)
         SettingsPage.DATA -> DataScreen(onBack, onExportBackup, onImportBackup, onCleanOrphanPhotos)
         SettingsPage.ABOUT -> AboutScreen(onBack)

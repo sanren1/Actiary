@@ -2,6 +2,7 @@ package com.actiary.glass
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,7 +63,13 @@ fun GlassPreview(
         LocalGlassLayers provides GlassLayers(bg, combined),
     ) {
         val n = tokens.neutrals
-        Box(modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(24.dp)).clearAndSetSemantics {}) {
+        val previewShape = RoundedCornerShape(24.dp)
+        Box(
+            modifier.fillMaxWidth().height(180.dp)
+                .clip(previewShape)
+                .border(1.dp, n.divider.asColor(), previewShape)
+                .clearAndSetSemantics {},
+        ) {
             AmbientBackground(tokens, Modifier.fillMaxSize().layerBackdrop(bg))
             Column(Modifier.fillMaxSize().layerBackdrop(content).padding(16.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

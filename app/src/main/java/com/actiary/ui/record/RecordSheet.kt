@@ -693,17 +693,13 @@ private fun EntryFields(
     }
     LaunchedEffect(Unit) { report() }
 
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BasicText(
-                exerciseTypeLabel(type), Modifier.width(72.dp).padding(bottom = 12.dp),
-                style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp, FontWeight.Medium), maxLines = 1,
-            )
-            val durationLabel = stringResource(R.string.record_duration)
-            val exactTime = entry.metrics.durationSeconds?.let { formatWorkoutClock(it.toLong()) }
+    val durationLabel = stringResource(R.string.record_duration)
+    val exactTime = entry.metrics.durationSeconds?.let { formatWorkoutClock(it.toLong()) }
+    val fields = buildList<@Composable (Modifier) -> Unit> {
+        add { mod ->
             NumberField(
                 if (exactTime == null) durationLabel else stringResource(R.string.workout_duration_exact, durationLabel, exactTime),
-                minutes, Modifier.weight(1f), KeyboardType.Number,
+                minutes, mod, KeyboardType.Number,
             ) {
                 val edited = sanitizeMinutes(it)
                 if (edited != minutes) {
@@ -711,10 +707,12 @@ private fun EntryFields(
                     onChange(entry.copy(durationMinutes = parseMinutes(minutes), metrics = entry.metrics.copy(durationSeconds = null)))
                 }
             }
-            if (hasDistance) {
+        }
+        if (hasDistance) {
+            add { mod ->
                 NumberField(
                     stringResource(if (swimming) R.string.record_distance_meters else R.string.record_distance),
-                    distance, Modifier.weight(1f),
+                    distance, mod,
                     if (swimming) KeyboardType.Number else KeyboardType.Decimal,
                 ) {
                     distance = if (swimming) sanitizeMinutes(it) else sanitizeKm(it)
@@ -723,53 +721,78 @@ private fun EntryFields(
                 }
             }
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.width(72.dp)) { // aligns this row's fields with the row above
-                if (onRemove != null) {
-                    IconButton(onClick = onRemove, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.Close, stringResource(R.string.record_remove_entry), tint = t.neutrals.textPrimary.asColor())
-                    }
-                }
-            }
-            NumberField(stringResource(R.string.record_calories), calories, Modifier.weight(1f), KeyboardType.Number) {
+        add { mod ->
+            NumberField(stringResource(R.string.record_calories), calories, mod, KeyboardType.Number) {
                 calories = sanitizeCalories(it)
                 onChange(entry.copy(calories = parseCalories(calories)))
                 report()
             }
-            NumberField(stringResource(R.string.record_heart_rate), heartRate, Modifier.weight(1f), KeyboardType.Number) {
+        }
+        add { mod ->
+            NumberField(stringResource(R.string.record_heart_rate), heartRate, mod, KeyboardType.Number) {
                 heartRate = sanitizeHeartRate(it)
                 onChange(entry.copy(avgHeartRate = parseHeartRate(heartRate)))
                 report()
             }
         }
-        visibleMetrics.chunked(2).forEach { row ->
+        visibleMetrics.forEach { metric ->
+            add { mod ->
+                key(metric) {
+                    val label = stringResource(metric.labelId)
+                    val labelWithUnit = when {
+                        metric.isLength -> stringResource(R.string.workout_metric_label_meters, label)
+                        metric == WorkoutMetric.CADENCE -> stringResource(R.string.workout_metric_label_steps_per_min, label)
+                        else -> label
+                    }
+                    NumberField(
+                        labelWithUnit, metricInputs[metric.ordinal], mod,
+                        if (metric.isLength) KeyboardType.Decimal else KeyboardType.Number,
+                    ) { input ->
+                        val text = input.filter { char -> char in '0'..'9' || (metric.isLength && char in ".,") }
+                        metricInputs = metricInputs.toMutableList().apply { set(metric.ordinal, text) }
+                        val value = parseWorkoutMetric(metric, text)
+                        if (value != null || text.isEmpty()) {
+                            onChange(entry.copy(metrics = metric.withValue(entry.metrics, value)))
+                        }
+                        report()
+                    }
+                }
+            }
+        }
+    }
+
+    Column(
+        Modifier.fillMaxWidth().padding(top = 12.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(t.neutrals.surface.asColor().copy(alpha = 0.55f))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(exerciseTypeIcon(type), null, Modifier.size(18.dp), tint = t.neutrals.textPrimary.asColor())
+            BasicText(
+                exerciseTypeLabel(type),
+                Modifier.weight(1f),
+                style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp, FontWeight.SemiBold),
+                maxLines = 1,
+            )
+            if (onRemove != null) {
+                IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Outlined.Close, stringResource(R.string.record_remove_entry), Modifier.size(18.dp), tint = t.neutrals.textSecondary.asColor())
+                }
+            }
+        }
+        fields.chunked(2).forEach { row ->
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                row.forEach { metric ->
-                    key(metric) {
-                        val label = stringResource(metric.labelId)
-                        val labelWithUnit = when {
-                            metric.isLength -> stringResource(R.string.workout_metric_label_meters, label)
-                            metric == WorkoutMetric.CADENCE -> stringResource(R.string.workout_metric_label_steps_per_min, label)
-                            else -> label
-                        }
-                        NumberField(
-                            labelWithUnit, metricInputs[metric.ordinal], Modifier.weight(1f),
-                            if (metric.isLength) KeyboardType.Decimal else KeyboardType.Number,
-                        ) { input ->
-                            val text = input.filter { char -> char in '0'..'9' || (metric.isLength && char in ".,") }
-                            metricInputs = metricInputs.toMutableList().apply { set(metric.ordinal, text) }
-                            val value = parseWorkoutMetric(metric, text)
-                            if (value != null || text.isEmpty()) {
-                                onChange(entry.copy(metrics = metric.withValue(entry.metrics, value)))
-                            }
-                            report()
-                        }
-                    }
-                }
+                row.forEach { field -> field(Modifier.weight(1f)) }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }

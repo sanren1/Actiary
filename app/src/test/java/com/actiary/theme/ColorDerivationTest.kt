@@ -75,15 +75,19 @@ class ColorDerivationTest {
     @Test fun ambientContrastFullMatrixTest() {
         val allSeeds = presetSeeds + listOf("#FFFFFF", "#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF")
         val failures = mutableListOf<String>()
-        for (hex in allSeeds) for (dark in listOf(false, true)) {
+        val themes = listOf(
+            Triple("light", false, LightNeutrals),
+            Triple("dark", true, DarkNeutrals),
+            Triple("amoled", true, AmoledDarkNeutrals),
+        )
+        for (hex in allSeeds) for ((themeName, dark, n) in themes) {
             val seed = parseHex(hex)!!
-            val n = if (dark) DarkNeutrals else LightNeutrals
             val amb = deriveAmbient(seed, n, dark)
             for ((blobName, bg) in listOf("blobA" to amb.blobA, "blobB" to amb.blobB)) {
                 val p = contrast(n.textPrimary, bg)
                 val s = contrast(n.textSecondary, bg)
-                if (p < 4.5) failures += "$hex dark=$dark $blobName primary=${"%.2f".format(p)}"
-                if (s < 4.5) failures += "$hex dark=$dark $blobName secondary=${"%.2f".format(s)}"
+                if (p < 4.5) failures += "$hex $themeName $blobName primary=${"%.2f".format(p)}"
+                if (s < 4.5) failures += "$hex $themeName $blobName secondary=${"%.2f".format(s)}"
             }
         }
         assertTrue("Ambient contrast failures:\n${failures.joinToString("\n")}", failures.isEmpty())

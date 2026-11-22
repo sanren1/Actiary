@@ -3,6 +3,7 @@ package com.actiary.ui.records
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -360,21 +361,21 @@ private fun SummaryCard(
     GlassPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             filter()
-            RecordsCrossfade(summary, reduced, Modifier.fillMaxWidth(), contentKey = { it.range to it.filter }) { shown, visibility ->
-                val stats = shown.stats
-                Column(visibility.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Row(Modifier.fillMaxWidth()) {
-                        Stat(Modifier.weight(1f), stringResource(R.string.records_stat_days), stats.exerciseDays.toString())
-                        Stat(Modifier.weight(1f), stringResource(R.string.records_stat_count), stats.entryCount.toString())
-                    }
-                    Row(Modifier.fillMaxWidth()) {
-                        Stat(Modifier.weight(1f), stringResource(R.string.records_stat_duration), stats.totalMinutes?.let { durationText(it) })
-                        Stat(Modifier.weight(1f), stringResource(R.string.records_stat_calories), stats.totalCalories?.let { stringResource(R.string.records_kcal, it) })
-                    }
-                    val top = stats.byType.firstOrNull()?.second ?: 0
-                    if (stats.byType.isNotEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            stats.byType.forEachIndexed { i, (id, count) ->
+            val stats = summary.stats
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(Modifier.fillMaxWidth()) {
+                    Stat(Modifier.weight(1f), stringResource(R.string.records_stat_days), stats.exerciseDays.toString(), reduced)
+                    Stat(Modifier.weight(1f), stringResource(R.string.records_stat_count), stats.entryCount.toString(), reduced)
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    Stat(Modifier.weight(1f), stringResource(R.string.records_stat_duration), stats.totalMinutes?.let { durationText(it) }, reduced)
+                    Stat(Modifier.weight(1f), stringResource(R.string.records_stat_calories), stats.totalCalories?.let { stringResource(R.string.records_kcal, it) }, reduced)
+                }
+                RecordsCrossfade(stats.byType, reduced, Modifier.fillMaxWidth()) { byType, visibility ->
+                    val top = byType.firstOrNull()?.second ?: 0
+                    if (byType.isNotEmpty()) {
+                        Column(visibility.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            byType.forEachIndexed { i, (id, count) ->
                                 val type = typeById[id] ?: return@forEachIndexed
                                 val fraction = count.toFloat() / top
                                 val color = colors.categories[i % colors.categories.size].asColor()
@@ -408,9 +409,7 @@ private fun SummaryCard(
                         .background(t.neutrals.surface.asColor()).padding(12.dp),
                 ) {
                     val chart = RecordsChart(summary.range, summary.filter, metric, summary.stats.buckets)
-                    RecordsCrossfade(chart, reduced, Modifier.fillMaxWidth(), contentKey = { Triple(it.range, it.filter, it.metric) }) { shown, visibility ->
-                        BarChart(shown, colors, reduced, visibility)
-                    }
+                    BarChart(chart, colors, reduced, Modifier.fillMaxWidth())
                 }
             }
         }
@@ -418,13 +417,15 @@ private fun SummaryCard(
 }
 
 @Composable
-private fun Stat(modifier: Modifier, label: String, value: String?) {
+private fun Stat(modifier: Modifier, label: String, value: String?, reduced: Boolean) {
     val t = LocalThemeTokens.current
     Column(modifier) {
-        if (value == null) {
-            BasicText(stringResource(R.string.records_none), style = TextStyle(t.neutrals.textSecondary.asColor(), 16.sp))
-        } else {
-            BasicText(value, style = TextStyle(t.neutrals.textPrimary.asColor(), 22.sp, FontWeight.Bold))
+        RecordsCrossfade(value, reduced) { shown, visibility ->
+            if (shown == null) {
+                BasicText(stringResource(R.string.records_none), visibility, style = TextStyle(t.neutrals.textSecondary.asColor(), 16.sp))
+            } else {
+                BasicText(shown, visibility, style = TextStyle(t.neutrals.textPrimary.asColor(), 22.sp, FontWeight.Bold))
+            }
         }
         BasicText(label, style = TextStyle(t.neutrals.textSecondary.asColor(), 13.sp))
     }
@@ -440,14 +441,11 @@ private fun metricText(metric: ChartMetric, v: Int): String = when (metric) {
 @Composable
 private fun BarChart(chart: RecordsChart, colors: ChartColors, reduced: Boolean, modifier: Modifier) {
     val t = LocalThemeTokens.current
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val buckets = chart.buckets
     val metric = chart.metric
     val values = buckets.map { it.valueOf(metric) }
     val max = values.filterNotNull().maxOrNull()
-    val fractions = values.map { if (it == null || max == null) 0f else it.toFloat() / max }
-    val heights = if (reduced) null else fractions.map {
-        animateFloatAsState(it, Motion.pushSpec(), label = "Bar height")
-    }
     val secondary = t.neutrals.textSecondary.asColor()
     // First bucket reaching the maximum is highlighted; ties keep the earliest bar.
     val maxIndex = maxValueIndex(values)
@@ -458,56 +456,82 @@ private fun BarChart(chart: RecordsChart, colors: ChartColors, reduced: Boolean,
         stringResource(R.string.records_chart_desc, stringResource(metric.label), maxText)
     val slot = t.neutrals.divider.asColor()
     fun label(i: Int) = buckets[i].start.let { if (chart.range.kind == RangeKind.YEAR) it.monthValue else it.dayOfMonth }.toString()
+
+    val targetBars = remember(values, maxIndex, rtl) { buildBarSpecs(values, maxIndex, rtl) }
+    var fromBars by remember { mutableStateOf(targetBars) }
+    var toBars by remember { mutableStateOf(targetBars) }
+    val progress = remember { Animatable(1f) }
+    LaunchedEffect(targetBars, reduced) {
+        if (targetBars == toBars && progress.value >= 1f) return@LaunchedEffect
+        if (reduced) {
+            fromBars = targetBars
+            toBars = targetBars
+            progress.snapTo(1f)
+        } else {
+            fromBars = interpolateBars(fromBars, toBars, progress.value)
+            toBars = targetBars
+            progress.snapTo(0f)
+            progress.animateTo(1f, Motion.pushSpec())
+        }
+    }
+    val displayedBars = interpolateBars(fromBars, toBars, progress.value)
+    val ticks = chartAxisTicks(chart.range.kind, buckets.size)
+    val tickEntries = ticks.map { it to label(it) }
+
     Column(
         modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = description },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        BasicText(maxText, style = TextStyle(secondary, 12.sp))
+        RecordsCrossfade(maxText, reduced) { shownMax, visibility ->
+            BasicText(shownMax, visibility, style = TextStyle(secondary, 12.sp))
+        }
         Canvas(Modifier.fillMaxWidth().height(96.dp)) {
-            val slotW = size.width / buckets.size
-            val barW = slotW * 0.6f
             val minH = 2.dp.toPx()
-            values.indices.forEach { i ->
-                val index = if (layoutDirection == LayoutDirection.Rtl) buckets.lastIndex - i else i
-                val x = index * slotW + (slotW - barW) / 2
-                val fraction = heights?.get(i)?.value ?: fractions[i]
-                val h = size.height * fraction
+            displayedBars.forEach { bar ->
+                if (bar.alpha <= 0.01f) return@forEach
+                val barW = size.width * bar.widthNorm
+                val x = size.width * bar.centerNorm - barW / 2f
+                val h = size.height * bar.fraction
+                val baseColor = if (h < minH) slot else if (bar.isMax) highlight else series
                 drawRoundRect(
-                    if (h < minH) slot else if (i == maxIndex) highlight else series,
-                    Offset(x, size.height - h.coerceAtLeast(minH)), Size(barW, h.coerceAtLeast(minH)),
+                    baseColor.copy(alpha = baseColor.alpha * bar.alpha),
+                    Offset(x, size.height - h.coerceAtLeast(minH)),
+                    Size(barW, h.coerceAtLeast(minH)),
                     CornerRadius(barW.coerceAtMost(4.dp.toPx())),
                 )
             }
         }
-        val ticks = chartAxisTicks(chart.range.kind, buckets.size)
-        Layout(
-            content = {
-                ticks.forEach { tick ->
-                    BasicText(label(tick), style = TextStyle(secondary, 12.sp), maxLines = 1)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { measurables, constraints ->
-            val childConstraints = constraints.copy(minWidth = 0, minHeight = 0)
-            val placeables = measurables.map { it.measure(childConstraints) }
-            val width = constraints.maxWidth
-            val height = placeables.maxOfOrNull { it.height } ?: 0
-            val slotW = if (buckets.isEmpty()) 0f else width.toFloat() / buckets.size
-            val rtl = layoutDirection == LayoutDirection.Rtl
-            layout(width, height) {
-                ticks.forEachIndexed { idx, tick ->
-                    val placeable = placeables[idx]
-                    val maxX = (width - placeable.width).coerceAtLeast(0)
-                    val x = when (tick) {
-                        0 -> if (rtl) maxX else 0
-                        buckets.lastIndex -> if (rtl) 0 else maxX
-                        else -> {
-                            val visualIndex = if (rtl) buckets.lastIndex - tick else tick
-                            val center = (visualIndex + 0.5f) * slotW
-                            (center - placeable.width / 2f).roundToInt().coerceIn(0, maxX)
-                        }
+        RecordsCrossfade(tickEntries to buckets.size, reduced, Modifier.fillMaxWidth()) { (shownTicks, bucketCount), visibility ->
+            Layout(
+                content = {
+                    shownTicks.forEach { (_, text) ->
+                        BasicText(text, style = TextStyle(secondary, 12.sp), maxLines = 1)
                     }
-                    placeable.place(x, 0)
+                },
+                modifier = visibility.fillMaxWidth(),
+            ) { measurables, constraints ->
+                val childConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+                val placeables = measurables.map { it.measure(childConstraints) }
+                val width = constraints.maxWidth
+                val height = placeables.maxOfOrNull { it.height } ?: 0
+                val slotW = if (bucketCount == 0) 0f else width.toFloat() / bucketCount
+                val isRtl = layoutDirection == LayoutDirection.Rtl
+                val lastIdx = bucketCount - 1
+                layout(width, height) {
+                    shownTicks.forEachIndexed { idx, (tick, _) ->
+                        val placeable = placeables[idx]
+                        val maxX = (width - placeable.width).coerceAtLeast(0)
+                        val x = when (tick) {
+                            0 -> if (isRtl) maxX else 0
+                            lastIdx -> if (isRtl) 0 else maxX
+                            else -> {
+                                val visualIndex = if (isRtl) lastIdx - tick else tick
+                                val center = (visualIndex + 0.5f) * slotW
+                                (center - placeable.width / 2f).roundToInt().coerceIn(0, maxX)
+                            }
+                        }
+                        placeable.place(x, 0)
+                    }
                 }
             }
         }

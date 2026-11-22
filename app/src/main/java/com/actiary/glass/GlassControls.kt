@@ -503,7 +503,11 @@ fun GlassSegmentedPicker(
     val ready = widths.all { it > 0f }
     val scroll = rememberScrollState()
 
-    BoxWithConstraints(modifier.fillMaxWidth().background(muted, shape)) {
+    BoxWithConstraints(
+        modifier.fillMaxWidth()
+            .background(muted, shape)
+            .border(0.75.dp, t.neutrals.divider.asColor(), shape),
+    ) {
         val viewportPx = constraints.maxWidth
         val padPx = with(LocalDensity.current) { 4.dp.toPx() }
         if (allowScroll) LaunchedEffect(selected, ready, viewportPx, fontScale) {

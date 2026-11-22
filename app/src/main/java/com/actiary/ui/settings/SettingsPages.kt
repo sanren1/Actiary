@@ -46,7 +46,7 @@ import com.actiary.ui.common.LocalFloatingInsets
 import com.actiary.ui.common.PinnedScrollPage
 import com.actiary.ui.common.RootTitle
 
-internal enum class SettingsPage { HOME, APPEARANCE, GENERAL, TYPES, DATA, ABOUT }
+internal enum class SettingsPage { HOME, APPEARANCE, TYPES, DATA, ABOUT }
 
 /** Navigation parent used by both the system back handler and in-page back buttons. */
 internal fun SettingsPage.parent(): SettingsPage? = when (this) {

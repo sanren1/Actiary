@@ -9,6 +9,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -187,17 +190,29 @@ fun HomeScreen(
         if (animationsOff) calendar.scrollToMonth(target) else calendar.animateScrollToMonth(target)
     }
     PinnedScrollPage(
-        scrollOffset = { pageScroll.value },
+        scrollOffset = { 0 },
         header = { RootTitle(stringResource(R.string.tab_calendar), Modifier.padding(start = 16.dp, end = 72.dp)) },
-    ) { headerHeight, viewportHeight ->
+    ) { headerHeight, _ ->
         val bottomPadding = LocalFloatingInsets.current.bottom + BOTTOM_CLEARANCE
         Column(
-            Modifier.fillMaxSize().nestedScroll(connection).verticalScroll(pageScroll)
+            Modifier.fillMaxSize().nestedScroll(connection)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                .padding(start = 16.dp, end = 16.dp, top = headerHeight + 16.dp, bottom = bottomPadding),
+                .padding(start = 16.dp, end = 16.dp, top = headerHeight + 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            GlassPanel(Modifier.fillMaxWidth(), exported = calendarLayer) {
+            GlassPanel(
+                Modifier.fillMaxWidth().draggable(
+                    state = rememberDraggableState { delta ->
+                        if (range > 0f && (delta < 0f || pageScroll.value == 0)) {
+                            settling?.cancel()
+                            p = (p - delta / range).coerceIn(0f, 1f)
+                        }
+                    },
+                    orientation = Orientation.Vertical,
+                    onDragStopped = { if (p > 0f && p < 1f) settle(snapTarget(p)) },
+                ),
+                exported = calendarLayer,
+            ) {
                 Column(Modifier.padding(12.dp)) {
                     Row(
                         Modifier.fillMaxWidth(),
@@ -225,8 +240,9 @@ fun HomeScreen(
                     MonthCalendar(calendar, monthStates, selected, today, locale, onSelect, collapse = p, userScrollEnabled = p < 1f)
                 }
             }
-            // Keep enough scroll range to pass the collapsed week under the title even on short days.
-            Box(Modifier.heightIn(min = (viewportHeight - headerHeight - bottomPadding).coerceAtLeast(0.dp))) {
+            Column(
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(pageScroll).padding(bottom = bottomPadding),
+            ) {
                 GlassPanel(Modifier.fillMaxWidth()) {
                     val content: @Composable (Pair<LocalDate, DayWithDetails?>?) -> Unit = { shown ->
                         val date = shown?.first ?: selected

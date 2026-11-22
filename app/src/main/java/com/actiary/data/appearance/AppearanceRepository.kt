@@ -30,6 +30,7 @@ private val GLASS_LEVEL = stringPreferencesKey("glass_level")
 private val GLASS_TINT_STRENGTH = stringPreferencesKey("glass_tint_strength")
 private val CHART_PALETTE = stringPreferencesKey("chart_palette")
 internal val AMBIENT_BACKGROUND = booleanPreferencesKey("ambient_background")
+internal val AMOLED_BLACK = booleanPreferencesKey("amoled_black")
 private val RECENT_COLORS = stringPreferencesKey("recent_colors")
 private val ACCENT_COLORS = stringPreferencesKey("accent_colors")
 
@@ -61,6 +62,7 @@ fun Preferences.toAppearanceSettings(): AppearanceSettings {
         glassTintStrength = enumOr(GLASS_TINT_STRENGTH, d.glassTintStrength),
         chartPalette = enumOr(CHART_PALETTE, d.chartPalette),
         ambientBackground = this[AMBIENT_BACKGROUND] ?: d.ambientBackground,
+        amoledBlack = this[AMOLED_BLACK] ?: d.amoledBlack,
     )
 }
 
@@ -112,6 +114,8 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
     suspend fun setGlassTintStrength(s: GlassTintStrength) { store.edit { it[GLASS_TINT_STRENGTH] = s.name } }
     suspend fun setChartPalette(p: ChartPalette) { store.edit { it[CHART_PALETTE] = p.name } }
     suspend fun setAmbientBackground(enabled: Boolean) { store.edit { it[AMBIENT_BACKGROUND] = enabled } }
+    suspend fun setAmoledBlack(enabled: Boolean) { store.edit { it[AMOLED_BLACK] = enabled } }
+    suspend fun selectDynamicAccent() { store.edit { it[ACCENT_PRESET] = AccentPreset.DYNAMIC.name } }
 
     suspend fun setCustomAccent(hex: String) {
         require(parseHex(hex) != null) { "Invalid hex color: $hex" }
@@ -150,7 +154,8 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
             prefs[ACCENT_COLORS] = next.joinToString(",")
             val history = parseRecent(prefs[RECENT_COLORS]).filterNot { it == previous }
             prefs[RECENT_COLORS] = pushRecent(history, normalized).joinToString(",")
-            if (previous == null || prefs.toAppearanceSettings().activeAccentHex() == previous) {
+            val current = prefs.toAppearanceSettings()
+            if (previous == null || (current.accentPreset != AccentPreset.DYNAMIC && current.activeAccentHex() == previous)) {
                 prefs.activatePaletteColor(normalized)
             }
         }
@@ -163,7 +168,8 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
             val next = colors - hex
             prefs[ACCENT_COLORS] = next.joinToString(",")
             prefs[RECENT_COLORS] = (parseRecent(prefs[RECENT_COLORS]) - hex).joinToString(",")
-            if (prefs.toAppearanceSettings().activeAccentHex() == hex) {
+            val current = prefs.toAppearanceSettings()
+            if (current.accentPreset != AccentPreset.DYNAMIC && current.activeAccentHex() == hex) {
                 prefs.activatePaletteColor(next.firstOrNull() ?: AppearanceSettings().activeAccentHex())
             }
         }
@@ -176,6 +182,7 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
         return buildMap {
             for (key in backupAppearanceStringKeys) preferences[key]?.let { put(key.name, it) }
             preferences[AMBIENT_BACKGROUND]?.let { put(AMBIENT_BACKGROUND.name, it.toString()) }
+            preferences[AMOLED_BLACK]?.let { put(AMOLED_BLACK.name, it.toString()) }
         }
     }
 
@@ -187,6 +194,9 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
             }
             values[AMBIENT_BACKGROUND.name]?.toBooleanStrictOrNull()?.let {
                 put(AMBIENT_BACKGROUND.name, it.toString())
+            }
+            values[AMOLED_BLACK.name]?.toBooleanStrictOrNull()?.let {
+                put(AMOLED_BLACK.name, it.toString())
             }
         }
         restoreAppearance(validated)
@@ -202,6 +212,9 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
             val ambient = values[AMBIENT_BACKGROUND.name]
             if (ambient == null) preferences.remove(AMBIENT_BACKGROUND)
             else preferences[AMBIENT_BACKGROUND] = ambient.toBooleanStrict()
+            val amoled = values[AMOLED_BLACK.name]
+            if (amoled == null) preferences.remove(AMOLED_BLACK)
+            else preferences[AMOLED_BLACK] = amoled.toBooleanStrict()
             if (clearRecent) preferences.remove(RECENT_COLORS)
         }
     }

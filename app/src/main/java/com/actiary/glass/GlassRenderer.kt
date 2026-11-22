@@ -10,6 +10,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
@@ -88,11 +89,21 @@ fun Modifier.glass(
             // Default highlight needs the runtime shader (API 33+); 31-32 use the flat stroke.
             Highlight(
                 alpha = profile.highlightAlpha * (press?.invoke() ?: 1f),
-                style = if (isRuntimeShaderSupported()) HighlightStyle.Default else HighlightStyle.Plain,
+                style = if (isRuntimeShaderSupported()) {
+                    HighlightStyle.Default(color = Color.White.copy(alpha = 0.34f), falloff = 0.45f)
+                } else {
+                    HighlightStyle.Plain
+                },
             )
         },
         shadow = when {
-            flat -> null
+            flat -> ({
+                Shadow(
+                    radius = 12.dp,
+                    offset = DpOffset(0.dp, 2.dp),
+                    color = Color.Black.copy(alpha = if (dark) 0.24f else 0.06f),
+                )
+            })
             press == null -> ({ Shadow.Default })
             else -> ({ Shadow(alpha = press()) })
         },
@@ -102,5 +113,9 @@ fun Modifier.glass(
         onDrawSurface = {
             drawRect(if (press == null) surface else lerp(thumbRestingColor ?: surface.copy(alpha = 1f), surface, press()))
         },
+    ).border(
+        0.85.dp,
+        if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.11f),
+        shape,
     )
 }

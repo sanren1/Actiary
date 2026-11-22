@@ -1,5 +1,6 @@
 package com.actiary
 
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.ColorDrawable
@@ -50,6 +51,7 @@ import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -62,7 +64,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -70,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.actiary.data.appearance.AppLanguagePrefs
 import com.actiary.data.appearance.resolve
 import com.actiary.data.photo.recognizeWorkoutScreenshot
 import com.actiary.domain.WorkoutScreenshot
@@ -132,8 +138,13 @@ private val BarGap = 6.dp
 internal enum class Tab { CALENDAR, RECORDS, SETTINGS }
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguagePrefs.wrapContext(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val initialLanguage = AppLanguagePrefs.load(this)
         val container = (application as ActiaryApp).container
         val backup = ViewModelProvider(this)[BackupActions::class.java]
         val typeActions = ViewModelProvider(this)[AddTypeActions::class.java]
@@ -143,13 +154,16 @@ class MainActivity : ComponentActivity() {
         val recordsView = runBlocking { container.recordsPrefs.view.first() }
         val initialWeekStart = runBlocking { container.generalPrefs.weekStart.first() }
         val systemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        window.setBackgroundDrawable(ColorDrawable(resolveTheme(initial, systemDark).neutrals.background))
+        val initialDynamicSeed = ContextCompat.getColor(this, android.R.color.system_accent1_500)
+        window.setBackgroundDrawable(ColorDrawable(resolveTheme(initial, systemDark, initialDynamicSeed).neutrals.background))
         setContent {
             val settings by repository.settings.collectAsStateWithLifecycle(initial)
             val accentColors by repository.accentColors.collectAsStateWithLifecycle(emptyList())
             val weekStart by container.generalPrefs.weekStart.collectAsStateWithLifecycle(initialWeekStart)
             val firstDayOfWeek = weekStart.resolve()
-            val tokens = resolveTheme(settings, isSystemInDarkTheme())
+            LocalConfiguration.current
+            val dynamicSeed = ContextCompat.getColor(LocalContext.current, android.R.color.system_accent1_500)
+            val tokens = resolveTheme(settings, isSystemInDarkTheme(), dynamicSeed)
             val reducedMotion = rememberSystemMotionReduced()
             val profile = resolveGlass(settings.glassLevel, settings.glassTintStrength, tokens, reducedMotion)
             DisposableEffect(tokens.dark) {
@@ -530,7 +544,7 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }
                                             Tab.SETTINGS -> PushHost(push) { page ->
-                                                holder.SaveableStateProvider(page.name) {
+                                                val renderPage: @Composable () -> Unit = {
                                                     val insets = if (page.showsBottomBar()) regularInsets else childInsets
                                                     CompositionLocalProvider(LocalFloatingInsets provides insets) {
                                                         SettingsScreen(
@@ -539,10 +553,22 @@ class MainActivity : ComponentActivity() {
                                                                 if (tab == Tab.SETTINGS && page == settingsPage && !hasOverlay()) goToSettings(it)
                                                             },
                                                             settings = settings,
+                                                            dynamicSeed = dynamicSeed,
+                                                            appLanguage = initialLanguage,
+                                                            onAppLanguage = { lang ->
+                                                                if (lang != initialLanguage) {
+                                                                    AppLanguagePrefs.save(this@MainActivity, lang)
+                                                                    recreate()
+                                                                }
+                                                            },
                                                             weekStart = weekStart,
                                                             onWeekStart = { lifecycleScope.launch { container.generalPrefs.setWeekStart(it) } },
                                                             onThemeMode = { lifecycleScope.launch { repository.setThemeMode(it) } },
+                                                            onAmoledBlack = { lifecycleScope.launch { repository.setAmoledBlack(it) } },
                                                             accentColors = accentColors,
+                                                            onSelectDynamicAccent = {
+                                                                lifecycleScope.launch { repository.selectDynamicAccent() }
+                                                            },
                                                             onSelectAccent = { hex ->
                                                                 lifecycleScope.launch { repository.selectPaletteAccent(hex) }
                                                             },
@@ -590,6 +616,11 @@ class MainActivity : ComponentActivity() {
                                                             onCleanOrphanPhotos = backup::checkOrphanPhotos,
                                                         )
                                                     }
+                                                }
+                                                if (page == SettingsPage.HOME) {
+                                                    holder.SaveableStateProvider(page.name) { renderPage() }
+                                                } else {
+                                                    renderPage()
                                                 }
                                             }
                                         }

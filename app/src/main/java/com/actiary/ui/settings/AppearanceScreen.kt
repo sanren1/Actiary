@@ -28,6 +28,8 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -56,10 +58,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.actiary.R
 import com.actiary.data.appearance.AccentPreset
+import com.actiary.data.appearance.AppLanguage
 import com.actiary.data.appearance.AppearanceSettings
 import com.actiary.data.appearance.ChartPalette
 import com.actiary.data.appearance.GlassLevel
 import com.actiary.data.appearance.ThemeMode
+import com.actiary.data.appearance.WeekStart
 import com.actiary.data.appearance.activeAccentHex
 import com.actiary.data.appearance.builtInAccentColors
 import com.actiary.glass.GlassAnchoredMenuItem
@@ -77,6 +81,7 @@ import com.actiary.ui.common.SelectionMenuRow
 @Composable
 internal fun presetName(p: AccentPreset): String = stringResource(
     when (p) {
+        AccentPreset.DYNAMIC -> R.string.preset_dynamic
         AccentPreset.MIST_TEAL -> R.string.preset_mist_teal
         AccentPreset.SLATE_BLUE -> R.string.preset_slate_blue
         AccentPreset.SAGE -> R.string.preset_sage
@@ -87,6 +92,24 @@ internal fun presetName(p: AccentPreset): String = stringResource(
     },
 )
 
+@Composable
+internal fun weekStartName(value: WeekStart): String = stringResource(
+    when (value) {
+        WeekStart.SYSTEM -> R.string.settings_week_system
+        WeekStart.MONDAY -> R.string.settings_week_monday
+        WeekStart.SUNDAY -> R.string.settings_week_sunday
+    },
+)
+
+@Composable
+internal fun appLanguageName(value: AppLanguage): String = stringResource(
+    when (value) {
+        AppLanguage.SYSTEM -> R.string.language_system
+        AppLanguage.ZH -> R.string.language_zh
+        AppLanguage.EN -> R.string.language_en
+    },
+)
+
 private fun style(c: Int, size: Int = 16, w: FontWeight = FontWeight.Normal) =
     TextStyle(color = c.asColor(), fontSize = size.sp, fontWeight = w)
 
@@ -94,8 +117,15 @@ private fun style(c: Int, size: Int = 16, w: FontWeight = FontWeight.Normal) =
 @Composable
 fun AppearanceScreen(
     settings: AppearanceSettings,
+    dynamicSeed: Int,
+    appLanguage: AppLanguage,
+    onAppLanguage: (AppLanguage) -> Unit,
+    weekStart: WeekStart,
+    onWeekStart: (WeekStart) -> Unit,
     onThemeMode: (ThemeMode) -> Unit,
+    onAmoledBlack: (Boolean) -> Unit,
     accentColors: List<String>,
+    onSelectDynamicAccent: () -> Unit,
     onSelectAccent: (String) -> Unit,
     onRemoveAccent: (String) -> Unit,
     onGlassLevel: (GlassLevel) -> Unit,
@@ -109,7 +139,9 @@ fun AppearanceScreen(
     val n = t.neutrals
 
     SettingsPageLayout(stringResource(R.string.appearance_title), onBack) {
-        GlassPreview(t, LocalGlassProfile.current, chartPalette = settings.chartPalette)
+        AppearanceSection(stringResource(R.string.appearance_preview), Icons.Outlined.Visibility) {
+            GlassPreview(t, LocalGlassProfile.current, chartPalette = settings.chartPalette)
+        }
 
         AppearanceSection(stringResource(R.string.appearance_theme_mode), Icons.Outlined.BrightnessAuto) {
             SettingsGroup { rowShape ->
@@ -135,6 +167,15 @@ fun AppearanceScreen(
                         }
                     }
                 }
+                val amoledLabel = stringResource(R.string.theme_amoled_black)
+                GlassToggle(
+                    checked = settings.amoledBlack,
+                    onCheckedChange = onAmoledBlack,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    label = amoledLabel,
+                ) {
+                    BasicText(amoledLabel, style = style(n.textPrimary))
+                }
             }
         }
         AppearanceSection(stringResource(R.string.accent_title), Icons.Outlined.Palette) {
@@ -144,6 +185,13 @@ fun AppearanceScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    val isDynamic = settings.accentPreset == AccentPreset.DYNAMIC
+                    DynamicAccentSwatch(
+                        seed = dynamicSeed,
+                        label = stringResource(R.string.preset_dynamic),
+                        isSelected = isDynamic,
+                        onClick = onSelectDynamicAccent,
+                    )
                     val active = settings.activeAccentHex()
                     accentColors.forEach { hex ->
                         key(hex) {
@@ -151,7 +199,7 @@ fun AppearanceScreen(
                             AccentSwatch(
                                 seed = checkNotNull(parseHex(hex)),
                                 label = if (preset != null) presetName(preset) else stringResource(R.string.accent_color_description, hex),
-                                isSelected = hex == active,
+                                isSelected = !isDynamic && hex == active,
                                 onClick = { onSelectAccent(hex) },
                                 onEdit = { onCustomColor(hex) },
                                 onDelete = { onRemoveAccent(hex) },
@@ -209,7 +257,47 @@ fun AppearanceScreen(
             selected = settings.chartPalette,
             onSelect = onChartPalette,
         )
+        SelectionMenuRow(
+            label = stringResource(R.string.settings_week_start),
+            options = WeekStart.entries.map { it to weekStartName(it) },
+            selected = weekStart,
+            onSelect = onWeekStart,
+        )
+        SelectionMenuRow(
+            label = stringResource(R.string.settings_language),
+            options = AppLanguage.entries.map { it to appLanguageName(it) },
+            selected = appLanguage,
+            onSelect = onAppLanguage,
+        )
         SettingsRow(stringResource(R.string.settings_reset_appearance), Icons.Outlined.RestartAlt, onClick = onResetAppearance)
+    }
+}
+
+@Composable
+private fun DynamicAccentSwatch(
+    seed: Int,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val t = LocalThemeTokens.current
+    Box(
+        Modifier.size(48.dp)
+            .clip(CircleShape)
+            .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = label }
+            .then(if (isSelected) Modifier.border(2.dp, t.accent.accentStroke.asColor(), CircleShape) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(34.dp).background(seed.asColor(), CircleShape), contentAlignment = Alignment.Center) {
+            val tint = if (contrast(seed, 0xFFFFFFFF.toInt()) >= contrast(seed, 0xFF000000.toInt())) Color.White else Color.Black
+            Icon(
+                if (isSelected) Icons.Outlined.Check else Icons.Outlined.Wallpaper,
+                null,
+                Modifier.size(18.dp),
+                tint = tint,
+            )
+        }
     }
 }
 

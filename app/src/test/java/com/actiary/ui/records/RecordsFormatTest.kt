@@ -71,4 +71,30 @@ class RecordsFormatTest {
         assertEquals(emptyList<Int>(), chartAxisTicks(RangeKind.WEEK, 0))
         assertEquals(listOf(0), chartAxisTicks(RangeKind.WEEK, 1))
     }
+
+    @Test fun matchedBarIndicesAreStrictlyIncreasingAcrossAllPeriodTransitions() {
+        for ((small, large) in listOf(7 to 12, 7 to 28, 7 to 30, 7 to 31, 12 to 28, 12 to 31)) {
+            val indices = matchedBarIndices(small, large)
+            assertEquals(small, indices.size)
+            assertEquals(indices.distinct(), indices)
+            assertEquals(indices.sorted(), indices)
+        }
+    }
+
+    @Test fun interpolateBarsMorphsMatchedBarsAndReturnsUnmatchedToBaseline() {
+        val week = buildBarSpecs(listOf(10, 20, 30, 40, 50, 60, 70), maxIndex = 6, rtl = false)
+        val month = buildBarSpecs(List(30) { (it + 1) * 10 }, maxIndex = 29, rtl = false)
+
+        val midExpand = interpolateBars(week, month, 0.5f)
+        assertEquals(30, midExpand.size)
+        assertEquals(7, midExpand.count { it.alpha == 1f })
+        assertEquals(23, midExpand.count { it.alpha == 0.5f })
+        assertEquals(month, interpolateBars(week, month, 1f))
+
+        val midShrink = interpolateBars(month, week, 0.5f)
+        assertEquals(30, midShrink.size)
+        assertEquals(7, midShrink.count { it.alpha == 1f })
+        assertEquals(23, midShrink.count { it.alpha == 0.5f })
+        assertEquals(week, interpolateBars(month, week, 1f))
+    }
 }
