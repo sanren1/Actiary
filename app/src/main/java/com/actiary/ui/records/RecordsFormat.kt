@@ -6,6 +6,8 @@ import com.actiary.data.db.DayWithDetails
 import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.domain.DateRange
+import com.actiary.domain.RangeStats
+import com.actiary.domain.computeStats
 import com.actiary.ui.record.formatDistance
 import java.time.LocalDate
 import java.time.YearMonth
@@ -14,6 +16,16 @@ sealed interface TimelineItem {
     data class Month(val month: YearMonth) : TimelineItem
     data class Day(val day: DayWithDetails) : TimelineItem
 }
+
+internal data class RecordsPresentation(
+    val range: DateRange,
+    val filter: Long?,
+    val stats: RangeStats,
+    val timeline: List<TimelineItem>,
+)
+
+internal fun recordsPresentation(range: DateRange, days: List<DayWithDetails>, filter: Long?): RecordsPresentation =
+    RecordsPresentation(range, filter, computeStats(days, range, filter), timelineItems(days, range, filter))
 
 fun splitMinutes(total: Int): Pair<Int, Int> = total / 60 to total % 60
 

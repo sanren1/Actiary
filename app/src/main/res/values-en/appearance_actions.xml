@@ -1,0 +1,9 @@
+<resources>
+    <string name="accent_add">Add accent color</string>
+    <string name="accent_edit">Edit accent color</string>
+    <string name="accent_edit_action">Edit</string>
+    <string name="accent_delete">Delete</string>
+    <string name="accent_delete_confirm">Delete this accent color from the palette?</string>
+    <string name="accent_options">Accent color options</string>
+    <string name="accent_color_description">Custom accent color %1$s</string>
+</resources>

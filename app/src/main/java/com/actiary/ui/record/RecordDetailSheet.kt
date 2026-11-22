@@ -3,14 +3,12 @@ package com.actiary.ui.record
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -28,7 +26,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,9 +39,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,6 +54,8 @@ import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DraftPhoto
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassSheet
+import com.actiary.glass.overlayPresent
+import com.actiary.glass.rememberOverlayVisibility
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseTypeIcon
@@ -92,70 +89,70 @@ internal fun RecordDetailSheet(
         buildDetailModel(day, types) { format, value -> resources.getString(format, value) }
     }
     var visible by rememberSaveable { mutableStateOf(true) }
-    var entered by remember { mutableStateOf(false) }
+    var editing by rememberSaveable { mutableStateOf(false) }
     var viewingPhoto by rememberSaveable { mutableStateOf<Int?>(null) }
     val photoIndex = viewingPhoto
     val photo = photoIndex?.let { detail?.photos?.getOrNull(it) }
-    LaunchedEffect(Unit) { entered = true }
+    val photoVisibility = rememberOverlayVisibility(photo != null)
 
-    val hideSheet = if (photo != null || !visible) Modifier.clearAndSetSemantics { hideFromAccessibility() } else Modifier
-    Box(Modifier.fillMaxSize().then(hideSheet)) {
-        GlassSheet(
-            visible = visible && entered,
-            onRequestClose = { visible = false },
-            onExited = { if (!visible) onDismiss() },
-            title = title,
+    GlassSheet(
+        visible = visible,
+        onRequestClose = { visible = false; true },
+        onExited = { if (editing) onEdit() else onDismiss() },
+        title = title,
+        covered = photoVisibility.overlayPresent,
+    ) {
+        Column(
+            Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp).fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                .padding(horizontal = 16.dp),
         ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title, Modifier.weight(1f).semantics { heading() },
+                    color = primary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                )
+                GlassIconButton(
+                    Icons.Outlined.Edit, stringResource(R.string.record_detail_edit),
+                    { editing = true; visible = false },
+                    enabled = visible, glass = false,
+                )
+            }
             Column(
-                Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp).fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
-                    .padding(horizontal = 16.dp),
+                Modifier.fillMaxWidth().weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()).padding(top = 4.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        title, Modifier.weight(1f).semantics { heading() },
-                        color = primary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
-                    )
-                    GlassIconButton(
-                        Icons.Outlined.Edit, stringResource(R.string.record_detail_edit), onEdit,
-                        enabled = visible, glass = false,
-                    )
-                }
-                Column(
-                    Modifier.fillMaxWidth().weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState()).padding(top = 4.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    if (detail != null) {
-                        val rest = detail.status == DayStatus.REST
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(if (rest) Icons.Outlined.Bedtime else Icons.Outlined.CheckCircle, null, Modifier.size(20.dp), tint = primary)
-                            Text(stringResource(if (rest) R.string.day_rest else R.string.day_state_logged), color = primary)
-                        }
-                        detail.entries.forEach { entry ->
-                            types[entry.typeId]?.let { DetailSession(it, entry) }
-                        }
-                        if (detail.empty) Text(stringResource(R.string.record_detail_empty), color = secondary)
-                        if (detail.note.isNotBlank()) {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(stringResource(R.string.record_note), Modifier.semantics { heading() }, color = secondary, fontSize = 14.sp)
-                                Text(detail.note, color = primary, fontSize = 16.sp)
-                            }
-                        }
-                        if (detail.photos.isNotEmpty()) {
-                            DetailPhotos(detail.photos, photoStore, visible) { viewingPhoto = it }
-                        }
-                    } else if (loaded != null) {
-                        Text(stringResource(R.string.day_unrecorded), color = secondary)
+                if (detail != null) {
+                    val rest = detail.status == DayStatus.REST
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(if (rest) Icons.Outlined.Bedtime else Icons.Outlined.CheckCircle, null, Modifier.size(20.dp), tint = primary)
+                        Text(stringResource(if (rest) R.string.day_rest else R.string.day_state_logged), color = primary)
                     }
+                    detail.entries.forEach { entry ->
+                        types[entry.typeId]?.let { DetailSession(it, entry) }
+                    }
+                    if (detail.empty) Text(stringResource(R.string.record_detail_empty), color = secondary)
+                    if (detail.note.isNotBlank()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(stringResource(R.string.record_note), Modifier.semantics { heading() }, color = secondary, fontSize = 14.sp)
+                            Text(detail.note, color = primary, fontSize = 16.sp)
+                        }
+                    }
+                    if (detail.photos.isNotEmpty()) {
+                        DetailPhotos(detail.photos, photoStore, visible) { viewingPhoto = it }
+                    }
+                } else if (loaded != null) {
+                    Text(stringResource(R.string.day_unrecorded), color = secondary)
                 }
             }
         }
     }
-    if (photoIndex != null && photo != null) {
-        PhotoViewer(DraftPhoto.Saved(photo), photoStore, stringResource(R.string.day_photo, photoIndex + 1)) {
-            viewingPhoto = null
-        }
+    PhotoViewer(
+        photo?.let { DraftPhoto.Saved(it) }, photoStore,
+        stringResource(R.string.day_photo, (photoIndex ?: 0) + 1), photoVisibility,
+    ) {
+        viewingPhoto = null
     }
 }
 

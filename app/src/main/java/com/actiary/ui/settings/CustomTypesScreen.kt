@@ -1,8 +1,20 @@
 package com.actiary.ui.settings
 
+import android.app.Application
+import android.os.Bundle
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +24,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -22,88 +36,428 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import androidx.core.os.bundleOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.actiary.ActiaryApp
 import com.actiary.R
 import com.actiary.data.RecordRepository
-import com.actiary.glass.GlassIconButton
+import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.glass.GlassOverlayPanel
+import com.actiary.glass.GlassSheet
+import com.actiary.glass.overlayInteraction
+import com.actiary.glass.rememberOverlayVisibility
 import com.actiary.glass.GlassToggle
+import com.actiary.ui.motion.rememberMotionReduced
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.CUSTOM_TYPE_ICONS
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+internal class AddTypeActions(application: Application) : AndroidViewModel(application) {
+    enum class State { Idle, Saving, Saved, Failed }
+
+    var state by mutableStateOf(State.Idle)
+        private set
+
+    fun save(typeId: Long?, name: String?, hasDistance: Boolean, iconKey: String?) {
+        if (state == State.Saving || state == State.Saved) return
+        state = State.Saving
+        viewModelScope.launch {
+            try {
+                val repository = (getApplication<Application>() as ActiaryApp).container.recordRepository
+                if (typeId == null) repository.addType(requireNotNull(name), hasDistance, iconKey)
+                else repository.updateType(typeId, name, hasDistance, iconKey)
+                state = State.Saved
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                state = State.Failed
+            }
+        }
+    }
+
+    fun reset() {
+        state = State.Idle
+    }
+}
+
+internal val EditingTypeSaver = Saver<ExerciseTypeEntity?, Bundle>(
+    save = { type -> type?.let {
+        bundleOf("id" to it.id, "builtin" to it.builtinKey, "name" to it.name, "distance" to it.hasDistance, "icon" to it.iconKey)
+    } },
+    restore = {
+        ExerciseTypeEntity(
+            id = it.getLong("id"), builtinKey = it.getString("builtin"), name = it.getString("name"),
+            sortOrder = 0, hasDistance = it.getBoolean("distance"), iconKey = it.getString("icon"),
+        )
+    },
+)
 
 @Composable
 fun CustomTypesScreen(
     repository: RecordRepository,
     onBack: () -> Unit,
-    iconKey: String,
-    onRequestIconPicker: () -> Unit,
-    onResetIcon: () -> Unit,
+    onRequestAdd: () -> Unit,
+    onRequestEdit: (ExerciseTypeEntity) -> Unit,
     onRequestRemoval: (Long) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val types by repository.types.collectAsStateWithLifecycle(emptyList())
+    val scroll = rememberScrollState()
+    val density = LocalDensity.current
+    val windowHeight = LocalWindowInfo.current.containerSize.height
+    val spacing = with(density) { 16.dp.toPx() }
+    val edge = with(density) { 80.dp.toPx() }
+    var openId by remember { mutableStateOf<Long?>(null) }
+    var dragId by remember { mutableStateOf<Long?>(null) }
+    var dragDistance by remember { mutableFloatStateOf(0f) }
+    var dragStartY by remember { mutableFloatStateOf(0f) }
+    var scrollStart by remember { mutableIntStateOf(0) }
+    var moving by remember { mutableStateOf(false) }
+    var moveFailed by remember { mutableStateOf(false) }
+    val heights = remember { mutableStateMapOf<Long, Int>() }
+    val source = types.indexOfFirst { it.id == dragId }
+    val displacement = if (source < 0) 0f else dragDistance + scroll.value - scrollStart
+    val rowSizes = if (source < 0) emptyList() else types.map { heights.getValue(it.id) }
+    val target = if (source < 0) source else typeDragDestination(source, rowSizes, spacing, displacement)
+
+    fun move(id: Long, offset: Int) {
+        if (moving || offset == 0) return
+        moving = true
+        moveFailed = false
+        scope.launch {
+            try {
+                repository.moveType(id, offset)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                moveFailed = true
+            } finally {
+                moving = false
+                dragId = null
+            }
+        }
+    }
+
+    LaunchedEffect(dragId, moving, windowHeight) {
+        if (dragId == null || moving) return@LaunchedEffect
+        var previous = withFrameNanos { it }
+        while (true) {
+            val now = withFrameNanos { it }
+            val pointerY = dragStartY + dragDistance
+            val top = edge * 2f
+            val bottom = (windowHeight - edge).coerceAtLeast(top)
+            val pressure = when {
+                pointerY < top -> (pointerY - top) / edge
+                pointerY > bottom -> (pointerY - bottom) / edge
+                else -> 0f
+            }.coerceIn(-1f, 1f)
+            if (pressure != 0f) scroll.scrollBy(pressure * edge * 7f * (now - previous) / 1_000_000_000f)
+            previous = now
+        }
+    }
+
+    SettingsPageLayout(stringResource(R.string.settings_custom_types), onBack, scrollState = scroll) {
+        SettingsRow(stringResource(R.string.custom_type_add_title), Icons.Outlined.Add, onClick = onRequestAdd)
+        if (moveFailed) BasicText(stringResource(R.string.record_save_failed), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        types.forEachIndexed { index, type ->
+            key(type.id) {
+                val shift = when {
+                    index == source -> displacement
+                    index > source && index <= target -> -(rowSizes[source] + spacing)
+                    index < source && index >= target -> rowSizes[source] + spacing
+                    else -> 0f
+                }
+                WorkoutTypeRow(
+                    type = type,
+                    open = openId == type.id,
+                    onOpen = { opened -> if (opened || openId == type.id) openId = type.id.takeIf { opened } },
+                    onEdit = { openId = null; onRequestEdit(type) },
+                    onRemove = if (type.builtinKey != null) null else ({ openId = null; onRequestRemoval(type.id) }),
+                    canGesture = dragId == null && !moving,
+                    dragging = dragId == type.id,
+                    shift = shift,
+                    onHeight = { heights[type.id] = it },
+                    onDragStart = { pointerY ->
+                        if (dragId == null && !moving && types.all { it.id in heights }) {
+                            openId = null
+                            dragStartY = pointerY
+                            dragDistance = 0f
+                            scrollStart = scroll.value
+                            dragId = type.id
+                        }
+                    },
+                    onDrag = { if (dragId == type.id && !moving) dragDistance += it },
+                    onDragEnd = { committed ->
+                        if (dragId == type.id) {
+                            val distance = dragDistance + scroll.value - scrollStart
+                            val destination = typeDragDestination(index, types.map { heights.getValue(it.id) }, spacing, distance)
+                            if (committed && destination != index) move(type.id, destination - index) else dragId = null
+                        }
+                    },
+                    onMoveUp = if (index > 0 && dragId == null && !moving) ({ move(type.id, -1) }) else null,
+                    onMoveDown = if (index < types.lastIndex && dragId == null && !moving) ({ move(type.id, 1) }) else null,
+                )
+            }
+        }
+    }
+}
+
+internal fun typeDragDestination(source: Int, rowSizes: List<Int>, gap: Float, distance: Float): Int {
+    val direction = if (distance >= 0f) 1 else -1
+    var index = source
+    var remaining = abs(distance)
+    while (index + direction in rowSizes.indices) {
+        val next = index + direction
+        remaining -= (rowSizes[index] + rowSizes[next]) / 2f + gap
+        if (remaining < 0f) break
+        index = next
+    }
+    return index
+}
+
+@Composable
+private fun WorkoutTypeRow(
+    type: ExerciseTypeEntity,
+    open: Boolean,
+    onOpen: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onRemove: (() -> Unit)?,
+    canGesture: Boolean,
+    dragging: Boolean,
+    shift: Float,
+    onHeight: (Int) -> Unit,
+    onDragStart: (Float) -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: (Boolean) -> Unit,
+    onMoveUp: (() -> Unit)?,
+    onMoveDown: (() -> Unit)?,
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
-    val a = t.accent
-    val scope = rememberCoroutineScope()
-    val focus = LocalFocusManager.current
-    val types by repository.types.collectAsStateWithLifecycle(emptyList())
-    var name by rememberSaveable { mutableStateOf("") }
-    var hasDistance by rememberSaveable { mutableStateOf(false) }
-    val selectedIcon = CUSTOM_TYPE_ICONS.first { it.key == iconKey }
-    val canAdd = name.trim().isNotEmpty()
+    val label = exerciseTypeLabel(type)
+    val edit = stringResource(R.string.custom_type_edit_named, label)
+    val remove = stringResource(R.string.custom_type_delete_named, label)
+    val up = stringResource(R.string.custom_type_move_up, label)
+    val down = stringResource(R.string.custom_type_move_down, label)
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val direction = if (rtl) 1f else -1f
+    val width = with(LocalDensity.current) { (if (onRemove == null) 48.dp else 96.dp).toPx() }
+    val reduced = rememberMotionReduced()
+    var swiping by remember { mutableStateOf(false) }
+    var swipeDistance by remember { mutableFloatStateOf(0f) }
+    var handleTop by remember { mutableFloatStateOf(0f) }
+    val reveal by animateFloatAsState(
+        if (swiping) swipeDistance else if (open) width else 0f,
+        if (reduced || swiping) snap() else tween(180), label = "Type actions",
+    )
+    val rowShift by animateFloatAsState(shift, if (dragging || reduced) snap() else tween(120), label = "Type order")
+    val beginDrag by rememberUpdatedState(onDragStart)
+    val moveDrag by rememberUpdatedState(onDrag)
+    val endDrag by rememberUpdatedState(onDragEnd)
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        Modifier.fillMaxWidth().onSizeChanged { onHeight(it.height) }.zIndex(if (dragging) 1f else 0f)
+            .offset { IntOffset(0, rowShift.roundToInt()) }.clip(shape),
+    ) {
+        Row(
+            Modifier.align(Alignment.CenterEnd).then(if (open) Modifier else Modifier.clearAndSetSemantics { hideFromAccessibility() }),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TypeAction(Icons.Outlined.Edit, edit, t.accent.accentSubtle.asColor(), n.textPrimary.asColor(), open, onEdit)
+            if (onRemove != null) {
+                TypeAction(Icons.Outlined.DeleteOutline, remove, n.surfaceMuted.asColor(), n.textPrimary.asColor(), open, onRemove)
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                .offset { IntOffset(-reveal.roundToInt(), 0) }
+                .background(n.surface.asColor(), shape)
+                .draggable(
+                    rememberDraggableState { delta -> swipeDistance = (swipeDistance + delta * direction).coerceIn(0f, width) },
+                    Orientation.Horizontal, enabled = canGesture,
+                    onDragStarted = { swipeDistance = reveal; swiping = true },
+                    onDragStopped = { onOpen(swipeDistance >= width / 2); swiping = false },
+                )
+                .semantics(mergeDescendants = true) {
+                    customActions = buildList {
+                        add(CustomAccessibilityAction(edit) { onEdit(); true })
+                        if (onRemove != null) add(CustomAccessibilityAction(remove) { onRemove(); true })
+                        if (onMoveUp != null) add(CustomAccessibilityAction(up) { onMoveUp(); true })
+                        if (onMoveDown != null) add(CustomAccessibilityAction(down) { onMoveDown(); true })
+                    }
+                }
+                .padding(start = 12.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(exerciseTypeIcon(type), null, Modifier.size(24.dp), tint = n.textPrimary.asColor())
+            BasicText(label, Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp), TextStyle(n.textPrimary.asColor(), 16.sp))
+            Box(
+                Modifier.size(48.dp)
+                    .onGloballyPositioned { handleTop = it.positionInWindow().y }
+                    .pointerInput(type.id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { beginDrag(handleTop + it.y) },
+                            onDragEnd = { endDrag(true) },
+                            onDragCancel = { endDrag(false) },
+                        ) { change, offset ->
+                            moveDrag(offset.y)
+                            change.consume()
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.DragHandle, null, tint = n.textSecondary.asColor())
+            }
+        }
+    }
+}
 
-    SettingsPageLayout(stringResource(R.string.settings_custom_types), onBack) {
+@Composable
+private fun TypeAction(icon: ImageVector, label: String, background: androidx.compose.ui.graphics.Color, tint: androidx.compose.ui.graphics.Color, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(width = 48.dp, height = 56.dp).background(background)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, label, tint = tint)
+    }
+}
+
+@Composable
+internal fun AddTypeSheet(
+    actions: AddTypeActions,
+    editingType: ExerciseTypeEntity?,
+    iconKey: String?,
+    covered: Boolean,
+    onRequestIconPicker: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val t = LocalThemeTokens.current
+    val n = t.neutrals
+    val focus = LocalFocusManager.current
+    val title = stringResource(if (editingType == null) R.string.custom_type_add_title else R.string.custom_type_edit_title)
+    val initialName = if (editingType == null) "" else exerciseTypeLabel(editingType)
+    val builtinName = editingType?.takeIf { it.builtinKey != null }?.let { exerciseTypeLabel(it.copy(name = null)) }
+    var visible by rememberSaveable { mutableStateOf(true) }
+    var name by rememberSaveable { mutableStateOf(initialName) }
+    var hasDistance by rememberSaveable { mutableStateOf(editingType?.hasDistance ?: false) }
+    val saving = actions.state == AddTypeActions.State.Saving || actions.state == AddTypeActions.State.Saved
+    val selectedIcon = CUSTOM_TYPE_ICONS.firstOrNull { it.key == iconKey }
+    val savedName = name.trim().takeUnless { builtinName != null && (it.isEmpty() || it == builtinName) }
+    val canSave = !saving && (builtinName != null || !savedName.isNullOrEmpty())
+
+    fun close(): Boolean {
+        if (saving) return false
+        focus.clearFocus()
+        visible = false
+        return true
+    }
+
+    LaunchedEffect(actions.state) {
+        if (actions.state == AddTypeActions.State.Saved) {
+            focus.clearFocus()
+            visible = false
+        }
+    }
+    GlassSheet(visible, ::close, onDismiss, title, covered = covered) {
         Column(
-            Modifier.fillMaxWidth().background(n.surface.asColor(), RoundedCornerShape(16.dp)).padding(16.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            BasicText(stringResource(R.string.custom_type_name), style = TextStyle(n.textSecondary.asColor(), 13.sp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BasicText(
+                    title, Modifier.weight(1f).semantics { heading() },
+                    style = TextStyle(n.textPrimary.asColor(), 20.sp, FontWeight.SemiBold),
+                )
+                TextButton(
+                    onClick = { close() },
+                    enabled = !saving,
+                    colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
+                ) { Text(stringResource(R.string.record_cancel)) }
+            }
+
+            val nameLabel = stringResource(R.string.custom_type_name)
+            BasicText(nameLabel, style = TextStyle(n.textSecondary.asColor(), 14.sp))
             BasicTextField(
                 value = name,
                 onValueChange = { name = it },
+                enabled = !saving,
                 singleLine = true,
-                textStyle = TextStyle(n.textPrimary.asColor(), 15.sp),
-                cursorBrush = SolidColor(a.accentAction.asColor()),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                textStyle = TextStyle(n.textPrimary.asColor(), 16.sp),
+                cursorBrush = SolidColor(t.accent.accentAction.asColor()),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(n.surfaceMuted.asColor())
+                    .semantics { contentDescription = nameLabel }
                     .padding(horizontal = 12.dp, vertical = 12.dp),
             )
 
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.custom_type_choose_icon)) {
+                    .clickable(enabled = !saving, role = Role.Button, onClickLabel = stringResource(R.string.custom_type_choose_icon)) {
                         focus.clearFocus()
                         onRequestIconPicker()
                     },
@@ -115,85 +469,49 @@ fun CustomTypesScreen(
                     Modifier.size(48.dp).background(n.surfaceMuted.asColor(), RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(selectedIcon.vector, stringResource(selectedIcon.label), tint = n.textPrimary.asColor())
+                    if (selectedIcon != null) {
+                        Icon(selectedIcon.vector, stringResource(selectedIcon.label), tint = n.textPrimary.asColor())
+                    } else if (editingType != null) {
+                        Icon(
+                            exerciseTypeIcon(editingType.copy(iconKey = null)),
+                            stringResource(R.string.custom_type_default_icon),
+                            tint = n.textPrimary.asColor(),
+                        )
+                    }
                 }
             }
 
             val distanceLabel = stringResource(R.string.custom_type_has_distance)
             GlassToggle(
                 checked = hasDistance,
-                onCheckedChange = { hasDistance = it },
-                modifier = Modifier.fillMaxWidth(),
+                onCheckedChange = { if (!saving) hasDistance = it },
+                modifier = Modifier.fillMaxWidth().overlayInteraction(!saving),
                 label = distanceLabel,
             ) {
                 BasicText(distanceLabel, style = TextStyle(n.textPrimary.asColor(), 16.sp))
             }
-
+            if (actions.state == AddTypeActions.State.Failed) {
+                BasicText(
+                    stringResource(R.string.record_save_failed),
+                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    style = TextStyle(n.textPrimary.asColor(), 14.sp),
+                )
+            }
             Box(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (canAdd) a.accentAction.asColor() else n.surfaceMuted.asColor())
-                    .then(
-                        if (canAdd) Modifier.clickable(role = Role.Button) {
-                            val trimmed = name.trim()
-                            if (trimmed.isEmpty()) return@clickable
-                            val trackDistance = hasDistance
-                            name = ""
-                            hasDistance = false
-                            onResetIcon()
-                            scope.launch { repository.addType(trimmed, trackDistance, iconKey) }
-                        } else Modifier,
-                    )
-                    .padding(horizontal = 16.dp),
+                    .background(if (canSave) t.accent.accentAction.asColor() else n.surfaceMuted.asColor())
+                    .clickable(enabled = canSave, role = Role.Button) {
+                        focus.clearFocus()
+                        actions.save(editingType?.id, savedName, hasDistance, iconKey)
+                    }
+                    .padding(12.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 BasicText(
-                    stringResource(R.string.custom_type_add),
-                    style = TextStyle(if (canAdd) a.onAccentAction.asColor() else n.textSecondary.asColor(), 16.sp),
+                    stringResource(R.string.record_save),
+                    style = TextStyle(if (canSave) t.accent.onAccentAction.asColor() else n.textSecondary.asColor(), 16.sp),
                 )
-            }
-        }
-
-        types.forEachIndexed { index, type ->
-            key(type.id) {
-                val label = exerciseTypeLabel(type)
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                        .background(n.surface.asColor(), RoundedCornerShape(12.dp))
-                        .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(exerciseTypeIcon(type), null, Modifier.padding(end = 12.dp).size(24.dp), tint = n.textPrimary.asColor())
-                    Column(Modifier.weight(1f)) {
-                        BasicText(label, style = TextStyle(n.textPrimary.asColor(), 16.sp))
-                        BasicText(
-                            stringResource(if (type.hasDistance) R.string.custom_type_with_distance else R.string.custom_type_no_distance),
-                            style = TextStyle(n.textSecondary.asColor(), 12.sp),
-                        )
-                    }
-                    GlassIconButton(
-                        Icons.Outlined.KeyboardArrowUp,
-                        stringResource(R.string.custom_type_move_up, label),
-                        onClick = { scope.launch { repository.moveType(type.id, -1) } },
-                        enabled = index > 0,
-                        glass = false,
-                    )
-                    GlassIconButton(
-                        Icons.Outlined.KeyboardArrowDown,
-                        stringResource(R.string.custom_type_move_down, label),
-                        onClick = { scope.launch { repository.moveType(type.id, 1) } },
-                        enabled = index < types.lastIndex,
-                        glass = false,
-                    )
-                    if (type.builtinKey == null) {
-                        GlassIconButton(
-                            Icons.Outlined.DeleteOutline,
-                            stringResource(R.string.custom_type_delete_named, label),
-                            onClick = { onRequestRemoval(type.id) },
-                            glass = false,
-                        )
-                    }
-                }
             }
         }
     }
@@ -203,15 +521,16 @@ fun CustomTypesScreen(
 @Composable
 fun CustomTypeIconPicker(
     visible: Boolean,
-    iconKey: String,
-    onSelect: (String) -> Unit,
+    iconKey: String?,
+    defaultType: ExerciseTypeEntity? = null,
+    onSelect: (String?) -> Unit,
     onDismiss: () -> Unit,
+    visibility: MutableTransitionState<Boolean> = rememberOverlayVisibility(visible),
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
-    val a = t.accent
     val title = stringResource(R.string.custom_type_choose_icon)
-    GlassOverlayPanel(visible, onDismiss, PaddingValues(16.dp), title) {
+    GlassOverlayPanel(visible, onDismiss, PaddingValues(16.dp), title, visibility) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, modifier = Modifier.semantics { heading() }, color = n.textPrimary.asColor(), fontWeight = FontWeight.Medium)
             FlowRow(
@@ -219,21 +538,15 @@ fun CustomTypeIconPicker(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                CUSTOM_TYPE_ICONS.forEach { icon ->
-                    val selected = icon.key == iconKey
-                    val label = stringResource(icon.label)
-                    val shape = RoundedCornerShape(12.dp)
-                    Box(
-                        Modifier.size(48.dp)
-                            .clip(shape)
-                            .background(if (selected) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
-                            .border(if (selected) 2.dp else 1.dp, if (selected) a.accentAction.asColor() else n.divider.asColor(), shape)
-                            .semantics { contentDescription = label }
-                            .selectable(selected, role = Role.RadioButton) { onSelect(icon.key) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(icon.vector, null, tint = n.textPrimary.asColor())
-                    }
+                if (defaultType != null) {
+                    TypeIconChoice(
+                        exerciseTypeIcon(defaultType.copy(iconKey = null)),
+                        stringResource(R.string.custom_type_default_icon),
+                        iconKey == null,
+                    ) { onSelect(null) }
+                }
+                for (icon in CUSTOM_TYPE_ICONS) {
+                    TypeIconChoice(icon.vector, stringResource(icon.label), iconKey == icon.key) { onSelect(icon.key) }
                 }
             }
             TextButton(
@@ -242,5 +555,24 @@ fun CustomTypeIconPicker(
                 colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
             ) { Text(stringResource(R.string.record_cancel)) }
         }
+    }
+}
+
+@Composable
+private fun TypeIconChoice(icon: ImageVector, label: String, selected: Boolean, onSelect: () -> Unit) {
+    val t = LocalThemeTokens.current
+    val n = t.neutrals
+    val a = t.accent
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        Modifier.size(48.dp)
+            .clip(shape)
+            .background(if (selected) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
+            .border(if (selected) 2.dp else 1.dp, if (selected) a.accentAction.asColor() else n.divider.asColor(), shape)
+            .semantics { contentDescription = label }
+            .selectable(selected, role = Role.RadioButton, onClick = onSelect),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, null, tint = n.textPrimary.asColor())
     }
 }

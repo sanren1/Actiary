@@ -7,6 +7,7 @@ import java.time.LocalDate
 sealed interface DraftPhoto {
     data class Saved(val fileName: String) : DraftPhoto
     data class Picked(val uri: String) : DraftPhoto
+    data class Staged(val fileName: String) : DraftPhoto
 }
 
 data class DraftEntry(
@@ -45,6 +46,11 @@ data class DayDraft(
         copy(photos = (photos + uris.map { DraftPhoto.Picked(it) }).take(PHOTO_LIMIT))
 
     fun removePhoto(index: Int): DayDraft = copy(photos = photos.filterIndexed { i, _ -> i != index })
+
+    fun movePhoto(from: Int, to: Int): DayDraft {
+        if (from == to) return this
+        return copy(photos = photos.toMutableList().apply { add(to, removeAt(from)) })
+    }
 
     fun markRest(): DayDraft = copy(status = DayStatus.REST, entries = emptyList())
 

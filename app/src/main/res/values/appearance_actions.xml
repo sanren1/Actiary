@@ -1,0 +1,9 @@
+<resources>
+    <string name="accent_add">添加强调色</string>
+    <string name="accent_edit">编辑强调色</string>
+    <string name="accent_edit_action">编辑</string>
+    <string name="accent_delete">删除</string>
+    <string name="accent_delete_confirm">从色板中删除这个强调色？</string>
+    <string name="accent_options">强调色选项</string>
+    <string name="accent_color_description">自定义强调色 %1$s</string>
+</resources>

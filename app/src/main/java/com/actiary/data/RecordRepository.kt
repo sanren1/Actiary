@@ -13,6 +13,8 @@ import com.actiary.domain.DraftPhoto
 import com.actiary.domain.toDayState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.withLock
@@ -42,6 +44,25 @@ class RecordRepository(
 
     val allTypes: Flow<List<ExerciseTypeEntity>> get() = dao.observeAllTypes()
 
+    internal suspend fun stagePickedPhotos(uris: List<String>): List<DraftPhoto.Staged> {
+        val staged = mutableListOf<DraftPhoto.Staged>()
+        try {
+            return withContext(io) {
+                for (uri in uris) {
+                    ensureActive()
+                    staged += DraftPhoto.Staged(photos.stage { openUri(uri) })
+                }
+                staged
+            }
+        } catch (failure: Throwable) {
+            // Also handles cancellation when withContext drops a completed result on return.
+            withContext(io + NonCancellable) {
+                staged.forEach { photos.stagedFile(it.fileName).delete() }
+            }
+            throw failure
+        }
+    }
+
     suspend fun save(draft: DayDraft) = withContext(io) {
         photos.mutations.withLock {
             val epochDay = draft.date.toEpochDay()
@@ -52,6 +73,7 @@ class RecordRepository(
                     when (it) {
                         is DraftPhoto.Saved -> it.fileName
                         is DraftPhoto.Picked -> photos.copyIn { openUri(it.uri) }.also(copied::add)
+                        is DraftPhoto.Staged -> photos.copyIn(photos.stagedFile(it.fileName)::inputStream).also(copied::add)
                     }
                 }
                 val now = clock()
@@ -87,6 +109,10 @@ class RecordRepository(
 
     suspend fun moveType(id: Long, offset: Int) = withContext(io) {
         dao.moveType(id, offset)
+    }
+
+    internal suspend fun updateType(id: Long, name: String?, hasDistance: Boolean, iconKey: String?) = withContext(io) {
+        check(dao.updateType(id, name?.trim()?.takeIf(String::isNotEmpty), hasDistance, iconKey) == 1)
     }
 
     suspend fun removeType(id: Long) = withContext(io) {

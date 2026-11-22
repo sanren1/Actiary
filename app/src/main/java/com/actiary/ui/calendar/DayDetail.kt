@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.Icon
@@ -19,6 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +46,7 @@ private const val MAX_THUMBS = 3
 @Composable
 fun DayDetail(
     title: String,
+    spokenTitle: String,
     detail: DayWithDetails?,
     types: Map<Long, ExerciseTypeEntity>,
     photoStore: PhotoStore,
@@ -51,7 +57,14 @@ fun DayDetail(
     val primary = t.neutrals.textPrimary.asColor()
     val secondary = t.neutrals.textSecondary.asColor()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        BasicText(title, style = TextStyle(primary, 18.sp, FontWeight.SemiBold))
+        BasicText(
+            title,
+            Modifier.clearAndSetSemantics {
+                contentDescription = spokenTitle
+                heading()
+            },
+            style = TextStyle(primary, 18.sp, FontWeight.SemiBold),
+        )
         if (loading) return@Column
         val entries = detail?.entries.orEmpty()
         when {
@@ -86,10 +99,13 @@ fun DayDetail(
         if (photos.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 photos.take(MAX_THUMBS).forEachIndexed { i, p ->
-                    Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(t.neutrals.surfaceMuted.asColor())) {
-                        AsyncImage(photoStore.file(p.fileName), stringResource(R.string.day_photo, i + 1), Modifier.size(96.dp), contentScale = ContentScale.Crop)
+                    Box(
+                        Modifier.weight(1f, fill = false).widthIn(max = 96.dp).aspectRatio(1f)
+                            .clip(RoundedCornerShape(12.dp)).background(t.neutrals.surfaceMuted.asColor()),
+                    ) {
+                        AsyncImage(photoStore.file(p.fileName), stringResource(R.string.day_photo, i + 1), Modifier.matchParentSize(), contentScale = ContentScale.Crop)
                         if (i == MAX_THUMBS - 1 && photos.size > MAX_THUMBS) {
-                            Box(Modifier.size(96.dp).background(t.neutrals.background.asColor().copy(alpha = 0.6f)), Alignment.Center) {
+                            Box(Modifier.matchParentSize().background(t.neutrals.background.asColor().copy(alpha = 0.6f)), Alignment.Center) {
                                 BasicText(
                                     stringResource(R.string.day_more_photos, photos.size - MAX_THUMBS),
                                     style = TextStyle(primary, 18.sp, FontWeight.SemiBold),

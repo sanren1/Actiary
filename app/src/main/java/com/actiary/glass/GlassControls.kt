@@ -18,11 +18,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +37,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -443,7 +447,13 @@ private fun TabLabel(tab: GlassTab, color: Color, bold: Boolean, scale: () -> Fl
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(tab.icon, null, tint = color, modifier = Modifier.size(24.dp))
-        Text(tab.label, color = color, fontSize = 12.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
+        BasicText(
+            tab.label,
+            Modifier.padding(horizontal = 4.dp),
+            style = TextStyle(color = color, fontSize = 12.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium),
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = 12.sp, stepSize = 0.5.sp),
+        )
     }
 }
 
@@ -456,7 +466,7 @@ private fun TabLabel(tab: GlassTab, color: Color, bold: Boolean, scale: () -> Fl
  * never hides the selected one; while the thumb is refracting, labels under it fade out and the refracted copy
  * replaces them. Only the thumb ever creates a drawBackdrop node, and only while interacting.
  *
- * [scrollable]: items take their text width and the track scrolls horizontally to keep the selection visible.
+ * [scrollable] or a large system font: items take their text width and the track scrolls to keep the selection visible.
  * Presses lift the thumb on every option, and the scroll owns horizontal drags in this variant.
  */
 @Composable
@@ -484,6 +494,8 @@ fun GlassSegmentedPicker(
     val muted = t.neutrals.surfaceMuted.asColor()
     val accent = t.accent.accentAction.asColor()
     val secondary = t.neutrals.textSecondary.asColor()
+    val fontScale = LocalDensity.current.fontScale
+    val allowScroll = scrollable || fontScale >= 1.3f
 
     // Item widths as laid out (equal weights or text widths); the thumb follows them.
     val widths = remember(count) { mutableStateListOf<Float>().apply { repeat(count) { add(0f) } } }
@@ -494,7 +506,7 @@ fun GlassSegmentedPicker(
     BoxWithConstraints(modifier.fillMaxWidth().background(muted, shape)) {
         val viewportPx = constraints.maxWidth
         val padPx = with(LocalDensity.current) { 4.dp.toPx() }
-        if (scrollable) LaunchedEffect(selected, ready) {
+        if (allowScroll) LaunchedEffect(selected, ready, viewportPx, fontScale) {
             if (ready) {
                 val start = thumbOffset(selected.toFloat(), widths)
                 val lo = start + widths[selected] + 2 * padPx - viewportPx
@@ -502,13 +514,14 @@ fun GlassSegmentedPicker(
                 if (still) scroll.scrollTo(target) else scroll.animateScrollTo(target)
             }
         }
-        Box(Modifier.then(if (scrollable) Modifier.horizontalScroll(scroll) else Modifier).padding(4.dp)) {
-            val rowWidth = if (scrollable) Modifier else Modifier.fillMaxWidth()
+        Box(Modifier.then(if (allowScroll) Modifier.horizontalScroll(scroll) else Modifier).padding(4.dp)) {
+            val rowWidth = if (allowScroll) Modifier else Modifier.fillMaxWidth()
             if (glassOn) {
                 Row(Modifier.clearAndSetSemantics {}.alpha(0f).layerBackdrop(copyBackdrop).then(rowWidth)) {
                     options.forEachIndexed { i, label ->
                         Box(
-                            Modifier.then(if (scrollable) Modifier else Modifier.weight(1f)).heightIn(min = 48.dp).padding(horizontal = 16.dp),
+                            Modifier.then(if (allowScroll) Modifier.widthIn(min = 48.dp) else Modifier.weight(1f))
+                                .heightIn(min = 48.dp).padding(horizontal = 16.dp),
                             contentAlignment = Alignment.Center,
                         ) { SegmentLabel(label, accent, i == selected) }
                     }
@@ -527,7 +540,7 @@ fun GlassSegmentedPicker(
                     .layout { m, c ->
                         val ok = rowHeight > 0 && widths.all { it > 0f }
                         // Equal weights: constant width, so the layout block does not read the animated value.
-                        val w = if (!ok) 0 else (if (scrollable) thumbWidth(state.value, widths) else widths[0]).roundToInt()
+                        val w = if (!ok) 0 else (if (allowScroll) thumbWidth(state.value, widths) else widths[0]).roundToInt()
                         val h = if (ok) rowHeight else 0
                         val p = m.measure(Constraints.fixed(w, h))
                         layout(w, h) { p.place(0, 0) }
@@ -539,7 +552,7 @@ fun GlassSegmentedPicker(
                     .then(rowWidth)
                     .onSizeChanged { rowHeight = it.height }
                     .thumbGestures(
-                        state, selected, onSelect, still, enhance, allowDrag = !scrollable,
+                        state, selected, onSelect, still, enhance, allowDrag = !allowScroll,
                         hitTest = { x -> if (ready) segmentIndexAt(x, widths, ltr) else null },
                         dragTarget = { start, dx -> dragValue(start, dx, widths[0], count, ltr) },
                     )
@@ -548,7 +561,7 @@ fun GlassSegmentedPicker(
                 options.forEachIndexed { i, label ->
                     val on = i == selected
                     Box(
-                        Modifier.then(if (scrollable) Modifier else Modifier.weight(1f)).heightIn(min = 48.dp)
+                        Modifier.then(if (allowScroll) Modifier.widthIn(min = 48.dp) else Modifier.weight(1f)).heightIn(min = 48.dp)
                             .onSizeChanged { widths[i] = it.width.toFloat() }
                             .clip(shape)
                             .glassControlFocus(enhance, shape)

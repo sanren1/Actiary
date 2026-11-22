@@ -9,11 +9,19 @@ class PhotoStore(private val dir: File) {
     // Files created by save or restore are unreferenced until their Room transaction commits.
     internal val mutations = Mutex()
 
-    fun copyIn(open: () -> InputStream): String {
+    private val draftDir = File(dir, "drafts")
+
+    fun copyIn(open: () -> InputStream): String = copyTo(dir, open)
+
+    internal fun stage(open: () -> InputStream): String = copyTo(draftDir, open)
+
+    fun stagedFile(fileName: String): File = File(draftDir, fileName)
+
+    private fun copyTo(directory: File, open: () -> InputStream): String {
         val name = "${UUID.randomUUID()}.jpg"
-        val target = file(name)
+        val target = File(directory, name)
         try {
-            dir.mkdirs()
+            directory.mkdirs()
             open().use { input -> target.outputStream().use { input.copyTo(it) } }
         } catch (e: Throwable) {
             target.delete()

@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -37,11 +40,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
@@ -53,17 +58,20 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import com.actiary.R
 import com.actiary.data.appearance.AccentPreset
 import com.actiary.data.appearance.AppearanceSettings
+import com.actiary.data.appearance.activeAccentHex
 import com.actiary.glass.GlassPreview
+import com.actiary.glass.GlassSheet
+import com.actiary.glass.LocalGlassProfile
 import com.actiary.glass.rememberGlassDegraded
 import com.actiary.glass.resolveGlass
 import com.actiary.theme.Hsv
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
-import com.actiary.theme.normalizeHex
 import com.actiary.theme.parseHex
 import com.actiary.theme.resolveTheme
 import com.actiary.theme.toArgb
 import com.actiary.theme.toHsv
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val HsvSaver = Saver<Hsv, ArrayList<Double>>(
@@ -84,9 +92,65 @@ internal fun ColorEditorScreen(
     onApply: (String) -> Unit,
     onBack: () -> Unit,
 ) {
+    SettingsPageLayout(stringResource(R.string.custom_color_title), onBack) {
+        ColorEditorContent(settings, settings.activeAccentHex(), recent) { hex ->
+            onApply(hex)
+            onBack()
+        }
+    }
+}
+
+@Composable
+internal fun ColorEditorSheet(
+    settings: AppearanceSettings,
+    initialHex: String?,
+    onApply: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val title = stringResource(if (initialHex == null) R.string.accent_add else R.string.accent_edit)
+    val focus = LocalFocusManager.current
+    var visible by rememberSaveable { mutableStateOf(true) }
+    fun close(): Boolean {
+        focus.clearFocus()
+        visible = false
+        return true
+    }
+    GlassSheet(visible, ::close, onDismiss, title) {
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                val n = LocalThemeTokens.current.neutrals
+                BasicText(
+                    title, Modifier.weight(1f).semantics { heading() },
+                    style = TextStyle(n.textPrimary.asColor(), 20.sp, FontWeight.SemiBold),
+                )
+                androidx.compose.material3.TextButton(
+                    onClick = { close() },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
+                ) {
+                    androidx.compose.material3.Text(stringResource(R.string.record_cancel))
+                }
+            }
+            ColorEditorContent(settings, initialHex ?: settings.activeAccentHex(), emptyList()) { hex ->
+                onApply(hex)
+                close()
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorEditorContent(
+    settings: AppearanceSettings,
+    initialHex: String,
+    recent: List<String>,
+    onApply: (String) -> Unit,
+) {
     val systemDark = isSystemInDarkTheme()
-    val degraded = rememberGlassDegraded()
-    val initialHex = normalizeHex(settings.customAccentHex) ?: AppearanceSettings().customAccentHex
+    val degraded = rememberGlassDegraded() || LocalGlassProfile.current.degraded
     var draft by rememberSaveable(stateSaver = ColorDraftSaver) {
         mutableStateOf(ColorDraft(hex = initialHex, input = initialHex))
     }
@@ -111,8 +175,8 @@ internal fun ColorEditorScreen(
     val valid = draft.canApply
     val invalidMessage = stringResource(R.string.color_hex_invalid)
 
-    SettingsPageLayout(stringResource(R.string.custom_color_title), onBack) {
-        GlassPreview(draftTokens, draftProfile)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        GlassPreview(draftTokens, draftProfile, chartPalette = settings.chartPalette)
 
         val fieldShape = RoundedCornerShape(if (valid) 12.dp else 4.dp)
         Column(
@@ -202,10 +266,7 @@ internal fun ColorEditorScreen(
             Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (valid) a.accentAction.asColor() else n.surfaceMuted.asColor())
-                .clickable(enabled = valid, role = Role.Button) {
-                    onApply(draft.hex)
-                    onBack()
-                },
+                .clickable(enabled = valid, role = Role.Button) { onApply(draft.hex) },
             contentAlignment = Alignment.Center,
         ) {
             BasicText(
@@ -239,19 +300,33 @@ private fun HsvSlider(
             BasicText(valueText, style = TextStyle(n.textSecondary.asColor(), 14.sp))
         }
         Box(
-            Modifier.fillMaxWidth().height(44.dp)
+            Modifier.fillMaxWidth().height(48.dp)
                 .pointerInput(max) {
                     fun setFromX(x: Float) {
                         currentOnChange((x / size.width).coerceIn(0f, 1f) * max)
                     }
-                    // One gesture: value on press, then follow the finger until lift.
+                    // Wait for horizontal intent so the surrounding page keeps vertical drags.
                     awaitEachGesture {
                         val down = awaitFirstDown()
-                        setFromX(down.position.x)
-                        down.consume()
+                        var dragging = false
                         while (true) {
                             val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                            if (change.changedToUp() || !change.pressed) break
+                            if (change.isConsumed) break
+                            if (change.changedToUp()) {
+                                if (!dragging) {
+                                    setFromX(change.position.x)
+                                    change.consume()
+                                }
+                                break
+                            }
+                            if (!dragging) {
+                                val delta = change.position - down.position
+                                val horizontal = abs(delta.x)
+                                val vertical = abs(delta.y)
+                                if (maxOf(horizontal, vertical) < viewConfiguration.touchSlop) continue
+                                if (vertical >= horizontal) break
+                                dragging = true
+                            }
                             setFromX(change.position.x)
                             change.consume()
                         }

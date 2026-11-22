@@ -3,6 +3,7 @@ package com.actiary.data.appearance
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -11,6 +12,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.actiary.theme.normalizeHex
 import com.actiary.theme.parseHex
+import com.actiary.theme.seed
+import com.actiary.theme.toHex
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -28,6 +31,11 @@ private val GLASS_TINT_STRENGTH = stringPreferencesKey("glass_tint_strength")
 private val CHART_PALETTE = stringPreferencesKey("chart_palette")
 internal val AMBIENT_BACKGROUND = booleanPreferencesKey("ambient_background")
 private val RECENT_COLORS = stringPreferencesKey("recent_colors")
+private val ACCENT_COLORS = stringPreferencesKey("accent_colors")
+
+internal val builtInAccentColors = AccentPreset.entries.mapNotNull { preset ->
+    preset.seed()?.let { it.toHex() to preset }
+}.toMap()
 
 private val appearanceValidators = mapOf<Preferences.Key<String>, (String) -> Boolean>(
     THEME_MODE to { value -> ThemeMode.entries.any { it.name == value } },
@@ -36,6 +44,7 @@ private val appearanceValidators = mapOf<Preferences.Key<String>, (String) -> Bo
     GLASS_LEVEL to { value -> GlassLevel.entries.any { it.name == value } },
     GLASS_TINT_STRENGTH to { value -> GlassTintStrength.entries.any { it.name == value } },
     CHART_PALETTE to { value -> ChartPalette.entries.any { it.name == value } },
+    ACCENT_COLORS to { value -> value.isEmpty() || value.split(',').all { normalizeHex(it) != null } },
 )
 internal val backupAppearanceStringKeys = appearanceValidators.keys
 
@@ -73,9 +82,29 @@ fun pushRecent(list: List<String>, hex: String): List<String> {
     return result
 }
 
+internal fun AppearanceSettings.activeAccentHex(): String =
+    accentPreset.seed()?.toHex() ?: checkNotNull(normalizeHex(customAccentHex))
+
+private fun Preferences.palette(): List<String> {
+    val saved = this[ACCENT_COLORS]
+    // Before the palette was editable, recent colors and the active accent were its only custom swatches.
+    return if (saved == null) {
+        (builtInAccentColors.keys + parseRecent(this[RECENT_COLORS]) + toAppearanceSettings().activeAccentHex()).toList()
+    } else {
+        saved.split(',').mapNotNull(::normalizeHex).distinct()
+    }
+}
+
+private fun MutablePreferences.activatePaletteColor(hex: String) {
+    val preset = builtInAccentColors[hex] ?: AccentPreset.CUSTOM
+    this[ACCENT_PRESET] = preset.name
+    if (preset == AccentPreset.CUSTOM) this[CUSTOM_ACCENT_HEX] = hex
+}
+
 class AppearanceRepository(private val store: DataStore<Preferences>) {
     val settings: Flow<AppearanceSettings> = store.data.map { it.toAppearanceSettings() }
     val recentColors: Flow<List<String>> = store.data.map { parseRecent(it[RECENT_COLORS]) }
+    val accentColors: Flow<List<String>> = store.data.map { it.palette() }
 
     suspend fun setThemeMode(m: ThemeMode) { store.edit { it[THEME_MODE] = m.name } }
     suspend fun setAccentPreset(p: AccentPreset) { store.edit { it[ACCENT_PRESET] = p.name } }
@@ -98,6 +127,45 @@ class AppearanceRepository(private val store: DataStore<Preferences>) {
             it[CUSTOM_ACCENT_HEX] = normalized
             it[ACCENT_PRESET] = AccentPreset.CUSTOM.name
             it[RECENT_COLORS] = pushRecent(parseRecent(it[RECENT_COLORS]), normalized).joinToString(",")
+        }
+    }
+
+    suspend fun selectPaletteAccent(hex: String) {
+        store.edit { prefs ->
+            if (hex in prefs.palette()) prefs.activatePaletteColor(hex)
+        }
+    }
+
+    suspend fun savePaletteAccent(hex: String, previous: String? = null) {
+        val normalized = requireNotNull(normalizeHex(hex)) { "Invalid hex color: $hex" }
+        store.edit { prefs ->
+            val colors = prefs.palette()
+            if (previous != null && previous !in colors) return@edit
+            val next = when {
+                previous == null -> (colors + normalized).distinct()
+                normalized == previous -> colors
+                normalized in colors -> colors - previous
+                else -> colors.map { if (it == previous) normalized else it }
+            }
+            prefs[ACCENT_COLORS] = next.joinToString(",")
+            val history = parseRecent(prefs[RECENT_COLORS]).filterNot { it == previous }
+            prefs[RECENT_COLORS] = pushRecent(history, normalized).joinToString(",")
+            if (previous == null || prefs.toAppearanceSettings().activeAccentHex() == previous) {
+                prefs.activatePaletteColor(normalized)
+            }
+        }
+    }
+
+    suspend fun removePaletteAccent(hex: String) {
+        store.edit { prefs ->
+            val colors = prefs.palette()
+            if (hex !in colors) return@edit
+            val next = colors - hex
+            prefs[ACCENT_COLORS] = next.joinToString(",")
+            prefs[RECENT_COLORS] = (parseRecent(prefs[RECENT_COLORS]) - hex).joinToString(",")
+            if (prefs.toAppearanceSettings().activeAccentHex() == hex) {
+                prefs.activatePaletteColor(next.firstOrNull() ?: AppearanceSettings().activeAccentHex())
+            }
         }
     }
 

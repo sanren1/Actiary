@@ -55,6 +55,9 @@ interface RecordDao {
     @Query("UPDATE exercise_type SET sortOrder = :sortOrder WHERE id = :id")
     suspend fun setTypeSortOrder(id: Long, sortOrder: Int)
 
+    @Query("UPDATE exercise_type SET name = :name, hasDistance = :hasDistance, iconKey = :iconKey WHERE id = :id AND archived = 0")
+    suspend fun updateType(id: Long, name: String?, hasDistance: Boolean, iconKey: String?): Int
+
     @Transaction
     suspend fun moveType(id: Long, offset: Int) {
         val types = getActiveTypes().toMutableList()

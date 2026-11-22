@@ -1,5 +1,6 @@
 package com.actiary.glass
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,23 +27,34 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.actiary.R
+import com.actiary.data.appearance.ChartPalette
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.ThemeTokens
 import com.actiary.theme.asColor
+import com.actiary.theme.resolveChartColors
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 
 /** Self-contained: uses the given [tokens] / [profile] (not the locals) so drafts can be previewed. */
 @Composable
-fun GlassPreview(tokens: ThemeTokens, profile: GlassProfile, modifier: Modifier = Modifier) {
+fun GlassPreview(
+    tokens: ThemeTokens,
+    profile: GlassProfile,
+    modifier: Modifier = Modifier,
+    chartPalette: ChartPalette = ChartPalette.NEUTRAL_FIRST,
+) {
     val bg = rememberGlassLayer()
     val content = rememberGlassLayer()
     val combined = rememberCombinedBackdrop(bg, content)
+    val chart = remember(chartPalette, tokens) { resolveChartColors(chartPalette, tokens) }
     var tab by remember { mutableIntStateOf(0) }
     CompositionLocalProvider(
         LocalThemeTokens provides tokens,
@@ -65,7 +77,21 @@ fun GlassPreview(tokens: ThemeTokens, profile: GlassProfile, modifier: Modifier 
                         }
                     }
                 }
-                Box(Modifier.padding(top = 16.dp).fillMaxWidth(0.6f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(n.textSecondary.asColor()))
+                Canvas(Modifier.fillMaxWidth().padding(top = 8.dp).height(38.dp)) {
+                    val values = listOf(0.4f, 0.65f, 0.5f, 0.9f, 0.55f, 0.72f)
+                    val slot = size.width / values.size
+                    val width = slot * 0.60f
+                    values.forEachIndexed { index, fraction ->
+                        val height = size.height * fraction
+                        val color = if (index == 3) chart.highlight else chart.categories[index]
+                        drawRoundRect(
+                            color.asColor(),
+                            topLeft = Offset(index * slot + (slot - width) / 2f, size.height - height),
+                            size = Size(width, height),
+                            cornerRadius = CornerRadius(4.dp.toPx()),
+                        )
+                    }
+                }
             }
             GlassBottomBar(
                 listOf(

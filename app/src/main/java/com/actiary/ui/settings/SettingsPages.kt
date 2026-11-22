@@ -1,6 +1,7 @@
 package com.actiary.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,6 +43,7 @@ import com.actiary.glass.GlassPanel
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.LocalFloatingInsets
+import com.actiary.ui.common.PinnedScrollPage
 import com.actiary.ui.common.RootTitle
 
 internal enum class SettingsPage { HOME, APPEARANCE, GENERAL, TYPES, DATA, ABOUT, CUSTOM_COLOR }
@@ -59,20 +61,15 @@ internal fun SettingsPage.showsBottomBar(): Boolean = parent() == null
 internal fun SettingsPageLayout(
     title: String,
     onBack: (() -> Unit)? = null,
+    scrollState: ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(
-        Modifier.fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, bottom = LocalFloatingInsets.current.bottom + 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+    PinnedScrollPage(scrollOffset = { scrollState.value }, header = {
         if (onBack == null) {
-            RootTitle(title)
+            RootTitle(title, Modifier.padding(horizontal = 16.dp))
         } else {
             Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp),
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp).heightIn(min = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -84,7 +81,15 @@ internal fun SettingsPageLayout(
                 )
             }
         }
-        content()
+    }) { headerHeight, _ ->
+        Column(
+            Modifier.fillMaxSize()
+                .verticalScroll(scrollState)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .padding(start = 16.dp, end = 16.dp, top = headerHeight + 16.dp, bottom = LocalFloatingInsets.current.bottom + 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            content = content,
+        )
     }
 }
 

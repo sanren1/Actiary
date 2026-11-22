@@ -38,6 +38,18 @@ class DayDraftTest {
         assertEquals(8, d.removePhoto(0).photos.size)
     }
 
+    @Test fun movingPhotosPreservesMixedReferencesAndMarksTheDraftDirty() {
+        val first = DraftPhoto.Saved("first.jpg")
+        val second = DraftPhoto.Staged("second.jpg")
+        val third = DraftPhoto.Picked("content://third")
+        val original = empty.copy(photos = listOf(first, second, third))
+
+        val moved = original.movePhoto(0, 2)
+        assertEquals(listOf(second, third, first), moved.photos)
+        assertTrue(moved.isChangedFrom(original))
+        assertEquals(original, moved.movePhoto(2, 0))
+    }
+
     @Test fun markRestKeepsNoteAndPhotos() {
         val d = empty.toggleType(1).withNote("hi").addPhotos(listOf("u")).markRest()
         assertEquals(DayStatus.REST, d.status)

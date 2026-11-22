@@ -7,6 +7,8 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+internal const val ACTIARY_DATABASE_NAME = "actiary.db"
+
 @Database(
     entities = [DailyRecordEntity::class, ExerciseTypeEntity::class, ExerciseEntryEntity::class, PhotoAttachmentEntity::class],
     version = 4,
@@ -62,7 +64,7 @@ abstract class ActiaryDatabase : RoomDatabase() {
 }
 
 fun ActiaryDatabase.Companion.build(context: Context): ActiaryDatabase =
-    Room.databaseBuilder(context.applicationContext, ActiaryDatabase::class.java, "actiary.db")
+    Room.databaseBuilder(context.applicationContext, ActiaryDatabase::class.java, ACTIARY_DATABASE_NAME)
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) = ActiaryDatabase.seedBuiltinTypes(db)
         })

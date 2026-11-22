@@ -34,7 +34,7 @@ import com.actiary.R
 import com.actiary.data.db.ExerciseTypeEntity
 
 @Composable
-fun exerciseTypeLabel(type: ExerciseTypeEntity): String = when (type.builtinKey) {
+fun exerciseTypeLabel(type: ExerciseTypeEntity): String = type.name ?: when (type.builtinKey) {
     "running" -> stringResource(R.string.type_running)
     "strength" -> stringResource(R.string.type_strength)
     "cycling" -> stringResource(R.string.type_cycling)
@@ -43,7 +43,7 @@ fun exerciseTypeLabel(type: ExerciseTypeEntity): String = when (type.builtinKey)
     "hiking" -> stringResource(R.string.type_hiking)
     "ball" -> stringResource(R.string.type_ball)
     "freeform" -> stringResource(R.string.type_freeform)
-    else -> type.name.orEmpty()
+    else -> ""
 }
 
 class TypeIcon(val key: String, val vector: ImageVector, @StringRes val label: Int)
@@ -72,7 +72,7 @@ val CUSTOM_TYPE_ICONS = listOf(
     TypeIcon("sports", Icons.Outlined.Sports, R.string.icon_sports),
 )
 
-fun exerciseTypeIcon(type: ExerciseTypeEntity): ImageVector = when (type.builtinKey) {
+fun exerciseTypeIcon(type: ExerciseTypeEntity): ImageVector = CUSTOM_TYPE_ICONS.firstOrNull { it.key == type.iconKey }?.vector ?: when (type.builtinKey) {
     "running" -> Icons.AutoMirrored.Outlined.DirectionsRun
     "strength" -> Icons.Outlined.FitnessCenter
     "cycling" -> Icons.AutoMirrored.Outlined.DirectionsBike
@@ -81,5 +81,5 @@ fun exerciseTypeIcon(type: ExerciseTypeEntity): ImageVector = when (type.builtin
     "hiking" -> Icons.Outlined.Hiking
     "ball" -> Icons.Outlined.SportsBasketball
     "freeform" -> Icons.Outlined.FitnessCenter
-    else -> CUSTOM_TYPE_ICONS.firstOrNull { it.key == type.iconKey }?.vector ?: Icons.Outlined.Star
+    else -> Icons.Outlined.Star
 }

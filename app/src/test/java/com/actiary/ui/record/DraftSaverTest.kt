@@ -36,6 +36,11 @@ class DraftSaverTest {
         assertEquals(draft, roundTrip(draft))
     }
 
+    @Test fun stagedPhotoReferencesSurviveProcessRecreation() {
+        val draft = DayDraft(date, DayStatus.EXERCISED, emptyList(), "", listOf(DraftPhoto.Staged("draft.jpg")))
+        assertEquals(draft, roundTrip(draft))
+    }
+
     @Test fun nullsStayNull() {
         val draft = DayDraft(date, DayStatus.REST, listOf(DraftEntry(9)), "", emptyList())
         val restored = roundTrip(draft)!!

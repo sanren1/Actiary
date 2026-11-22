@@ -1,5 +1,13 @@
 package com.actiary.ui.calendar
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,12 +17,11 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
@@ -42,6 +49,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,16 +59,20 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.actiary.R
 import com.actiary.data.RecordRepository
+import com.actiary.data.db.DayWithDetails
 import com.actiary.data.photo.PhotoStore
+import com.actiary.domain.toDayState
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassPanel
 import com.actiary.glass.GlassSampling
-import com.actiary.glass.rememberAnimationsOff
 import com.actiary.glass.rememberGlassLayer
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.LocalFloatingInsets
+import com.actiary.ui.common.PinnedScrollPage
 import com.actiary.ui.common.RootTitle
+import com.actiary.ui.motion.Motion
+import com.actiary.ui.motion.rememberMotionReduced
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.map
@@ -68,8 +81,12 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 private val BOTTOM_CLEARANCE = 24.dp
+
+internal fun canEditDayDetail(selected: LocalDate, loaded: LocalDate?, displayed: LocalDate?, today: LocalDate): Boolean =
+    selected == loaded && selected == displayed && !isFuture(selected, today)
 
 @Composable
 fun HomeScreen(
@@ -94,30 +111,36 @@ fun HomeScreen(
         firstVisibleMonth = remember { YearMonth.from(selected) },
         firstDayOfWeek = remember { firstDayOfWeek },
     )
+    val animationsOff = rememberMotionReduced()
     // Update the saved pager in place so changing the week layout retains the visible month.
     SideEffect { calendar.firstDayOfWeek = firstDayOfWeek }
     var alignedSelection by rememberSaveable { mutableStateOf(selected) }
     LaunchedEffect(selected) {
         if (selected != alignedSelection) {
             val m = YearMonth.from(selected).coerceIn(calendar.startMonth, calendar.endMonth)
-            if (m != calendar.firstVisibleMonth.yearMonth) calendar.animateScrollToMonth(m)
+            if (m != calendar.firstVisibleMonth.yearMonth) {
+                if (animationsOff) calendar.scrollToMonth(m) else calendar.animateScrollToMonth(m)
+            }
             alignedSelection = selected
         }
     }
     val visible = calendar.firstVisibleMonth.yearMonth
-    // Keyed with their month/date so a stale value from the previous key never reads as "loaded".
-    val month by remember(visible) { repository.observeMonth(visible).map { visible to it } }.collectAsStateWithLifecycle(null)
-    val monthStates = month?.takeIf { it.first == visible }?.second.orEmpty()
-    val day by remember(selected) { repository.observeDay(selected).map { selected to it } }.collectAsStateWithLifecycle(null)
-    val loading = day?.first != selected
-    val detail = day?.second
+    // Prefetch both neighbors and retain the previous dated marks until the new window returns.
+    val monthStates by remember(repository, visible) {
+        repository.observeRange(visible.minusMonths(1).atDay(1), visible.plusMonths(1).atEndOfMonth())
+            .map { days -> days.associate { LocalDate.ofEpochDay(it.record.epochDay) to it.record.toDayState() } }
+    }.collectAsStateWithLifecycle(emptyMap())
+    // The collector retains the last dated result while the new date loads.
+    val day by remember(repository, selected) { repository.observeDay(selected).map { selected to it } }
+        .collectAsStateWithLifecycle(null)
     val types by repository.allTypes.collectAsStateWithLifecycle(emptyList())
+    val typesById = remember(types) { types.associateBy { it.id } }
+    val dateFormatter = DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)
+    val spokenDateFormatter = DateTimeFormatter.ofPattern(stringResource(R.string.day_accessibility_pattern), locale)
     val scope = rememberCoroutineScope()
-    val canRecord = !isFuture(selected, today)
 
     // Collapse progress of the calendar: 0 = full month, 1 = only the selected week.
     var p by rememberSaveable { mutableStateOf(0f) }
-    val animationsOff = rememberAnimationsOff()
     // One settle animation at a time; any new drag or settle cancels the previous one.
     var settling by remember { mutableStateOf<Job?>(null) }
     val settle by rememberUpdatedState<(Float) -> Unit> { target ->
@@ -154,67 +177,106 @@ fun HomeScreen(
             }
         }
     }
-    val detailScroll = rememberScrollState()
+    val pageScroll = rememberScrollState()
 
     val calendarLayer = rememberGlassLayer()
     val primary = t.neutrals.textPrimary.asColor()
     fun go(target: YearMonth) = scope.launch {
+        pageScroll.scrollTo(0)
         if (p > 0f) settle(0f)
-        calendar.animateScrollToMonth(target)
+        if (animationsOff) calendar.scrollToMonth(target) else calendar.animateScrollToMonth(target)
     }
-    Column(
-        Modifier.fillMaxSize().nestedScroll(connection)
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .padding(start = 16.dp, end = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        RootTitle(stringResource(R.string.tab_calendar), Modifier.padding(end = 56.dp))
-        GlassPanel(Modifier.fillMaxWidth(), exported = calendarLayer) {
-            Column(Modifier.padding(12.dp)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    BasicText(
-                        visible.format(DateTimeFormatter.ofPattern(stringResource(R.string.home_month_pattern), locale)),
-                        Modifier.weight(1f).padding(start = 8.dp),
-                        style = TextStyle(primary, 18.sp, FontWeight.SemiBold),
-                    )
-                    val hasPrev = visible > calendar.startMonth
-                    val hasNext = visible < calendar.endMonth
-                    GlassIconButton(
-                        Icons.AutoMirrored.Outlined.KeyboardArrowLeft, stringResource(R.string.home_prev_month),
-                        { go(visible.minusMonths(1)) }, Modifier,
-                        GlassSampling.Background, calendarLayer, hasPrev, iconSize = 28.dp,
-                    )
-                    GlassIconButton(
-                        Icons.AutoMirrored.Outlined.KeyboardArrowRight, stringResource(R.string.home_next_month),
-                        { go(visible.plusMonths(1)) }, Modifier,
-                        GlassSampling.Background, calendarLayer, hasNext, iconSize = 28.dp,
-                    )
-                }
-                MonthCalendar(calendar, monthStates, selected, today, locale, onSelect, collapse = p, userScrollEnabled = p < 1f)
-            }
-        }
+    PinnedScrollPage(
+        scrollOffset = { pageScroll.value },
+        header = { RootTitle(stringResource(R.string.tab_calendar), Modifier.padding(start = 16.dp, end = 72.dp)) },
+    ) { headerHeight, viewportHeight ->
+        val bottomPadding = LocalFloatingInsets.current.bottom + BOTTOM_CLEARANCE
         Column(
-            Modifier.weight(1f).verticalScroll(detailScroll)
-                .padding(bottom = LocalFloatingInsets.current.bottom + BOTTOM_CLEARANCE),
+            Modifier.fillMaxSize().nestedScroll(connection).verticalScroll(pageScroll)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .padding(start = 16.dp, end = 16.dp, top = headerHeight + 16.dp, bottom = bottomPadding),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-        GlassPanel(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                val editable = canRecord && !loading
-                Box(Modifier.then(if (editable) Modifier.clickable(role = Role.Button) { onEdit(selected) } else Modifier)) {
-                    DayDetail(
-                        title = selected.format(DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)),
-                        detail = detail,
-                        types = types.associateBy { it.id },
-                        photoStore = photoStore,
-                        loading = loading,
-                    )
+            GlassPanel(Modifier.fillMaxWidth(), exported = calendarLayer) {
+                Column(Modifier.padding(12.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        BasicText(
+                            visible.format(DateTimeFormatter.ofPattern(stringResource(R.string.home_month_pattern), locale)),
+                            Modifier.weight(1f).padding(start = 8.dp),
+                            style = TextStyle(primary, 18.sp, FontWeight.SemiBold),
+                        )
+                        val hasPrev = visible > calendar.startMonth
+                        val hasNext = visible < calendar.endMonth
+                        GlassIconButton(
+                            Icons.AutoMirrored.Outlined.KeyboardArrowLeft, stringResource(R.string.home_prev_month),
+                            { go(visible.minusMonths(1)) }, Modifier,
+                            GlassSampling.Background, calendarLayer, hasPrev, iconSize = 28.dp,
+                        )
+                        GlassIconButton(
+                            Icons.AutoMirrored.Outlined.KeyboardArrowRight, stringResource(R.string.home_next_month),
+                            { go(visible.plusMonths(1)) }, Modifier,
+                            GlassSampling.Background, calendarLayer, hasNext, iconSize = 28.dp,
+                        )
+                    }
+                    MonthCalendar(calendar, monthStates, selected, today, locale, onSelect, collapse = p, userScrollEnabled = p < 1f)
                 }
             }
-        }
+            // Keep enough scroll range to pass the collapsed week under the title even on short days.
+            Box(Modifier.heightIn(min = (viewportHeight - headerHeight - bottomPadding).coerceAtLeast(0.dp))) {
+                GlassPanel(Modifier.fillMaxWidth()) {
+                    val content: @Composable (Pair<LocalDate, DayWithDetails?>?) -> Unit = { shown ->
+                        val date = shown?.first ?: selected
+                        val details = shown?.second
+                        val interaction = when {
+                            shown?.first != day?.first -> Modifier.clearAndSetSemantics { hideFromAccessibility() }
+                            canEditDayDetail(selected, day?.first, shown?.first, today) -> Modifier.clickable(
+                                onClickLabel = stringResource(if (details == null) R.string.record_title else R.string.record_detail_edit),
+                                role = Role.Button,
+                                onClick = { onEdit(date) },
+                            )
+                            else -> Modifier
+                        }
+                        DayDetail(
+                            title = date.format(dateFormatter),
+                            spokenTitle = date.format(spokenDateFormatter),
+                            detail = details,
+                            types = typesById,
+                            photoStore = photoStore,
+                            modifier = interaction.padding(16.dp),
+                            loading = shown == null,
+                        )
+                    }
+                    if (animationsOff) {
+                        content(day)
+                    } else {
+                        AnimatedContent(
+                            targetState = day,
+                            contentKey = { it?.first },
+                            transitionSpec = {
+                                val from = initialState?.first
+                                val to = targetState?.first
+                                val direction = when {
+                                    from == null || to == null -> 0
+                                    to > from -> 1
+                                    else -> -1
+                                }
+                                val enter = tween<Float>(Motion.FADE_IN_MS)
+                                val exit = tween<Float>(Motion.FADE_OUT_MS)
+                                (fadeIn(enter) + slideInVertically(tween(Motion.FADE_IN_MS)) {
+                                    (it * Motion.DAY_DETAIL_SHIFT * direction).roundToInt()
+                                } togetherWith fadeOut(exit) + slideOutVertically(tween(Motion.FADE_OUT_MS)) {
+                                    (-it * Motion.DAY_DETAIL_SHIFT * direction).roundToInt()
+                                }).using(null)
+                            },
+                            label = "Day detail",
+                        ) { content(it) }
+                    }
+                }
+            }
         }
     }
 }

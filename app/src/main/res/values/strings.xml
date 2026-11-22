@@ -2,6 +2,8 @@
 <resources xmlns:tools="http://schemas.android.com/tools" tools:locale="zh">
     <string name="app_name">Actiary</string>
     <string name="appearance_title">外观</string>
+    <string name="appearance_theme_mode">主题模式</string>
+    <string name="appearance_glass_style">玻璃样式</string>
     <string name="theme_mode_light">浅色</string>
     <string name="theme_mode_dark">深色</string>
     <string name="theme_mode_system">跟随系统</string>
@@ -10,10 +12,6 @@
     <string name="glass_level_soft">柔和</string>
     <string name="glass_level_balanced">均衡</string>
     <string name="glass_level_clear">通透</string>
-    <string name="glass_tint_title">玻璃染色强度</string>
-    <string name="glass_tint_low">低</string>
-    <string name="glass_tint_medium">中</string>
-    <string name="glass_tint_high">高</string>
     <string name="ambient_title">环境背景</string>
     <string name="preset_mist_teal">雾青绿</string>
     <string name="preset_slate_blue">灰蓝</string>
@@ -64,6 +62,7 @@
     <string name="record_detail_distance">距离</string>
     <string name="record_detail_bpm">%d 次/分钟</string>
     <string name="record_cancel">取消</string>
+    <string name="overlay_close">关闭</string>
     <string name="record_save">保存</string>
     <string name="record_date">日期</string>
     <string name="record_activities">运动类型（可多选）</string>
@@ -88,6 +87,8 @@
     <string name="record_discard_title">放弃未保存的修改？</string>
     <string name="record_discard">放弃</string>
     <string name="record_keep_editing">继续编辑</string>
+    <string name="record_photo_importing">正在导入照片…</string>
+    <string name="record_photo_import_failed">无法读取所选照片，请重新选择。</string>
     <string name="record_save_failed">保存失败，请重试</string>
     <string name="record_invalid_value">请检查热量/心率/距离数值</string>
     <string name="record_counter">%1$d/%2$d</string>
@@ -183,6 +184,10 @@
     <string name="notice_coroutines_use">异步任务和数据流</string>
     <string name="notice_json_use">备份 JSON 处理，仅用于 JVM 单元测试</string>
     <string name="custom_type_name">类型名称</string>
+    <string name="custom_type_add_title">添加运动类型</string>
+    <string name="custom_type_edit_title">编辑运动类型</string>
+    <string name="custom_type_edit_named">编辑%1$s</string>
+    <string name="custom_type_default_icon">默认图标</string>
     <string name="custom_type_has_distance">记录距离</string>
     <string name="custom_type_icon">图标</string>
     <string name="custom_type_choose_icon">选择图标</string>
@@ -206,12 +211,15 @@
     <string name="icon_walk">步行</string>
     <string name="icon_skate">滑板</string>
     <string name="icon_sports">其他运动</string>
-    <string name="custom_type_add">添加</string>
     <string name="custom_type_delete">删除</string>
     <string name="custom_type_delete_named">删除%1$s</string>
     <string name="custom_type_delete_confirm">删除这个运动类型？已有记录的类型会归档，历史记录会保留。未使用的类型将永久删除。</string>
     <string name="custom_type_move_up">上移%1$s</string>
     <string name="custom_type_move_down">下移%1$s</string>
-    <string name="custom_type_with_distance">带距离</string>
-    <string name="custom_type_no_distance">不带距离</string>
+    <string name="data_storage_usage">运动记录存储占用</string>
+    <string name="data_storage_total">合计</string>
+    <string name="data_storage_database">记录数据库</string>
+    <string name="data_storage_photos">照片存储</string>
+    <string name="record_move_photo_earlier">将照片前移</string>
+    <string name="record_move_photo_later">将照片后移</string>
 </resources>

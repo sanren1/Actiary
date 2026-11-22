@@ -1,25 +1,19 @@
 package com.actiary.ui.settings
 
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.sp
 import com.actiary.R
 import com.actiary.data.appearance.WeekStart
-import com.actiary.glass.GlassSegmentedPicker
-import com.actiary.theme.LocalThemeTokens
-import com.actiary.theme.asColor
+import com.actiary.ui.common.SelectionMenuRow
 
 @Composable
 internal fun GeneralScreen(weekStart: WeekStart, onWeekStart: (WeekStart) -> Unit, onBack: () -> Unit) {
-    val n = LocalThemeTokens.current.neutrals
     SettingsPageLayout(stringResource(R.string.settings_general), onBack) {
-        BasicText(stringResource(R.string.settings_week_start), style = TextStyle(n.textPrimary.asColor(), 16.sp))
-        GlassSegmentedPicker(
-            WeekStart.entries.map { weekStartName(it) },
-            weekStart.ordinal,
-            { onWeekStart(WeekStart.entries[it]) },
+        SelectionMenuRow(
+            label = stringResource(R.string.settings_week_start),
+            options = WeekStart.entries.map { it to weekStartName(it) },
+            selected = weekStart,
+            onSelect = onWeekStart,
         )
     }
 }

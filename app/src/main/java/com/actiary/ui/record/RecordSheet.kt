@@ -46,14 +46,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.hideFromAccessibility
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,6 +71,8 @@ import com.actiary.domain.withRecognizedWorkout
 import com.actiary.glass.GlassDialog
 import com.actiary.glass.GlassSegmentedPicker
 import com.actiary.glass.GlassSheet
+import com.actiary.glass.overlayPresent
+import com.actiary.glass.rememberOverlayVisibility
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseTypeIcon
@@ -98,7 +96,13 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
             ArrayList(d.entries.map { it.typeId }),
             ArrayList(d.entries.map { it.durationMinutes ?: -1 }),
             ArrayList(d.entries.map { it.distanceMeters ?: -1 }),
-            ArrayList(d.photos.map { if (it is DraftPhoto.Saved) "s:${it.fileName}" else "p:${(it as DraftPhoto.Picked).uri}" }),
+            ArrayList(d.photos.map {
+                when (it) {
+                    is DraftPhoto.Saved -> "s:${it.fileName}"
+                    is DraftPhoto.Picked -> "p:${it.uri}"
+                    is DraftPhoto.Staged -> "d:${it.fileName}"
+                }
+            }),
             ArrayList(d.entries.map { it.calories ?: -1 }),
             ArrayList(d.entries.map { it.avgHeartRate ?: -1 }),
             ArrayList(d.entries.map { it.id }),
@@ -127,7 +131,13 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
                     )
                 },
                 note = l[2] as String,
-                photos = (l[6] as List<String>).map { if (it.startsWith("s:")) DraftPhoto.Saved(it.drop(2)) else DraftPhoto.Picked(it.drop(2)) },
+                photos = (l[6] as List<String>).map {
+                    when {
+                        it.startsWith("s:") -> DraftPhoto.Saved(it.drop(2))
+                        it.startsWith("d:") -> DraftPhoto.Staged(it.drop(2))
+                        else -> DraftPhoto.Picked(it.drop(2))
+                    }
+                },
             )
         }
     },
@@ -138,9 +148,9 @@ private val InvalidEntryIdsSaver = Saver<Set<Long>, List<Long>>(
     restore = { it.toSet() },
 )
 
-private val CapturePathsSaver = Saver<MutableList<String>, List<String>>(
-    save = { it.toList() },
-    restore = { it.toMutableList() },
+private val PhotoPathsSaver = Saver<List<String>, ArrayList<String>>(
+    save = { ArrayList(it) },
+    restore = { it.toList() },
 )
 
 @Composable
@@ -173,9 +183,23 @@ internal fun RecordSheet(
     var waitingForType by rememberSaveable { mutableStateOf(false) }
     var invalidEntryIds by rememberSaveable(stateSaver = InvalidEntryIdsSaver) { mutableStateOf(emptySet<Long>()) }
     var pendingCapturePath by rememberSaveable { mutableStateOf<String?>(null) }
-    var capturePaths by rememberSaveable(stateSaver = CapturePathsSaver) { mutableStateOf(mutableListOf<String>()) }
+    var capturePaths by rememberSaveable(stateSaver = PhotoPathsSaver) { mutableStateOf(emptyList<String>()) }
+    var pendingPickerUris by rememberSaveable(stateSaver = PhotoPathsSaver) { mutableStateOf(emptyList<String>()) }
+    var photoImportFailed by rememberSaveable { mutableStateOf(false) }
+    var changingDate by remember { mutableStateOf(false) }
+    val importingPhotos = pendingPickerUris.isNotEmpty()
+    fun isBusy() = saving || changingDate || pendingPickerUris.isNotEmpty()
+    val busy = isBusy()
     val types by repository.types.collectAsState(emptyList())
     val allTypes by repository.allTypes.collectAsState(emptyList())
+
+    fun cleanupCaptures() {
+        capturePaths.forEach { CameraCapture.cleanup(File(it)) }
+        capturePaths = emptyList()
+    }
+    fun cleanupStagedPhotos(photos: List<DraftPhoto>) {
+        photos.filterIsInstance<DraftPhoto.Staged>().forEach { photoStore.stagedFile(it.fileName).delete() }
+    }
 
     suspend fun load(d: LocalDate) {
         try {
@@ -184,14 +208,18 @@ internal fun RecordSheet(
             val detectedType = screenshot?.workout?.typeKey?.let { key ->
                 repository.types.first().firstOrNull { it.builtinKey == key }
             }
-            original = base
-            waitingForType = screenshot != null && detectedType == null
-            draft = if (screenshot == null) base else {
+            val next = if (screenshot == null) base else {
                 // Keep all existing photos in the draft. A full day needs a removal before saving.
                 val imported = base.markExercised().copy(photos = base.photos + DraftPhoto.Picked(screenshot.uri))
                 if (detectedType == null) imported else imported.withRecognizedWorkout(screenshot.workout, detectedType)
             }
+            cleanupStagedPhotos(draft?.photos.orEmpty())
+            cleanupCaptures()
+            original = base
+            waitingForType = screenshot != null && detectedType == null
+            draft = next
             existing = day != null
+            photoImportFailed = false
             failed = false
             invalidEntryIds = emptySet()
             showInvalid = false
@@ -202,17 +230,39 @@ internal fun RecordSheet(
         }
     }
     LaunchedEffect(Unit) { if (draft == null) load(date) }
+    fun changeDate(date: LocalDate) {
+        if (isBusy() || !visible) return
+        changingDate = true
+        scope.launch {
+            try {
+                load(date)
+            } finally {
+                changingDate = false
+            }
+        }
+    }
 
     val current = draft
     val dirty = current != null && original?.let { current.isChangedFrom(it) } == true
-    var entered by remember { mutableStateOf(false) } // starts hidden so the slide-in plays
-    LaunchedEffect(Unit) { entered = true }
-    fun cleanupCaptures() {
-        capturePaths.forEach { CameraCapture.cleanup(File(it)) }
-        capturePaths = mutableListOf()
+    val photo = viewing?.let { current?.photos?.getOrNull(it) }
+    LaunchedEffect(viewing, photo) { if (viewing != null && photo == null) viewing = null }
+    val datePickerVisibility = rememberOverlayVisibility(showDatePicker)
+    val photoVisibility = rememberOverlayVisibility(photo != null)
+    val discardVisibility = rememberOverlayVisibility(showDiscard)
+    val restVisibility = rememberOverlayVisibility(showRest)
+    val clearVisibility = rememberOverlayVisibility(showClear)
+    val covered = datePickerVisibility.overlayPresent || photoVisibility.overlayPresent ||
+        discardVisibility.overlayPresent || restVisibility.overlayPresent || clearVisibility.overlayPresent
+    fun close() { visible = false }
+    fun requestClose(): Boolean {
+        if (isBusy() || !visible) return false
+        if (dirty) {
+            showDiscard = true
+            return false
+        }
+        close()
+        return true
     }
-    fun close() { cleanupCaptures(); visible = false }
-    fun requestClose() { if (saving || !visible) return; if (dirty) showDiscard = true else close() }
     fun update(f: (DayDraft) -> DayDraft) {
         showInvalid = false
         val updated = draft?.let(f) ?: return
@@ -220,13 +270,36 @@ internal fun RecordSheet(
         draft = updated
     }
 
+    LaunchedEffect(pendingPickerUris) {
+        if (pendingPickerUris.isEmpty()) return@LaunchedEffect
+        try {
+            val photos = repository.stagePickedPhotos(pendingPickerUris)
+            update { it.copy(photos = it.photos + photos) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            photoImportFailed = true
+        }
+        pendingPickerUris = emptyList()
+    }
+    fun importPhotos(uris: List<String>) {
+        val selected = draft ?: return
+        if (isBusy() || !visible) return
+        val available = (DayDraft.PHOTO_LIMIT - selected.photos.size).coerceAtLeast(0)
+        val accepted = uris.take(available)
+        if (accepted.isNotEmpty()) {
+            photoImportFailed = false
+            pendingPickerUris = accepted
+        }
+    }
+
     val remaining = DayDraft.PHOTO_LIMIT - (current?.photos?.size ?: 0)
     // PickMultipleVisualMedia requires maxItems >= 2; the single picker covers the last slot.
     val multiPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(maxOf(2, remaining)),
-    ) { uris -> update { it.addPhotos(uris.map { u -> u.toString() }) } }
+    ) { uris -> importPhotos(uris.map { it.toString() }) }
     val singlePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) update { it.addPhotos(listOf(uri.toString())) }
+        if (uri != null) importPhotos(listOf(uri.toString()))
     }
     val imageOnly = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -238,20 +311,21 @@ internal fun RecordSheet(
                 update { it.addPhotos(listOf(uri.toString())) }
             } else {
                 CameraCapture.cleanup(File(path))
-                capturePaths = capturePaths.filterNot { it == path }.toMutableList()
+                capturePaths = capturePaths - path
             }
         }
     }
     fun launchCapture() {
-        if (remaining >= 1) {
+        if (!isBusy() && remaining >= 1) {
             val file = CameraCapture.createTempFile(context.cacheDir)
             pendingCapturePath = file.absolutePath
-            capturePaths = (capturePaths + file.absolutePath).toMutableList()
+            capturePaths = capturePaths + file.absolutePath
             cameraLauncher.launch(FileProvider.getUriForFile(context, CameraCapture.AUTHORITY, file))
         }
     }
 
     fun launchOp(work: suspend () -> Unit, after: () -> Unit) {
+        if (isBusy() || !visible) return
         saving = true
         failed = false
         scope.launch {
@@ -269,20 +343,23 @@ internal fun RecordSheet(
         }
     }
 
-    GlassSheet(visible && entered, onRequestClose = { requestClose() }, onExited = { if (!visible) onDismiss() }, title = stringResource(R.string.record_title)) {
+    GlassSheet(
+        visible = visible,
+        onRequestClose = ::requestClose,
+        onExited = {
+            cleanupStagedPhotos(draft?.photos.orEmpty())
+            cleanupCaptures()
+            onDismiss()
+        },
+        title = stringResource(R.string.record_title),
+        covered = covered,
+    ) {
         val primary = t.neutrals.textPrimary.asColor()
         val secondary = t.neutrals.textSecondary.asColor()
-        Column(
-            Modifier.fillMaxWidth().semantics { if (viewing != null) hideFromAccessibility() }.then(
-                // closing: swallow all input until the exit animation ends
-                if (visible) Modifier else Modifier.pointerInput(Unit) {
-                    awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
-                },
-            ),
-        ) {
+        Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).clickable(enabled = !saving, role = Role.Button) { requestClose() }.padding(horizontal = 8.dp),
+                    Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).clickable(enabled = !busy, role = Role.Button) { requestClose() }.padding(horizontal = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) { BasicText(stringResource(R.string.record_cancel), style = TextStyle(primary, 16.sp)) }
                 BasicText(
@@ -298,7 +375,7 @@ internal fun RecordSheet(
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
                         .background(t.neutrals.surfaceMuted.asColor())
-                        .clickable(role = Role.Button) { showDatePicker = true }.padding(horizontal = 16.dp),
+                        .clickable(enabled = !busy, role = Role.Button) { showDatePicker = true }.padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     BasicText(stringResource(R.string.record_date), Modifier.weight(1f), style = TextStyle(secondary, 15.sp))
@@ -382,15 +459,29 @@ internal fun RecordSheet(
                     PhotoRow(
                         current.photos, photoStore,
                         onView = { viewing = it },
-                        onRemove = { i -> update { it.removePhoto(i) } },
-                        onAdd = { if (remaining >= 2) multiPicker.launch(imageOnly) else singlePicker.launch(imageOnly) },
+                        onRemove = { i ->
+                            if (!isBusy()) {
+                                val removed = draft?.photos?.getOrNull(i)
+                                update { it.removePhoto(i) }
+                                if (removed is DraftPhoto.Staged) photoStore.stagedFile(removed.fileName).delete()
+                            }
+                        },
+                        onAdd = {
+                            if (!isBusy()) {
+                                if (remaining >= 2) multiPicker.launch(imageOnly) else singlePicker.launch(imageOnly)
+                            }
+                        },
                         onCapture = { launchCapture() },
+                        onMove = { from, to ->
+                            if (!isBusy()) update { it.movePhoto(from, to) }
+                        },
+                        editingEnabled = !busy,
                     )
                 }
                 if (existing) {
                     BasicText(
                         stringResource(R.string.record_clear),
-                        Modifier.heightIn(min = 48.dp).clickable(enabled = !saving, role = Role.Button) { showClear = true },
+                        Modifier.heightIn(min = 48.dp).clickable(enabled = !busy, role = Role.Button) { showClear = true },
                         style = TextStyle(t.accent.accentStroke.asColor(), 15.sp, FontWeight.Medium),
                     )
                 }
@@ -399,6 +490,13 @@ internal fun RecordSheet(
                 if (failed) {
                     BasicText(
                         stringResource(R.string.record_save_failed),
+                        Modifier.padding(bottom = 8.dp),
+                        style = TextStyle(primary, 14.sp, FontWeight.Medium),
+                    )
+                }
+                if (importingPhotos || photoImportFailed) {
+                    BasicText(
+                        stringResource(if (importingPhotos) R.string.record_photo_importing else R.string.record_photo_import_failed),
                         Modifier.padding(bottom = 8.dp),
                         style = TextStyle(primary, 14.sp, FontWeight.Medium),
                     )
@@ -417,7 +515,7 @@ internal fun RecordSheet(
                         style = TextStyle(primary, 14.sp, FontWeight.Medium),
                     )
                 }
-                val canSave = current != null && !saving && visible && remaining >= 0 &&
+                val canSave = current != null && !busy && visible && remaining >= 0 &&
                     (!waitingForType || current.status == DayStatus.REST)
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(if (canSave) 1f else 0.5f).clip(RoundedCornerShape(50))
@@ -441,23 +539,21 @@ internal fun RecordSheet(
         }
     }
 
-    if (showDatePicker) {
-        DatePickerDialog(
-            selected = current?.date ?: date,
-            firstDayOfWeek = firstDayOfWeek,
-            onSelect = { d ->
-                showDatePicker = false
-                if (d != current?.date) {
-                    if (dirty) { pendingDate = d.toEpochDay(); showDiscard = true } else scope.launch { load(d) }
-                }
-            },
-            onDismiss = { showDatePicker = false },
-        )
-    }
-    viewing?.let { i ->
-        val photo = current?.photos?.getOrNull(i)
-        if (photo == null) viewing = null
-        else PhotoViewer(photo, photoStore, stringResource(R.string.day_photo, i + 1)) { viewing = null }
+    DatePickerDialog(
+        visible = showDatePicker,
+        selected = current?.date ?: date,
+        firstDayOfWeek = firstDayOfWeek,
+        onSelect = { d ->
+            showDatePicker = false
+            if (d != current?.date) {
+                if (dirty) { pendingDate = d.toEpochDay(); showDiscard = true } else changeDate(d)
+            }
+        },
+        onDismiss = { showDatePicker = false },
+        visibility = datePickerVisibility,
+    )
+    PhotoViewer(photo, photoStore, stringResource(R.string.day_photo, (viewing ?: 0) + 1), photoVisibility) {
+        viewing = null
     }
     GlassDialog(
         visible = showDiscard,
@@ -466,15 +562,17 @@ internal fun RecordSheet(
             showDiscard = false
             val p = pendingDate
             pendingDate = null
-            if (p != null) { cleanupCaptures(); scope.launch { load(LocalDate.ofEpochDay(p)) } } else close()
+            if (p != null) changeDate(LocalDate.ofEpochDay(p)) else close()
         },
         onDismiss = { showDiscard = false; pendingDate = null },
+        visibility = discardVisibility,
     )
     GlassDialog(
         visible = showRest,
         text = stringResource(R.string.record_rest_confirm), confirm = stringResource(R.string.record_status_rest), dismiss = stringResource(R.string.record_cancel),
         onConfirm = { showRest = false; update { it.markRest() } },
         onDismiss = { showRest = false },
+        visibility = restVisibility,
     )
     GlassDialog(
         visible = showClear,
@@ -488,6 +586,7 @@ internal fun RecordSheet(
             }
         },
         onDismiss = { showClear = false },
+        visibility = clearVisibility,
     )
 }
 

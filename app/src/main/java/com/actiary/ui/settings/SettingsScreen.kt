@@ -10,11 +10,9 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.actiary.R
-import com.actiary.data.appearance.AccentPreset
 import com.actiary.data.appearance.AppearanceSettings
 import com.actiary.data.appearance.ChartPalette
 import com.actiary.data.appearance.GlassLevel
-import com.actiary.data.appearance.GlassTintStrength
 import com.actiary.data.appearance.ThemeMode
 import com.actiary.data.appearance.WeekStart
 
@@ -26,12 +24,13 @@ internal fun SettingsScreen(
     weekStart: WeekStart,
     onWeekStart: (WeekStart) -> Unit,
     onThemeMode: (ThemeMode) -> Unit,
-    onPreset: (AccentPreset) -> Unit,
+    accentColors: List<String>,
+    onSelectAccent: (String) -> Unit,
+    onRemoveAccent: (String) -> Unit,
     onGlassLevel: (GlassLevel) -> Unit,
-    onGlassTint: (GlassTintStrength) -> Unit,
     onAmbient: (Boolean) -> Unit,
     onResetAppearance: () -> Unit,
-    onCustomColor: () -> Unit,
+    onCustomColor: (String?) -> Unit,
     onChartPalette: (ChartPalette) -> Unit,
     recent: List<String>,
     onApplyCustomAccent: (String) -> Unit,
@@ -66,8 +65,8 @@ internal fun SettingsScreen(
             }
         }
         SettingsPage.APPEARANCE -> AppearanceScreen(
-            settings, onThemeMode, onPreset, onGlassLevel, onGlassTint, onAmbient, onBack, onResetAppearance,
-            onCustomColor, onChartPalette,
+            settings, onThemeMode, accentColors, onSelectAccent, onRemoveAccent,
+            onGlassLevel, onAmbient, onBack, onResetAppearance, onCustomColor, onChartPalette,
         )
         SettingsPage.GENERAL -> GeneralScreen(weekStart, onWeekStart, onBack)
         SettingsPage.TYPES -> typesContent(onBack)

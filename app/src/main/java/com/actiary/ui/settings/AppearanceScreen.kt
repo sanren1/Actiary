@@ -1,32 +1,53 @@
 package com.actiary.ui.settings
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.BrightnessAuto
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.WaterDrop
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -38,21 +59,20 @@ import com.actiary.data.appearance.AccentPreset
 import com.actiary.data.appearance.AppearanceSettings
 import com.actiary.data.appearance.ChartPalette
 import com.actiary.data.appearance.GlassLevel
-import com.actiary.data.appearance.GlassTintStrength
 import com.actiary.data.appearance.ThemeMode
+import com.actiary.data.appearance.activeAccentHex
+import com.actiary.data.appearance.builtInAccentColors
+import com.actiary.glass.GlassAnchoredMenuItem
 import com.actiary.glass.GlassPanel
 import com.actiary.glass.GlassPreview
-import com.actiary.glass.GlassSegmentedPicker
 import com.actiary.glass.GlassToggle
+import com.actiary.glass.LocalGlassAnchoredMenu
 import com.actiary.glass.LocalGlassProfile
-import com.actiary.theme.DEFAULT_SEED
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.theme.contrast
 import com.actiary.theme.parseHex
-import com.actiary.theme.seed
-
-private val presets = AccentPreset.entries.filter { it != AccentPreset.CUSTOM }
+import com.actiary.ui.common.SelectionMenuRow
 
 @Composable
 internal fun presetName(p: AccentPreset): String = stringResource(
@@ -75,127 +95,187 @@ private fun style(c: Int, size: Int = 16, w: FontWeight = FontWeight.Normal) =
 fun AppearanceScreen(
     settings: AppearanceSettings,
     onThemeMode: (ThemeMode) -> Unit,
-    onPreset: (AccentPreset) -> Unit,
+    accentColors: List<String>,
+    onSelectAccent: (String) -> Unit,
+    onRemoveAccent: (String) -> Unit,
     onGlassLevel: (GlassLevel) -> Unit,
-    onGlassTint: (GlassTintStrength) -> Unit,
     onAmbient: (Boolean) -> Unit,
     onBack: () -> Unit,
     onResetAppearance: () -> Unit,
-    onCustomColor: () -> Unit,
+    onCustomColor: (String?) -> Unit,
     onChartPalette: (ChartPalette) -> Unit,
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
 
     SettingsPageLayout(stringResource(R.string.appearance_title), onBack) {
-        GlassPreview(t, LocalGlassProfile.current)
+        GlassPreview(t, LocalGlassProfile.current, chartPalette = settings.chartPalette)
 
-        GlassPanel(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Segmented(
-                    listOf(
-                        ThemeMode.LIGHT to R.string.theme_mode_light,
-                        ThemeMode.DARK to R.string.theme_mode_dark,
-                        ThemeMode.SYSTEM to R.string.theme_mode_system,
-                    ),
-                    settings.themeMode, onThemeMode,
-                )
-                BasicText(stringResource(R.string.accent_title), style = style(n.textSecondary, 14))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    presets.forEach { p ->
-                        AccentSwatch(p.seed() ?: 0, presetName(p), settings.accentPreset == p) { onPreset(p) }
+        AppearanceSection(stringResource(R.string.appearance_theme_mode), Icons.Outlined.BrightnessAuto) {
+            SettingsGroup { rowShape ->
+                Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(ThemeMode.SYSTEM, ThemeMode.LIGHT, ThemeMode.DARK).forEach { mode ->
+                        val (label, icon) = when (mode) {
+                            ThemeMode.SYSTEM -> R.string.theme_mode_system to Icons.Outlined.BrightnessAuto
+                            ThemeMode.LIGHT -> R.string.theme_mode_light to Icons.Outlined.LightMode
+                            ThemeMode.DARK -> R.string.theme_mode_dark to Icons.Outlined.DarkMode
+                        }
+                        val selected = mode == settings.themeMode
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                                .clip(rowShape).background(n.surface.asColor())
+                                .selectable(selected, role = Role.RadioButton) { onThemeMode(mode) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(icon, contentDescription = null, tint = n.textSecondary.asColor())
+                            BasicText(stringResource(label), Modifier.weight(1f), style = style(n.textPrimary))
+                            if (selected) Icon(Icons.Outlined.Check, null, tint = t.accent.accentAction.asColor())
+                        }
                     }
-                    AccentSwatch(
-                        parseHex(settings.customAccentHex) ?: DEFAULT_SEED,
-                        stringResource(R.string.preset_custom),
-                        settings.accentPreset == AccentPreset.CUSTOM,
-                        onCustomColor,
-                    )
                 }
             }
         }
-
-        GlassPanel(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                BasicText(stringResource(R.string.glass_level_title), style = style(n.textSecondary, 14))
-                Segmented(
-                    listOf(
-                        GlassLevel.SOFT to R.string.glass_level_soft,
-                        GlassLevel.BALANCED to R.string.glass_level_balanced,
-                        GlassLevel.CLEAR to R.string.glass_level_clear,
+        AppearanceSection(stringResource(R.string.accent_title), Icons.Outlined.Palette) {
+            GlassPanel(Modifier.fillMaxWidth()) {
+                FlowRow(
+                    Modifier.padding(12.dp).selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    val active = settings.activeAccentHex()
+                    accentColors.forEach { hex ->
+                        key(hex) {
+                            val preset = builtInAccentColors[hex]
+                            AccentSwatch(
+                                seed = checkNotNull(parseHex(hex)),
+                                label = if (preset != null) presetName(preset) else stringResource(R.string.accent_color_description, hex),
+                                isSelected = hex == active,
+                                onClick = { onSelectAccent(hex) },
+                                onEdit = { onCustomColor(hex) },
+                                onDelete = { onRemoveAccent(hex) },
+                            )
+                        }
+                    }
+                    val addLabel = stringResource(R.string.accent_add)
+                    Box(
+                        Modifier.size(48.dp).clip(CircleShape)
+                            .clickable(role = Role.Button, onClickLabel = addLabel) { onCustomColor(null) }
+                            .semantics { contentDescription = addLabel },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier.size(34.dp).background(n.surfaceMuted.asColor(), CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Outlined.Add, null, Modifier.size(20.dp), tint = n.textSecondary.asColor())
+                        }
+                    }
+                }
+            }
+        }
+        val glassLabel = stringResource(R.string.glass_level_title)
+        AppearanceSection(glassLabel, Icons.Outlined.WaterDrop) {
+            SettingsGroup {
+                SelectionMenuRow(
+                    label = stringResource(R.string.appearance_glass_style),
+                    options = listOf(
+                        GlassLevel.SOFT to stringResource(R.string.glass_level_soft),
+                        GlassLevel.BALANCED to stringResource(R.string.glass_level_balanced),
+                        GlassLevel.CLEAR to stringResource(R.string.glass_level_clear),
                     ),
-                    settings.glassLevel, onGlassLevel,
-                )
-                BasicText(stringResource(R.string.glass_tint_title), style = style(n.textSecondary, 14))
-                Segmented(
-                    listOf(
-                        GlassTintStrength.LOW to R.string.glass_tint_low,
-                        GlassTintStrength.MEDIUM to R.string.glass_tint_medium,
-                        GlassTintStrength.HIGH to R.string.glass_tint_high,
-                    ),
-                    settings.glassTintStrength, onGlassTint,
+                    selected = settings.glassLevel,
+                    onSelect = onGlassLevel,
                 )
                 val ambientLabel = stringResource(R.string.ambient_title)
                 GlassToggle(
                     checked = settings.ambientBackground,
                     onCheckedChange = onAmbient,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     label = ambientLabel,
                 ) {
                     BasicText(ambientLabel, style = style(n.textPrimary))
                 }
-                BasicText(stringResource(R.string.chart_palette_title), style = style(n.textSecondary, 14))
-                Segmented(
-                    listOf(
-                        ChartPalette.NEUTRAL_FIRST to R.string.chart_palette_neutral,
-                        ChartPalette.FOLLOW_ACCENT to R.string.chart_palette_accent,
-                        ChartPalette.MUTED_CATEGORIES to R.string.chart_palette_muted,
-                    ),
-                    settings.chartPalette, onChartPalette,
-                )
             }
         }
+        SelectionMenuRow(
+            label = stringResource(R.string.chart_palette_title),
+            options = listOf(
+                ChartPalette.NEUTRAL_FIRST to stringResource(R.string.chart_palette_neutral),
+                ChartPalette.FOLLOW_ACCENT to stringResource(R.string.chart_palette_accent),
+                ChartPalette.MUTED_CATEGORIES to stringResource(R.string.chart_palette_muted),
+            ),
+            selected = settings.chartPalette,
+            onSelect = onChartPalette,
+        )
         SettingsRow(stringResource(R.string.settings_reset_appearance), Icons.Outlined.RestartAlt, onClick = onResetAppearance)
     }
 }
 
 @Composable
-private fun <T> Segmented(options: List<Pair<T, Int>>, current: T, onSelect: (T) -> Unit) {
-    GlassSegmentedPicker(
-        options.map { stringResource(it.second) },
-        options.indexOfFirst { it.first == current },
-        { onSelect(options[it].first) },
-    )
+private fun AppearanceSection(label: String, icon: ImageVector, content: @Composable () -> Unit) {
+    val color = LocalThemeTokens.current.neutrals.textPrimary
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.padding(horizontal = 4.dp).semantics(mergeDescendants = true) { heading() },
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, null, Modifier.size(18.dp), tint = color.asColor())
+            BasicText(label, style = style(color, 14, FontWeight.SemiBold))
+        }
+        content()
+    }
 }
 
 @Composable
-private fun AccentSwatch(seed: Int, label: String, isSelected: Boolean, onClick: () -> Unit) {
+private fun AccentSwatch(
+    seed: Int,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val t = LocalThemeTokens.current
-    val n = t.neutrals
-    val a = t.accent
-    Column(
-        Modifier.width(96.dp)
-            .then(if (isSelected) Modifier.border(2.dp, a.accentStroke.asColor(), RoundedCornerShape(12.dp)) else Modifier)
-            .semantics { selected = isSelected }
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+    val menu = LocalGlassAnchoredMenu.current
+    val optionsLabel = stringResource(R.string.accent_options)
+    val editLabel = stringResource(R.string.accent_edit_action)
+    val deleteLabel = stringResource(R.string.accent_delete)
+    var anchor by remember { mutableStateOf<Rect?>(null) }
+    Box(
+        Modifier.size(48.dp)
+            .onGloballyPositioned { anchor = it.boundsInRoot() }
+            .clip(CircleShape)
+            .combinedClickable(
+                role = Role.RadioButton,
+                onClick = onClick,
+                onLongClickLabel = optionsLabel,
+                onLongClick = {
+                    anchor?.let { bounds ->
+                        menu.show(
+                            bounds,
+                            listOf(
+                                GlassAnchoredMenuItem(editLabel, Icons.Outlined.Edit, onClick = onEdit),
+                                GlassAnchoredMenuItem(deleteLabel, Icons.Outlined.Delete, destructive = true, onClick = onDelete),
+                            ),
+                        )
+                    }
+                },
+            )
+            .semantics {
+                contentDescription = label
+                selected = isSelected
+            }
+            .then(if (isSelected) Modifier.border(2.dp, t.accent.accentStroke.asColor(), CircleShape) else Modifier),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(40.dp).background(seed.asColor(), CircleShape), contentAlignment = Alignment.Center) {
-            val checkColor = if (contrast(seed, 0xFFFFFFFF.toInt()) >= contrast(seed, 0xFF000000.toInt())) Color.White else Color.Black
-            if (isSelected) Canvas(Modifier.size(20.dp)) {
-                val path = Path().apply {
-                    moveTo(size.width * 0.15f, size.height * 0.55f)
-                    lineTo(size.width * 0.4f, size.height * 0.8f)
-                    lineTo(size.width * 0.85f, size.height * 0.25f)
-                }
-                drawPath(path, checkColor, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+        Box(Modifier.size(34.dp).background(seed.asColor(), CircleShape), contentAlignment = Alignment.Center) {
+            if (isSelected) {
+                val tint = if (contrast(seed, 0xFFFFFFFF.toInt()) >= contrast(seed, 0xFF000000.toInt())) Color.White else Color.Black
+                Icon(Icons.Outlined.Check, null, Modifier.size(20.dp), tint = tint)
             }
         }
-        BasicText(label, style = style(n.textPrimary, 12, if (isSelected) FontWeight.Bold else FontWeight.Normal))
     }
 }

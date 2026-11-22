@@ -50,4 +50,14 @@ class RecordsFormatTest {
         assertEquals(1, days.size)
         assertEquals(listOf(2L), days[0].day.entries.map { it.typeId })
     }
+
+    @Test fun emptyTypeKeepsRangeAndChartSlotsWithAnEmptyTimeline() {
+        val result = recordsPresentation(year, days, 3)
+
+        assertEquals(year, result.range)
+        assertEquals(3L, result.filter)
+        assertEquals(0, result.stats.entryCount)
+        assertEquals((1..12).toList(), result.stats.buckets.map { it.start.monthValue })
+        assertEquals(emptyList<TimelineItem>(), result.timeline)
+    }
 }

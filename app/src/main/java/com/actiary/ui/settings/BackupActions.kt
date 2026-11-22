@@ -6,6 +6,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -34,6 +35,9 @@ internal class BackupActions(application: Application) : AndroidViewModel(applic
     private val repository by lazy { app.container.backupRepository }
 
     var state: BackupState by mutableStateOf(BackupState.Idle)
+        private set
+
+    var storageRevision by mutableIntStateOf(0)
         private set
 
     fun pickDocument(launchPicker: () -> Unit) {
@@ -81,6 +85,7 @@ internal class BackupActions(application: Application) : AndroidViewModel(applic
             } finally {
                 staged.release()
             }
+            storageRevision++
             when (mode) {
                 ImportMode.MERGE -> notify(R.string.backup_merged, days(summary.written), days(summary.skipped))
                 ImportMode.OVERWRITE -> notify(R.string.backup_restored, days(summary.written))
@@ -100,7 +105,9 @@ internal class BackupActions(application: Application) : AndroidViewModel(applic
     fun cleanPhotos() {
         if (state !is BackupState.ConfirmCleanup) return
         runOperation(R.string.backup_cleaning_photos, R.string.backup_cleanup_failed) {
-            notify(R.string.backup_cleaned, photos(repository.deleteOrphanPhotos()))
+            val deleted = repository.deleteOrphanPhotos()
+            storageRevision++
+            notify(R.string.backup_cleaned, photos(deleted))
         }
     }
 

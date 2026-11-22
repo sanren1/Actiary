@@ -1,5 +1,6 @@
 package com.actiary.ui.record
 
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassOverlayPanel
+import com.actiary.glass.rememberOverlayVisibility
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
@@ -38,26 +40,28 @@ import java.time.YearMonth
 
 @Composable
 fun DatePickerDialog(
+    visible: Boolean,
     selected: LocalDate,
     firstDayOfWeek: DayOfWeek,
     onSelect: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
     title: String = "",
+    visibility: MutableTransitionState<Boolean> = rememberOverlayVisibility(visible),
 ) {
     val t = LocalThemeTokens.current
     val locale = LocalConfiguration.current.locales[0]
     val today = LocalDate.now()
     val thisMonth = YearMonth.from(today)
-    val state = rememberCalendarState(
-        startMonth = thisMonth.minusYears(10),
-        endMonth = thisMonth,
-        firstVisibleMonth = YearMonth.from(selected),
-        firstDayOfWeek = remember { firstDayOfWeek },
-    )
-    SideEffect { state.firstDayOfWeek = firstDayOfWeek }
-    val scope = rememberCoroutineScope()
-    val month = state.firstVisibleMonth.yearMonth
-    GlassOverlayPanel(true, onDismiss, PaddingValues(16.dp), title = title) {
+    GlassOverlayPanel(visible, onDismiss, PaddingValues(16.dp), title, visibility) {
+        val state = rememberCalendarState(
+            startMonth = thisMonth.minusYears(10),
+            endMonth = thisMonth,
+            firstVisibleMonth = YearMonth.from(selected),
+            firstDayOfWeek = remember { firstDayOfWeek },
+        )
+        SideEffect { state.firstDayOfWeek = firstDayOfWeek }
+        val scope = rememberCoroutineScope()
+        val month = state.firstVisibleMonth.yearMonth
         if (title.isNotEmpty()) {
             BasicText(title, Modifier.padding(bottom = 8.dp), style = TextStyle(t.neutrals.textPrimary.asColor(), 16.sp, FontWeight.Medium))
         }

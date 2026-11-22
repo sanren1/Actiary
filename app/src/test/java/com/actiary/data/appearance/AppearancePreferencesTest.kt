@@ -163,6 +163,39 @@ class AppearancePreferencesTest {
         assertEquals(listOf("#222222", "#111111"), r.recentColors.first())
     }
 
+    @Test fun paletteEditsPreserveOrderAndUpdateOnlyActiveSwatch() = runBlocking {
+        val r = repo()
+        val original = r.accentColors.first()
+        r.savePaletteAccent("#111111")
+        r.savePaletteAccent("#222222")
+        r.selectPaletteAccent("#111111")
+
+        r.savePaletteAccent("#333333", previous = "#222222")
+        assertEquals(original + listOf("#111111", "#333333"), r.accentColors.first())
+        assertEquals("#111111", r.settings.first().customAccentHex)
+
+        r.savePaletteAccent("#333333", previous = "#111111")
+        assertEquals(original + "#333333", r.accentColors.first())
+        assertEquals("#333333", r.settings.first().customAccentHex)
+
+        r.removePaletteAccent("#333333")
+        assertEquals(original, r.accentColors.first())
+        assertEquals(original.first(), r.settings.first().activeAccentHex())
+    }
+
+    @Test fun paletteCanEditAndRemovePresetsAcrossBackup() = runBlocking {
+        val source = repo()
+        val original = source.accentColors.first()
+        val active = source.settings.first().activeAccentHex()
+        source.savePaletteAccent("#111111", previous = active)
+        source.removePaletteAccent(original.first())
+        assertEquals("#111111", source.settings.first().activeAccentHex())
+        val destination = repo()
+        destination.importAppearance(source.exportAppearance(), replace = true)
+        assertEquals(source.accentColors.first(), destination.accentColors.first())
+        assertEquals("#111111", destination.settings.first().activeAccentHex())
+    }
+
     @Test fun exportImportAppearanceRoundTrip() = runBlocking {
         val sourceStore = inMemoryPreferencesStore()
         val source = AppearanceRepository(sourceStore)

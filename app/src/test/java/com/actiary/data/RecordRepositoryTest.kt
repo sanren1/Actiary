@@ -67,6 +67,13 @@ private class FakeDao : RecordDao {
     override suspend fun setTypeSortOrder(id: Long, sortOrder: Int) {
         typeRows.value = typeRows.value.map { if (it.id == id) it.copy(sortOrder = sortOrder) else it }
     }
+    override suspend fun updateType(id: Long, name: String?, hasDistance: Boolean, iconKey: String?): Int {
+        val type = typeRows.value.firstOrNull { it.id == id && !it.archived } ?: return 0
+        typeRows.value = typeRows.value.map {
+            if (it == type) it.copy(name = name, hasDistance = hasDistance, iconKey = iconKey) else it
+        }
+        return 1
+    }
     override suspend fun insertPhotos(photos: List<PhotoAttachmentEntity>) = error("unused")
     override suspend fun replaceDay(
         record: DailyRecordEntity,
@@ -129,6 +136,31 @@ class RecordRepositoryTest {
         try { repo().save(draft().addPhotos(listOf("a", "b"))); fail() } catch (_: FileNotFoundException) {}
         assertNull(dao.get(date.toEpochDay()))
         assertEquals(0, dir.list()!!.size)
+    }
+
+    @Test fun stagedPickerPhotosSaveAfterTheOriginalGrantIsGone() = runBlocking {
+        val pickerUri = "content://picker/1"
+        val staged = repo().stagePickedPhotos(List(9) { pickerUri })
+        assertTrue(store.listFileNames().isEmpty())
+        failUri = pickerUri
+
+        repo().save(draft().withNote("x".repeat(200)).copy(photos = staged))
+
+        val saved = dao.get(date.toEpochDay())!!
+        assertEquals(200, saved.record.note.length)
+        assertEquals((0..8).toList(), saved.photos.map { it.sortOrder })
+        assertEquals(List(9) { pickerUri }, saved.photos.map { store.file(it.fileName).readText() })
+    }
+
+    @Test fun partialPickerFailureDiscardsEveryNewDraftFile() = runBlocking {
+        failUri = "missing"
+        try {
+            repo().stagePickedPhotos(listOf("readable", "missing"))
+            fail()
+        } catch (_: FileNotFoundException) {
+            assertTrue(dir.walkTopDown().none { it.isFile })
+            assertNull(dao.get(date.toEpochDay()))
+        }
     }
 
     @Test fun editRemovesDroppedFileOnly() = runBlocking {
@@ -200,5 +232,25 @@ class RecordRepositoryTest {
         val climbing = repo().addType("攀岩", false, "climb")
         repo().moveType(climbing, -1)
         assertEquals(listOf(climbing, running), repo().types.first().map { it.id })
+    }
+
+    @Test fun editingBuiltinTypeChangesPresentationWithoutReplacingItsIdentity() = runBlocking {
+        val id = dao.insertType(ExerciseTypeEntity(builtinKey = "running", name = null, sortOrder = 3, hasDistance = true))
+        repo().save(draft().toggleType(id))
+
+        repo().updateType(id, "  Trail running  ", false, "climb")
+
+        val edited = dao.getActiveTypes().single()
+        assertEquals(id, edited.id)
+        assertEquals("running", edited.builtinKey)
+        assertEquals(3, edited.sortOrder)
+        assertEquals("Trail running", edited.name)
+        assertFalse(edited.hasDistance)
+        assertEquals("climb", edited.iconKey)
+        assertEquals(id, dao.get(date.toEpochDay())!!.entries.single().typeId)
+
+        repo().updateType(id, null, true, null)
+        assertNull(dao.getActiveTypes().single().name)
+        assertNull(dao.getActiveTypes().single().iconKey)
     }
 }

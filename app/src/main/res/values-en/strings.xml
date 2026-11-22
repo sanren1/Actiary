@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name">Actiary</string>
     <string name="appearance_title">Appearance</string>
+    <string name="appearance_theme_mode">Theme mode</string>
+    <string name="appearance_glass_style">Glass style</string>
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_dark">Dark</string>
     <string name="theme_mode_system">System</string>
@@ -10,10 +12,6 @@
     <string name="glass_level_soft">Soft</string>
     <string name="glass_level_balanced">Balanced</string>
     <string name="glass_level_clear">Clear</string>
-    <string name="glass_tint_title">Glass tint</string>
-    <string name="glass_tint_low">Low</string>
-    <string name="glass_tint_medium">Medium</string>
-    <string name="glass_tint_high">High</string>
     <string name="ambient_title">Ambient background</string>
     <string name="preset_mist_teal">Mist Teal</string>
     <string name="preset_slate_blue">Slate Blue</string>
@@ -64,6 +62,7 @@
     <string name="record_detail_distance">Distance</string>
     <string name="record_detail_bpm">%d bpm</string>
     <string name="record_cancel">Cancel</string>
+    <string name="overlay_close">Close</string>
     <string name="record_save">Save</string>
     <string name="record_date">Date</string>
     <string name="record_activities">Activities</string>
@@ -88,6 +87,8 @@
     <string name="record_discard_title">Discard unsaved changes?</string>
     <string name="record_discard">Discard</string>
     <string name="record_keep_editing">Keep editing</string>
+    <string name="record_photo_importing">Importing photos…</string>
+    <string name="record_photo_import_failed">Could not read the selected photos. Please select them again.</string>
     <string name="record_save_failed">Couldn’t save. Try again.</string>
     <string name="record_invalid_value">Check calories, heart rate and distance</string>
     <string name="record_counter">%1$d/%2$d</string>
@@ -186,6 +187,10 @@
     <string name="notice_coroutines_use">Asynchronous tasks and data streams</string>
     <string name="notice_json_use">Backup JSON handling in JVM unit tests only</string>
     <string name="custom_type_name">Type name</string>
+    <string name="custom_type_add_title">Add workout type</string>
+    <string name="custom_type_edit_title">Edit workout type</string>
+    <string name="custom_type_edit_named">Edit %1$s</string>
+    <string name="custom_type_default_icon">Default icon</string>
     <string name="custom_type_has_distance">Track distance</string>
     <string name="custom_type_icon">Icon</string>
     <string name="custom_type_choose_icon">Choose an icon</string>
@@ -209,12 +214,15 @@
     <string name="icon_walk">Walking</string>
     <string name="icon_skate">Skateboarding</string>
     <string name="icon_sports">Other sports</string>
-    <string name="custom_type_add">Add</string>
     <string name="custom_type_delete">Delete</string>
     <string name="custom_type_delete_named">Delete %1$s</string>
     <string name="custom_type_delete_confirm">Delete this workout type? A type with records will be archived and its history kept. An unused type will be permanently deleted.</string>
     <string name="custom_type_move_up">Move %1$s up</string>
     <string name="custom_type_move_down">Move %1$s down</string>
-    <string name="custom_type_with_distance">With distance</string>
-    <string name="custom_type_no_distance">No distance</string>
+    <string name="data_storage_usage">Workout storage</string>
+    <string name="data_storage_total">Total</string>
+    <string name="data_storage_database">Workout database</string>
+    <string name="data_storage_photos">Photo storage</string>
+    <string name="record_move_photo_earlier">Move photo earlier</string>
+    <string name="record_move_photo_later">Move photo later</string>
 </resources>
