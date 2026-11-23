@@ -1,9 +1,30 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
+
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) file.inputStream().use(::load)
+}
+
+fun signingProp(propKey: String, envKey: String): String? =
+    localProps.getProperty(propKey)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(envKey)?.takeIf { it.isNotBlank() }
+
+val releaseStoreFilePath = signingProp("release.storeFile", "ACTIARY_STORE_FILE")
+val releaseStorePassword = signingProp("release.storePassword", "ACTIARY_STORE_PASSWORD")
+val releaseKeyAlias = signingProp("release.keyAlias", "ACTIARY_KEY_ALIAS")
+val releaseKeyPassword = signingProp("release.keyPassword", "ACTIARY_KEY_PASSWORD")
+val releaseKeystoreFile = releaseStoreFilePath?.let { rootProject.file(it) }?.takeIf { it.isFile }
+val hasReleaseSigning = releaseKeystoreFile != null &&
+    releaseStorePassword != null &&
+    releaseKeyAlias != null &&
+    releaseKeyPassword != null
 
 android {
     namespace = "com.actiary"
@@ -21,13 +42,24 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            // Local verification uses the debug keystore so in-place upgrades keep device data;
-            // replace with a dedicated release keystore before publishing a public GitHub release.
-            signingConfig = signingConfigs.getByName("debug")
+            // Uses the local release keystore when configured in local.properties / env vars;
+            // falls back to debug signing so contributors can build locally without private keys.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
