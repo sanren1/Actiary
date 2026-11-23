@@ -31,12 +31,30 @@ internal data class ParsedWorkout(
 
 private const val DURATION_LABEL = "运动时间"
 private const val CALORIES_LABEL = "总消耗热量"
+private const val ACTIVE_CALORIES_LABEL = "活动热量"
 private const val HEART_RATE_LABEL = "平均心率"
-private val metricLabels = setOf(DURATION_LABEL, CALORIES_LABEL, HEART_RATE_LABEL, "活动热量")
-private val workoutTypes = mapOf("户外跑步" to "running", "泳池游泳" to "swimming", "自由训练" to "freeform")
-private val chineseDate = Regex("""^([0-9]{4})年([0-9]{1,2})月([0-9]{1,2})日""")
+private val metricLabels = setOf(DURATION_LABEL, CALORIES_LABEL, HEART_RATE_LABEL, ACTIVE_CALORIES_LABEL)
+private val workoutTypes = mapOf(
+    "户外跑步" to "running",
+    "室内跑步" to "running",
+    "跑步" to "running",
+    "户外骑行" to "cycling",
+    "室内骑行" to "cycling",
+    "骑行" to "cycling",
+    "泳池游泳" to "swimming",
+    "公开水域游泳" to "swimming",
+    "游泳" to "swimming",
+    "徒步" to "hiking",
+    "登山" to "hiking",
+    "户外步行" to "hiking",
+    "健走" to "hiking",
+    "自由训练" to "freeform",
+    "力量训练" to "freeform",
+)
+private val workoutDate = Regex("""^([0-9]{4})(?:年|[/.-])([0-9]{1,2})(?:月|[/.-])([0-9]{1,2})日?""")
 private val elapsedTime = Regex("""([0-9]{1,4}):([0-5][0-9]):([0-5][0-9])""")
-private val totalCalories = Regex("""([0-9]+)-?(?:千卡|干卡)?""")
+private val totalCalories = Regex("""([0-9]+)-?(?:千卡|干卡|kcal)?""", RegexOption.IGNORE_CASE)
+private val calorieUnits = setOf("千卡", "干卡", "kcal")
 private val averageHeartRate = Regex("""([0-9]+)(?:次/分钟)?""")
 private val headlineNumber = Regex("""([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)[.-]?(公里|米)?""")
 private val distanceUnits = setOf("公里", "米")
@@ -45,7 +63,7 @@ private val metricMetres = Regex("""([0-9]+)(?:\.([0-9]{1,2}))?""")
 
 internal fun parseHuaweiWorkout(lines: List<RecognizedLine>): ParsedWorkout? {
     val ordered = lines.map { it.copy(text = it.text.filterNot(Char::isWhitespace)) }.sortedBy { it.top }
-    val dateLine = ordered.firstOrNull { chineseDate.containsMatchIn(it.text) }
+    val dateLine = ordered.firstOrNull { workoutDate.containsMatchIn(it.text) }
     val date = dateLine?.text?.let(::parseDate)
     val title = ordered.firstNotNullOfOrNull { line ->
         if (dateLine != null && line.bottom > dateLine.top) null
@@ -54,13 +72,13 @@ internal fun parseHuaweiWorkout(lines: List<RecognizedLine>): ParsedWorkout? {
     val typeKey = title?.second
     val durationSeconds = ordered.metricValue(DURATION_LABEL)?.let(::parseDurationSeconds)
     val duration = durationSeconds?.let { parseMinutes(roundedWorkoutMinutes(it).toString()) }
-    val calories = ordered.metricValue(CALORIES_LABEL)?.let {
-        totalCalories.matchEntire(it)?.groupValues?.get(1)?.let(::parseCalories)
-    }
+    val firstMetric = ordered.firstOrNull { it.text in metricLabels }
+    val calories = ordered.metricValue(CALORIES_LABEL)?.let(::parseCalorieValue)
+        ?: ordered.headlineCalories(dateLine ?: title?.first, firstMetric)
+        ?: ordered.metricValue(ACTIVE_CALORIES_LABEL)?.let(::parseCalorieValue)
     val heartRate = ordered.metricValue(HEART_RATE_LABEL)?.let {
         averageHeartRate.matchEntire(it)?.groupValues?.get(1)?.let(::parseHeartRate)
     }
-    val firstMetric = ordered.firstOrNull { it.text in metricLabels }
     val distance = if (typeKey == "freeform") null else ordered.headlineDistance(typeKey, dateLine ?: title?.first, firstMetric)
     if (typeKey == null && duration == null && distance == null && calories == null && heartRate == null) return null
     val seconds = durationSeconds.takeIf { duration != null }
@@ -83,13 +101,16 @@ internal fun parseHuaweiWorkout(lines: List<RecognizedLine>): ParsedWorkout? {
 }
 
 private fun parseDate(text: String): LocalDate? {
-    val (year, month, day) = chineseDate.find(text)?.destructured ?: return null
+    val (year, month, day) = workoutDate.find(text)?.destructured ?: return null
     return try {
         LocalDate.of(year.toInt(), month.toInt(), day.toInt())
     } catch (_: DateTimeException) {
         null
     }
 }
+
+private fun parseCalorieValue(text: String): Int? =
+    totalCalories.matchEntire(text)?.groupValues?.get(1)?.let(::parseCalories)
 
 private fun parseDurationSeconds(text: String): Int? {
     val (hours, minutes, seconds) = elapsedTime.matchEntire(text)?.destructured ?: return null
@@ -130,16 +151,36 @@ private fun List<RecognizedLine>.metricLine(labelText: String): RecognizedLine? 
     return beside ?: below
 }
 
+private fun List<RecognizedLine>.headlineCalories(
+    header: RecognizedLine?,
+    firstMetric: RecognizedLine?,
+): Int? {
+    val referenceHeight = (header ?: firstMetric)?.height ?: return null
+    return asSequence().filter { number ->
+        number.height >= (referenceHeight * 1.5f).toInt() &&
+            (firstMetric == null || number.bottom <= firstMetric.top)
+    }.sortedByDescending { it.height }.firstNotNullOfOrNull { number ->
+        val inlineHasUnit = calorieUnits.any { number.text.endsWith(it, ignoreCase = true) }
+        val separateUnit = if (inlineHasUnit) true else any { unit ->
+            unit.text.lowercase() in calorieUnits &&
+                unit.top < number.bottom && unit.bottom > number.top &&
+                unit.right > number.right && unit.left <= number.right + number.height
+        }
+        if (separateUnit) parseCalorieValue(number.text) else null
+    }
+}
+
 private fun List<RecognizedLine>.headlineDistance(
     typeKey: String?,
     header: RecognizedLine?,
     firstMetric: RecognizedLine?,
 ): Int? {
     val referenceHeight = (header ?: firstMetric)?.height ?: return null
-    // The distance is the large readout between the date and the metric grid.
+    // The distance is the large readout above the metric grid (below or beside the header).
     return asSequence().filter { number ->
+        val belowOrBesideHeader = header == null || number.top >= header.bottom || number.right <= header.left
         number.height >= 2 * referenceHeight &&
-            (header == null || number.top >= header.bottom) &&
+            belowOrBesideHeader &&
             (firstMetric == null || number.bottom <= firstMetric.top)
     }.sortedByDescending { it.height }.firstNotNullOfOrNull { number ->
         val (value, inlineUnit) = headlineNumber.matchEntire(number.text)?.destructured ?: return@firstNotNullOfOrNull null

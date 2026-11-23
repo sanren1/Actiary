@@ -243,8 +243,9 @@ internal fun RecordSheet(
                 repository.types.first().firstOrNull { it.builtinKey == key }
             }
             val next = if (screenshot == null) base else {
-                // Keep all existing photos in the draft. A full day needs a removal before saving.
-                val imported = base.markExercised().copy(photos = base.photos + DraftPhoto.Picked(screenshot.uri))
+                // Keep all existing photos in the draft. Track file imports (uri == null) attach no photo.
+                val photos = screenshot.uri?.let { base.photos + DraftPhoto.Picked(it) } ?: base.photos
+                val imported = base.markExercised().copy(photos = photos)
                 if (detectedType == null) imported else imported.withRecognizedWorkout(screenshot.workout, detectedType)
             }
             cleanupStagedPhotos(draft?.photos.orEmpty())

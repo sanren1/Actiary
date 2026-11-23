@@ -71,6 +71,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -85,6 +86,7 @@ import com.actiary.data.update.AppUpdater
 import com.actiary.data.update.ReleaseUpdate
 import com.actiary.data.update.UpdatePrefs
 import com.actiary.domain.WorkoutScreenshot
+import com.actiary.domain.WorkoutTrackParser
 import com.actiary.glass.GlassBottomBar
 import com.actiary.glass.GlassBottomBarHeight
 import com.actiary.glass.GlassDialog
@@ -136,9 +138,11 @@ import com.actiary.ui.settings.parent
 import com.actiary.ui.settings.showsBottomBar
 import com.actiary.widget.TodayWidgetUpdater
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -148,8 +152,12 @@ private val BarGap = 6.dp
 
 internal enum class Tab { CALENDAR, RECORDS, SETTINGS }
 
+private data class IncomingImport(val uri: String, val isImage: Boolean, val token: Int)
+
 class MainActivity : ComponentActivity() {
     private var openTodayRequest by mutableIntStateOf(0)
+    private var incomingImport by mutableStateOf<IncomingImport?>(null)
+    private var incomingImportSeq = 0
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguagePrefs.wrapContext(newBase))
@@ -158,19 +166,32 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        consumeOpenTodayExtra(intent)
+        consumeIncomingIntent(intent)
     }
 
-    private fun consumeOpenTodayExtra(target: Intent?) {
-        if (target?.getBooleanExtra(EXTRA_OPEN_RECORD_TODAY, false) == true) {
+    private fun consumeIncomingIntent(target: Intent?) {
+        if (target == null) return
+        if (target.getBooleanExtra(EXTRA_OPEN_RECORD_TODAY, false)) {
             target.removeExtra(EXTRA_OPEN_RECORD_TODAY)
             openTodayRequest++
+        }
+        val uri: Uri? = when (target.action) {
+            Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(target, Intent.EXTRA_STREAM, Uri::class.java)
+            Intent.ACTION_VIEW -> target.data
+            else -> null
+        }
+        if (uri != null) {
+            val mime = (target.type ?: runCatching { contentResolver.getType(uri) }.getOrNull()).orEmpty().lowercase()
+            val isImage = mime.startsWith("image/")
+            incomingImport = IncomingImport(uri.toString(), isImage, ++incomingImportSeq)
+            // Clear action so configuration changes do not replay the same share intent.
+            target.action = null
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null) consumeOpenTodayExtra(intent)
+        if (savedInstanceState == null) consumeIncomingIntent(intent)
         val initialLanguage = AppLanguagePrefs.load(this)
         val container = (application as ActiaryApp).container
         val backup = ViewModelProvider(this)[BackupActions::class.java]
@@ -256,6 +277,33 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 var tab by rememberSaveable { mutableStateOf(Tab.CALENDAR) }
+                LaunchedEffect(incomingImport?.token) {
+                    val req = incomingImport ?: return@LaunchedEffect
+                    incomingImport = null
+                    tab = Tab.CALENDAR
+                    viewing = null
+                    editing = null
+                    clearScreenshot()
+                    if (req.isImage) {
+                        scanningUri = req.uri
+                    } else {
+                        val parsed = withContext(Dispatchers.IO) {
+                            runCatching {
+                                contentResolver.openInputStream(Uri.parse(req.uri))?.use { stream ->
+                                    WorkoutTrackParser.parse(stream)
+                                }
+                            }.getOrNull()
+                        }
+                        if (parsed == null) {
+                            Toast.makeText(this@MainActivity, R.string.home_import_failed, Toast.LENGTH_LONG).show()
+                        } else {
+                            screenshot = WorkoutScreenshot(uri = null, workout = parsed)
+                            val today = LocalDate.now()
+                            val firstDay = YearMonth.from(today).minusYears(10).atDay(1)
+                            editing = parsed.date?.takeIf { it in firstDay..today }?.toEpochDay()
+                        }
+                    }
+                }
                 LaunchedEffect(openTodayRequest) {
                     if (openTodayRequest > 0) {
                         val today = LocalDate.now()

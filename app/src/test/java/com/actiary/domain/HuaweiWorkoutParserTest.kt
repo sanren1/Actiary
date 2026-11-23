@@ -93,6 +93,26 @@ class HuaweiWorkoutParserTest {
         )
     }
 
+    @Test fun freeformSharedPosterReadsSlashDateAndHeadlineCalories() {
+        val lines = listOf(
+            RecognizedLine("140", 96, 160, 310, 260),
+            RecognizedLine("千卡", 320, 212, 390, 252),
+            RecognizedLine("自由训练", 690, 166, 880, 206),
+            RecognizedLine("2026/11/23 21:55", 610, 216, 880, 250),
+            RecognizedLine("活动热量", 180, 310, 320, 344),
+            RecognizedLine("108千卡", 180, 356, 330, 396),
+            RecognizedLine("运动时间", 560, 310, 700, 344),
+            RecognizedLine("00:24:42", 560, 356, 760, 396),
+            RecognizedLine("平均心率", 180, 440, 320, 474),
+            RecognizedLine("114次/分钟", 180, 486, 360, 526),
+        )
+
+        assertEquals(
+            ParsedWorkout(LocalDate.of(2026, 11, 23), "freeform", 25, null, 140, 114, WorkoutMetrics(durationSeconds = 1482)),
+            parseHuaweiWorkout(lines),
+        )
+    }
+
     @Test fun missingDateAndTypeLeaveRecognizedMetricAvailable() {
         assertEquals(
             ParsedWorkout(null, null, 20, null, null, null, WorkoutMetrics(durationSeconds = 1204)),

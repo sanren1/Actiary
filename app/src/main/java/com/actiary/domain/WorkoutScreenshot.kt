@@ -3,7 +3,7 @@ package com.actiary.domain
 import com.actiary.data.db.ExerciseTypeEntity
 import java.io.Serializable
 
-internal data class WorkoutScreenshot(val uri: String, val workout: ParsedWorkout) : Serializable
+internal data class WorkoutScreenshot(val uri: String?, val workout: ParsedWorkout) : Serializable
 
 internal fun DayDraft.withRecognizedWorkout(workout: ParsedWorkout, type: ExerciseTypeEntity): DayDraft {
     val existing = entries.filter { it.typeId == type.id }.singleOrNull()
