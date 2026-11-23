@@ -76,6 +76,9 @@ interface RecordDao {
     @Query("UPDATE exercise_type SET archived = 1 WHERE id = :id AND builtinKey IS NULL")
     suspend fun archiveType(id: Long)
 
+    @Query("UPDATE exercise_type SET archived = :hidden WHERE id = :id AND builtinKey IS NOT NULL")
+    suspend fun setBuiltinTypeHidden(id: Long, hidden: Boolean): Int
+
     @Query("DELETE FROM exercise_type WHERE id = :id AND builtinKey IS NULL AND NOT EXISTS (SELECT 1 FROM exercise_entry WHERE typeId = :id)")
     suspend fun deleteUnusedType(id: Long): Int
 

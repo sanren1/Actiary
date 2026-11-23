@@ -7,9 +7,11 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -213,6 +215,23 @@ internal fun GlassAnchoredMenu(state: GlassAnchoredMenuState, visibility: Mutabl
             },
             label = "Menu opacity",
         ) { if (it == EnterExitState.Visible) 1f else 0f }
+        val panelScale = transition.animateFloat(
+            transitionSpec = {
+                if (reduced) snap()
+                else if (targetState == EnterExitState.Visible) {
+                    spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)
+                } else {
+                    tween(Motion.FADE_OUT_MS)
+                }
+            },
+            label = "Menu scale",
+        ) { state ->
+            when (state) {
+                EnterExitState.PreEnter -> 0.84f
+                EnterExitState.Visible -> 1f
+                EnterExitState.PostExit -> 0.92f
+            }
+        }
         Box(Modifier.fillMaxSize()) {
             // Keep catching outside touches through the exit transition.
             Box(Modifier.matchParentSize().scrim(state::dismiss))
@@ -230,14 +249,22 @@ internal fun GlassAnchoredMenu(state: GlassAnchoredMenuState, visibility: Mutabl
                 val gap = 4.dp.roundToPx()
                 val maxHeight = minOf(glassMenuMaxHeight(anchor, safe, gap), 320.dp.roundToPx())
                 if (safe.width == 0 || maxHeight == 0) return@SubcomposeLayout layout(width, height) {}
+                val opensBelow = (safe.bottom - (anchor.bottom + gap)) >= ((anchor.top - gap) - safe.top)
+                val pivotX = if (layoutDirection == LayoutDirection.Ltr) 0.85f else 0.15f
+                val pivotY = if (opensBelow) 0f else 1f
                 val panel = subcompose(Unit) {
                     Column(
                         Modifier.widthIn(min = 152.dp, max = 272.dp).width(IntrinsicSize.Max)
-                            // Fade the rounded surface with its outline shadow at the anchor.
+                            // Spring-scale and fade the rounded surface from the anchor corner.
                             .graphicsLayer {
                                 shape = menuShape
                                 clip = true
                                 alpha = panelOpacity.value
+                                if (!reduced) {
+                                    scaleX = panelScale.value
+                                    scaleY = panelScale.value
+                                    transformOrigin = TransformOrigin(pivotX, pivotY)
+                                }
                                 shadowElevation = if (profile.degraded) 0f else 8.dp.toPx()
                             }
                             .overlayInteraction(request != null)

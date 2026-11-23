@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -128,12 +129,20 @@ internal fun AboutScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Icon(Icons.Outlined.Code, null, tint = n.textPrimary.asColor())
+                Icon(Icons.Outlined.VerifiedUser, null, tint = n.textPrimary.asColor())
                 Column(Modifier.weight(1f)) {
-                    BasicText(stringResource(R.string.about_open_source), style = TextStyle(n.textPrimary.asColor(), 16.sp))
-                    BasicText(stringResource(R.string.about_open_source_summary), style = TextStyle(n.textSecondary.asColor(), 14.sp))
+                    BasicText(stringResource(R.string.about_privacy), style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                    BasicText(stringResource(R.string.about_privacy_value), style = TextStyle(n.textSecondary.asColor(), 14.sp))
                 }
             }
+            SettingsRow(
+                label = stringResource(R.string.about_open_source),
+                icon = Icons.Outlined.Code,
+                endIcon = Icons.AutoMirrored.Outlined.OpenInNew,
+                summary = stringResource(R.string.about_open_source_summary),
+                shape = rowShape,
+                onClick = { openExternalUrl(context, ACTIARY_GITHUB_URL) },
+            )
             SettingsRow(
                 label = stringResource(R.string.settings_licenses),
                 icon = Icons.Outlined.Description,
@@ -250,6 +259,23 @@ private fun ThirdPartyProjectRow(
     }
 }
 
+private const val ACTIARY_GITHUB_URL = "https://github.com/sanren1/Actiary"
+
+private fun openExternalUrl(context: android.content.Context, url: String) {
+    try {
+        val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+            .apply {
+                // Match generic HTTPS handlers while delivering the actual project URL.
+                selector = Intent(Intent.ACTION_VIEW, Uri.fromParts("https", "", null))
+                    .addCategory(Intent.CATEGORY_BROWSABLE)
+            }
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, R.string.notice_browser_unavailable, Toast.LENGTH_SHORT).show()
+    }
+}
+
 @Composable
 private fun BrowserLink(label: String, url: String) {
     val context = LocalContext.current
@@ -261,20 +287,7 @@ private fun BrowserLink(label: String, url: String) {
                 indication = ripple(color = textColor),
                 role = Role.Button,
                 onClickLabel = stringResource(R.string.notice_open_browser),
-            ) {
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, url.toUri())
-                        .addCategory(Intent.CATEGORY_BROWSABLE)
-                        .apply {
-                            // Match generic HTTPS handlers while delivering the actual project URL.
-                            selector = Intent(Intent.ACTION_VIEW, Uri.fromParts("https", "", null))
-                                .addCategory(Intent.CATEGORY_BROWSABLE)
-                        }
-                    context.startActivity(intent)
-                } catch (_: ActivityNotFoundException) {
-                    Toast.makeText(context, R.string.notice_browser_unavailable, Toast.LENGTH_SHORT).show()
-                }
-            }
+            ) { openExternalUrl(context, url) }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,

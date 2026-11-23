@@ -258,8 +258,6 @@ internal fun StorageDetailsSheet(
                     StorageSummaryRow(stringResource(R.string.data_storage_database), Formatter.formatShortFileSize(app, current.databaseBytes))
                     StorageSummaryRow(stringResource(R.string.data_storage_photos), Formatter.formatShortFileSize(app, current.photoBytes))
                     StorageSummaryRow(stringResource(R.string.data_storage_photo_count), current.photoCount.toString())
-                    StorageSummaryRow(stringResource(R.string.data_storage_photo_avg), Formatter.formatShortFileSize(app, current.averagePhotoBytes))
-                    StorageSummaryRow(stringResource(R.string.data_storage_photo_max), Formatter.formatShortFileSize(app, current.largestPhotoBytes))
                     StorageSummaryRow(stringResource(R.string.data_storage_cache), Formatter.formatShortFileSize(app, current.cacheBytes))
                 }
                 val canClearCache = !clearing && current.cacheBytes > 0L

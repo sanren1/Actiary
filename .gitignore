@@ -1,7 +1,13 @@
-# 本地规划、执行记录与资料（不提交）
-/docs/superpowers/
+# 本地规划、规则、执行记录与资料（不提交）
+/CLAUDE.md
+/AGENTS.md
+/docs/
 /.superpowers/
+/.workbuddy-ai/
+/workout_journal_v2_package/
 /local/
+/Icon.png
+/pic/
 
 # Android / Gradle
 .gradle/

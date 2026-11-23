@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +34,7 @@ typealias GlassBackdrop = Backdrop
 @Composable
 fun rememberGlassLayer(): GlassLayer = rememberLayerBackdrop()
 
-val LocalGlassProfile = staticCompositionLocalOf<GlassProfile> { error("no glass") }
+val LocalGlassProfile = compositionLocalOf<GlassProfile> { error("no glass") }
 
 /** background = ambient layer; content = page content layer (floating glass samples this one). */
 data class GlassLayers(val background: Backdrop, val content: Backdrop)
@@ -91,10 +92,11 @@ fun Modifier.glass(
             } else {
                 val p = press()
                 blur(profile.blurDp.dp.toPx() * (1f - p))
+                val minDim = size.minDimension
                 lens(
-                    profile.refractionHeightDp.dp.toPx() * p,
-                    profile.refractionAmountDp.dp.toPx() * p,
-                    chromaticAberration = true,
+                    minOf(profile.refractionHeightDp.dp.toPx(), minDim * 0.30f) * p,
+                    minOf(profile.refractionAmountDp.dp.toPx() * 0.55f, minDim * 0.35f) * p,
+                    chromaticAberration = profile.chromaticAberration,
                 )
             }
         },

@@ -44,6 +44,12 @@ internal fun builtinTypeLabelRes(builtinKey: String?): Int? = when (builtinKey) 
     "hiking" -> R.string.type_hiking
     "ball" -> R.string.type_ball
     "freeform" -> R.string.type_freeform
+    "chest" -> R.string.type_chest
+    "back" -> R.string.type_back
+    "shoulders" -> R.string.type_shoulders
+    "arms" -> R.string.type_arms
+    "legs" -> R.string.type_legs
+    "abs" -> R.string.type_abs
     else -> null
 }
 
@@ -59,6 +65,12 @@ class TypeIcon(val key: String, val vector: ImageVector, @StringRes val label: I
 /** Icons offered for custom types; the first is the default. Keys are persisted, never rename them. */
 val CUSTOM_TYPE_ICONS = listOf(
     TypeIcon("gym", Icons.Outlined.FitnessCenter, R.string.icon_gym),
+    TypeIcon("chest", WorkoutPartIcons.Chest, R.string.type_chest),
+    TypeIcon("back", WorkoutPartIcons.Back, R.string.type_back),
+    TypeIcon("shoulders", WorkoutPartIcons.Shoulders, R.string.type_shoulders),
+    TypeIcon("arms", WorkoutPartIcons.Arms, R.string.type_arms),
+    TypeIcon("legs", WorkoutPartIcons.Legs, R.string.type_legs),
+    TypeIcon("abs", WorkoutPartIcons.Abs, R.string.type_abs),
     TypeIcon("stretch", Icons.Outlined.SelfImprovement, R.string.icon_stretch),
     TypeIcon("gymnastics", Icons.Outlined.SportsGymnastics, R.string.icon_gymnastics),
     TypeIcon("martial", Icons.Outlined.SportsMartialArts, R.string.icon_martial),
@@ -89,5 +101,11 @@ fun exerciseTypeIcon(type: ExerciseTypeEntity): ImageVector = CUSTOM_TYPE_ICONS.
     "hiking" -> Icons.Outlined.Hiking
     "ball" -> Icons.Outlined.SportsBasketball
     "freeform" -> Icons.Outlined.FitnessCenter
+    "chest" -> WorkoutPartIcons.Chest
+    "back" -> WorkoutPartIcons.Back
+    "shoulders" -> WorkoutPartIcons.Shoulders
+    "arms" -> WorkoutPartIcons.Arms
+    "legs" -> WorkoutPartIcons.Legs
+    "abs" -> WorkoutPartIcons.Abs
     else -> Icons.Outlined.Star
 }

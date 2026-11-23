@@ -94,6 +94,7 @@ import com.actiary.glass.rememberOverlayVisibility
 import com.actiary.glass.resolveGlass
 import com.actiary.theme.AppTheme
 import com.actiary.theme.asColor
+import com.actiary.theme.rememberAnimatedThemeTokens
 import com.actiary.theme.resolveTheme
 import com.actiary.ui.calendar.HomeScreen
 import com.actiary.ui.common.FloatingInsets
@@ -184,12 +185,16 @@ class MainActivity : ComponentActivity() {
             val firstDayOfWeek = weekStart.resolve()
             LocalConfiguration.current
             val dynamicSeed = ContextCompat.getColor(LocalContext.current, android.R.color.system_accent1_500)
-            val tokens = resolveTheme(settings, isSystemInDarkTheme(), dynamicSeed)
+            val targetTokens = resolveTheme(settings, isSystemInDarkTheme(), dynamicSeed)
             val reducedMotion = rememberSystemMotionReduced()
+            val tokens = rememberAnimatedThemeTokens(targetTokens, reducedMotion)
             val profile = resolveGlass(settings.glassLevel, settings.glassTintStrength, tokens, reducedMotion)
-            DisposableEffect(tokens.dark) {
+            LaunchedEffect(targetTokens.neutrals.background) {
+                window.setBackgroundDrawable(ColorDrawable(targetTokens.neutrals.background))
+            }
+            DisposableEffect(targetTokens.dark) {
                 val t = AndroidColor.TRANSPARENT
-                val bars = if (tokens.dark) SystemBarStyle.dark(t) else SystemBarStyle.light(t, t)
+                val bars = if (targetTokens.dark) SystemBarStyle.dark(t) else SystemBarStyle.light(t, t)
                 enableEdgeToEdge(bars, bars)
                 onDispose {}
             }

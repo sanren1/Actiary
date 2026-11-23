@@ -60,6 +60,12 @@
     <string name="type_hiking">徒步</string>
     <string name="type_ball">球类</string>
     <string name="type_freeform">自由训练</string>
+    <string name="type_chest">胸</string>
+    <string name="type_back">背</string>
+    <string name="type_shoulders">肩</string>
+    <string name="type_arms">臂</string>
+    <string name="type_legs">腿</string>
+    <string name="type_abs">腹</string>
     <string name="day_state_logged">已锻炼</string>
     <string name="day_today">今天</string>
     <string name="day_photo">照片 %d</string>
@@ -239,6 +245,9 @@
     <string name="icon_sports">其他运动</string>
     <string name="custom_type_delete">删除</string>
     <string name="custom_type_delete_named">删除%1$s</string>
+    <string name="custom_type_hide_named">隐藏%1$s</string>
+    <string name="custom_type_hidden_section">已隐藏</string>
+    <string name="custom_type_restore">恢复显示</string>
     <string name="custom_type_delete_confirm">删除这个运动类型？已有记录的类型会归档，历史记录会保留。未使用的类型将永久删除。</string>
     <string name="custom_type_move_up">上移%1$s</string>
     <string name="custom_type_move_down">下移%1$s</string>
@@ -264,15 +273,15 @@
     <string name="data_storage_details">查看空间明细</string>
     <string name="data_storage_cache">缓存</string>
     <string name="data_storage_photo_count">照片数量</string>
-    <string name="data_storage_photo_avg">单张平均</string>
-    <string name="data_storage_photo_max">最大单张</string>
     <string name="data_storage_clear_cache">清理缓存</string>
     <string name="data_storage_cache_cleared">缓存已清理</string>
     <string name="data_storage_photos_summary">%1$s · %2$d 张</string>
     <string name="about_tagline">离线优先的个人运动记录</string>
     <string name="about_compatibility">适配环境</string>
     <string name="about_compatibility_value">Android 12+ · arm64-v8a</string>
-    <string name="about_open_source">开源信息</string>
-    <string name="about_open_source_summary">计划开源至 GitHub</string>
+    <string name="about_privacy">隐私与数据</string>
+    <string name="about_privacy_value">完全离线运行，运动记录与照片仅保存在本机</string>
+    <string name="about_open_source">GitHub 仓库</string>
+    <string name="about_open_source_summary">github.com/sanren1/Actiary</string>
     <string name="about_third_party_summary">查看开源库列表与许可声明</string>
 </resources>

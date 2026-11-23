@@ -128,6 +128,11 @@ class RecordRepository(
         onChanged()
     }
 
+    suspend fun setBuiltinTypeHidden(id: Long, hidden: Boolean) = withContext(io) {
+        dao.setBuiltinTypeHidden(id, hidden)
+        onChanged()
+    }
+
     suspend fun clearDay(date: LocalDate) = withContext(io) {
         photos.mutations.withLock {
             val epochDay = date.toEpochDay()

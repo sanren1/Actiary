@@ -60,6 +60,12 @@
     <string name="type_hiking">Hiking</string>
     <string name="type_ball">Ball sports</string>
     <string name="type_freeform">Free workout</string>
+    <string name="type_chest">Chest</string>
+    <string name="type_back">Back</string>
+    <string name="type_shoulders">Shoulders</string>
+    <string name="type_arms">Arms</string>
+    <string name="type_legs">Legs</string>
+    <string name="type_abs">Abs</string>
     <string name="day_state_logged">Workout logged</string>
     <string name="day_today">Today</string>
     <string name="day_photo">Photo %d</string>
@@ -242,6 +248,9 @@
     <string name="icon_sports">Other sports</string>
     <string name="custom_type_delete">Delete</string>
     <string name="custom_type_delete_named">Delete %1$s</string>
+    <string name="custom_type_hide_named">Hide %1$s</string>
+    <string name="custom_type_hidden_section">Hidden</string>
+    <string name="custom_type_restore">Restore</string>
     <string name="custom_type_delete_confirm">Delete this workout type? A type with records will be archived and its history kept. An unused type will be permanently deleted.</string>
     <string name="custom_type_move_up">Move %1$s up</string>
     <string name="custom_type_move_down">Move %1$s down</string>
@@ -267,15 +276,15 @@
     <string name="data_storage_details">Storage details</string>
     <string name="data_storage_cache">Cache</string>
     <string name="data_storage_photo_count">Photo count</string>
-    <string name="data_storage_photo_avg">Average per photo</string>
-    <string name="data_storage_photo_max">Largest photo</string>
     <string name="data_storage_clear_cache">Clear cache</string>
     <string name="data_storage_cache_cleared">Cache cleared</string>
     <string name="data_storage_photos_summary">%1$s · %2$d photos</string>
     <string name="about_tagline">Offline-first personal workout journal</string>
     <string name="about_compatibility">Compatibility</string>
     <string name="about_compatibility_value">Android 12+ · arm64-v8a</string>
-    <string name="about_open_source">Open source</string>
-    <string name="about_open_source_summary">Planned open-source release on GitHub</string>
+    <string name="about_privacy">Privacy &amp; Data</string>
+    <string name="about_privacy_value">100% offline — all workout logs and photos stay on your device</string>
+    <string name="about_open_source">GitHub Repository</string>
+    <string name="about_open_source_summary">github.com/sanren1/Actiary</string>
     <string name="about_third_party_summary">View open-source libraries and licenses</string>
 </resources>

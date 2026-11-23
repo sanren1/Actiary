@@ -60,6 +60,16 @@ private class FakeDao : RecordDao {
     override suspend fun archiveType(id: Long) {
         typeRows.value = typeRows.value.map { if (it.id == id && it.builtinKey == null) it.copy(archived = true) else it }
     }
+    override suspend fun setBuiltinTypeHidden(id: Long, hidden: Boolean): Int {
+        var updated = 0
+        typeRows.value = typeRows.value.map {
+            if (it.id == id && it.builtinKey != null) {
+                updated++
+                it.copy(archived = hidden)
+            } else it
+        }
+        return updated
+    }
     override suspend fun deleteUnusedType(id: Long): Int {
         val original = typeRows.value
         val used = rows.value.values.any { day -> day.entries.any { it.typeId == id } }
@@ -286,5 +296,19 @@ class RecordRepositoryTest {
         repo().updateType(id, null, true, null)
         assertNull(dao.getActiveTypes().single().name)
         assertNull(dao.getActiveTypes().single().iconKey)
+    }
+
+    @Test fun builtinTypeCanBeHiddenAndRestoredWithoutLosingHistory() = runBlocking {
+        val id = dao.insertType(ExerciseTypeEntity(builtinKey = "chest", name = null, sortOrder = 6, hasDistance = false))
+        repo().save(draft().toggleType(id))
+
+        repo().setBuiltinTypeHidden(id, true)
+        assertTrue(repo().types.first().none { it.id == id })
+        assertTrue(repo().allTypes.first().single { it.id == id }.archived)
+        assertEquals(id, repo().observeDay(date).first()!!.entries.single().typeId)
+
+        repo().setBuiltinTypeHidden(id, false)
+        assertTrue(repo().types.first().any { it.id == id })
+        assertFalse(repo().allTypes.first().single { it.id == id }.archived)
     }
 }

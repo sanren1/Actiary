@@ -116,16 +116,12 @@ class MigrationTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
             ActiaryDatabase::class.java,
             TEST_DB,
-        ).addMigrations(ActiaryDatabase.MIGRATION_4_5).build()
+        ).addMigrations(ActiaryDatabase.MIGRATION_4_5, ActiaryDatabase.MIGRATION_5_6).build()
         try {
             val dao = room.recordDao()
             assertEquals(
-                listOf(
-                    ExerciseTypeEntity(5, "yoga", null, 4, archived = true),
-                    ExerciseTypeEntity(8, "freeform", null, 7),
-                    ExerciseTypeEntity(9, null, "Strength", 8),
-                ),
-                dao.observeAllTypes().first(),
+                listOf("yoga", "freeform", null, "chest", "back", "shoulders", "arms", "legs", "abs"),
+                dao.observeAllTypes().first().map { it.builtinKey },
             )
             val day = dao.get(100)!!
             assertEquals(DailyRecordEntity(100, DayStatus.EXERCISED, "training note", 1234), day.record)
@@ -161,23 +157,41 @@ class MigrationTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
             ActiaryDatabase::class.java,
             TEST_DB,
-        ).build()
+        ).addMigrations(ActiaryDatabase.MIGRATION_5_6).build()
         try {
             val dao = room.recordDao()
             val original = dao.get(100)!!
             assertEquals("old workout", original.record.note)
             assertEquals(ExerciseEntryEntity(20, 100, 5, 30, 5000, 320, 145, 0), original.entries.single())
             assertEquals(listOf(PhotoAttachmentEntity(31, 100, "a.jpg", 0, 1234)), original.photos)
-            assertNull(dao.getActiveTypes().single().extraMetricMask)
+            assertNull(dao.getActiveTypes().first { it.id == 5L }.extraMetricMask)
 
             val mask = WorkoutMetric.CADENCE.bit or WorkoutMetric.STEPS.bit or WorkoutMetric.ELEVATION_GAIN.bit
             assertEquals(1, dao.updateType(5, null, true, null, mask))
-            assertEquals(mask, dao.getActiveTypes().single().extraMetricMask)
+            assertEquals(mask, dao.getActiveTypes().first { it.id == 5L }.extraMetricMask)
             val metrics = WorkoutMetrics(durationSeconds = 1805, cadenceSpm = 172, stepCount = 8600, elevationGainCm = 240)
             dao.replaceDay(original.record, listOf(original.entries.single().copy(metrics = metrics)), original.photos)
             assertEquals(metrics, dao.get(100)!!.entries.single().metrics)
         } finally {
             room.close()
+        }
+    }
+
+    @Test
+    fun migrate5To6AppendsSixBodyPartBuiltinTypesWithoutDisturbingExistingOrder() = runBlocking {
+        helper.createDatabase(TEST_DB, 5).use { db ->
+            db.execSQL("INSERT INTO exercise_type (id, builtinKey, name, sortOrder, archived, hasDistance) VALUES (1, 'running', NULL, 0, 0, 1)")
+            db.execSQL("INSERT INTO exercise_type (id, builtinKey, name, sortOrder, archived, hasDistance) VALUES (2, NULL, 'Custom', 1, 0, 0)")
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 6, true, ActiaryDatabase.MIGRATION_5_6).use { migrated ->
+            migrated.query("SELECT builtinKey, sortOrder FROM exercise_type ORDER BY sortOrder").use { cursor ->
+                val keys = mutableListOf<String?>()
+                while (cursor.moveToNext()) keys.add(cursor.getString(0))
+                assertEquals(
+                    listOf("running", null, "chest", "back", "shoulders", "arms", "legs", "abs"),
+                    keys,
+                )
+            }
         }
     }
 

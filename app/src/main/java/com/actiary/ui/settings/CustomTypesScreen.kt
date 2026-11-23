@@ -41,6 +41,8 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -183,6 +185,8 @@ fun CustomTypesScreen(
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val types by repository.types.collectAsStateWithLifecycle(emptyList())
+    val allTypes by repository.allTypes.collectAsStateWithLifecycle(emptyList())
+    val hiddenBuiltins = remember(allTypes) { allTypes.filter { it.builtinKey != null && it.archived } }
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     val windowHeight = LocalWindowInfo.current.containerSize.height
@@ -265,6 +269,9 @@ fun CustomTypesScreen(
                     onOpen = { opened -> if (opened || openId == type.id) openId = type.id.takeIf { opened } },
                     onEdit = { openId = null; onRequestEdit(type) },
                     onRemove = if (type.builtinKey != null) null else ({ openId = null; onRequestRemoval(type.id) }),
+                    onHide = if (type.builtinKey != null && types.size > 1) {
+                        { openId = null; scope.launch { repository.setBuiltinTypeHidden(type.id, true) } }
+                    } else null,
                     canGesture = dragId == null && !moving,
                     dragging = dragId == type.id,
                     shift = shift,
@@ -292,6 +299,46 @@ fun CustomTypesScreen(
                 )
             }
         }
+        if (hiddenBuiltins.isNotEmpty()) {
+            val n = LocalThemeTokens.current.neutrals
+            val accent = LocalThemeTokens.current.accent.accentAction.asColor()
+            BasicText(
+                stringResource(R.string.custom_type_hidden_section),
+                Modifier.padding(top = 8.dp, start = 4.dp).semantics { heading() },
+                style = TextStyle(n.textSecondary.asColor(), 14.sp, FontWeight.SemiBold),
+            )
+            hiddenBuiltins.forEach { hidden ->
+                key("hidden_${hidden.id}") {
+                    val label = exerciseTypeLabel(hidden)
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(n.surface.asColor().copy(alpha = 0.72f))
+                            .padding(start = 12.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(exerciseTypeIcon(hidden), null, Modifier.size(22.dp), tint = n.textSecondary.asColor())
+                        BasicText(
+                            label,
+                            Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
+                            style = TextStyle(n.textSecondary.asColor(), 15.sp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        TextButton(
+                            onClick = { scope.launch { repository.setBuiltinTypeHidden(hidden.id, false) } },
+                            colors = ButtonDefaults.textButtonColors(contentColor = accent),
+                        ) {
+                            Icon(Icons.Outlined.Visibility, null, Modifier.size(18.dp))
+                            Text(
+                                stringResource(R.string.custom_type_restore),
+                                Modifier.padding(start = 6.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -315,6 +362,7 @@ private fun WorkoutTypeRow(
     onOpen: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onRemove: (() -> Unit)?,
+    onHide: (() -> Unit)?,
     canGesture: Boolean,
     dragging: Boolean,
     shift: Float,
@@ -330,12 +378,14 @@ private fun WorkoutTypeRow(
     val label = exerciseTypeLabel(type)
     val edit = stringResource(R.string.custom_type_edit_named, label)
     val remove = stringResource(R.string.custom_type_delete_named, label)
+    val hide = stringResource(R.string.custom_type_hide_named, label)
     val up = stringResource(R.string.custom_type_move_up, label)
     val down = stringResource(R.string.custom_type_move_down, label)
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val direction = if (rtl) 1f else -1f
     val density = LocalDensity.current
-    val width = with(density) { (if (onRemove == null) 56.dp else 110.dp).toPx() }
+    val hasSecondAction = onRemove != null || onHide != null
+    val width = with(density) { (if (hasSecondAction) 110.dp else 56.dp).toPx() }
     val reduced = rememberMotionReduced()
     var swiping by remember { mutableStateOf(false) }
     var swipeDistance by remember { mutableFloatStateOf(0f) }
@@ -390,6 +440,12 @@ private fun WorkoutTypeRow(
                     deleteBg, deleteTint.copy(alpha = 0.45f), deleteTint,
                     revealProgress, open, onRemove,
                 )
+            } else if (onHide != null) {
+                TypeAction(
+                    Icons.Outlined.VisibilityOff, hide,
+                    n.surfaceMuted.asColor(), n.divider.asColor(), n.textSecondary.asColor(),
+                    revealProgress, open, onHide,
+                )
             }
         }
         Row(
@@ -406,6 +462,7 @@ private fun WorkoutTypeRow(
                     customActions = buildList {
                         add(CustomAccessibilityAction(edit) { onEdit(); true })
                         if (onRemove != null) add(CustomAccessibilityAction(remove) { onRemove(); true })
+                        if (onHide != null) add(CustomAccessibilityAction(hide) { onHide(); true })
                         if (onMoveUp != null) add(CustomAccessibilityAction(up) { onMoveUp(); true })
                         if (onMoveDown != null) add(CustomAccessibilityAction(down) { onMoveDown(); true })
                     }

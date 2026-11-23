@@ -11,7 +11,7 @@ internal const val ACTIARY_DATABASE_NAME = "actiary.db"
 
 @Database(
     entities = [DailyRecordEntity::class, ExerciseTypeEntity::class, ExerciseEntryEntity::class, PhotoAttachmentEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class ActiaryDatabase : RoomDatabase() {
@@ -20,8 +20,10 @@ abstract class ActiaryDatabase : RoomDatabase() {
     companion object {
         val BUILTIN_TYPE_KEYS = listOf(
             "running", "cycling", "swimming", "hiking", "ball", "freeform",
+            "chest", "back", "shoulders", "arms", "legs", "abs",
         )
         private val DISTANCE_TYPE_KEYS = setOf("running", "cycling", "swimming", "hiking")
+        private val BODY_PART_TYPE_KEYS = listOf("chest", "back", "shoulders", "arms", "legs", "abs")
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -65,6 +67,22 @@ abstract class ActiaryDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                var nextOrder = db.query("SELECT COALESCE(MAX(sortOrder), -1) FROM exercise_type").use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getInt(0) + 1 else 0
+                }
+                for (key in BODY_PART_TYPE_KEYS) {
+                    db.execSQL(
+                        """INSERT INTO exercise_type (builtinKey, name, sortOrder, archived, hasDistance)
+                            SELECT '$key', NULL, $nextOrder, 0, 0
+                            WHERE NOT EXISTS (SELECT 1 FROM exercise_type WHERE builtinKey = '$key')""",
+                    )
+                    nextOrder++
+                }
+            }
+        }
+
         fun seedBuiltinTypes(db: SupportSQLiteDatabase) {
             BUILTIN_TYPE_KEYS.forEachIndexed { i, key ->
                 val hasDistance = if (key in DISTANCE_TYPE_KEYS) 1 else 0
@@ -84,5 +102,6 @@ fun ActiaryDatabase.Companion.build(context: Context): ActiaryDatabase =
             ActiaryDatabase.MIGRATION_2_3,
             ActiaryDatabase.MIGRATION_3_4,
             ActiaryDatabase.MIGRATION_4_5,
+            ActiaryDatabase.MIGRATION_5_6,
         )
         .build()
