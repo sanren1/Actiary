@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -67,6 +68,8 @@ import com.actiary.theme.asColor
 internal fun AboutScreen(
     onBack: () -> Unit,
     onOpenNotices: () -> Unit,
+    checkingUpdate: Boolean,
+    onCheckUpdate: () -> Unit,
 ) {
     val context = LocalContext.current
     val n = LocalThemeTokens.current.neutrals
@@ -135,6 +138,16 @@ internal fun AboutScreen(
                     BasicText(stringResource(R.string.about_privacy_value), style = TextStyle(n.textSecondary.asColor(), 14.sp))
                 }
             }
+            SettingsRow(
+                label = stringResource(R.string.about_check_update),
+                icon = Icons.Outlined.SystemUpdate,
+                endIcon = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                summary = stringResource(
+                    if (checkingUpdate) R.string.about_checking_update else R.string.about_check_update_summary,
+                ),
+                shape = rowShape,
+                onClick = { if (!checkingUpdate) onCheckUpdate() },
+            )
             SettingsRow(
                 label = stringResource(R.string.about_open_source),
                 icon = Icons.Outlined.Code,

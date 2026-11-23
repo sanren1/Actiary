@@ -3,6 +3,14 @@ package com.actiary.ui.record
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,6 +74,8 @@ import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DraftEntry
 import com.actiary.domain.DraftPhoto
+import com.actiary.domain.FreeformFocusNote
+import com.actiary.domain.FreeformFocusPart
 import com.actiary.domain.WorkoutMetric
 import com.actiary.domain.WorkoutMetrics
 import com.actiary.domain.WorkoutScreenshot
@@ -78,10 +88,13 @@ import com.actiary.glass.overlayPresent
 import com.actiary.glass.rememberOverlayVisibility
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
+import com.actiary.ui.common.WorkoutPartIcons
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
 import com.actiary.ui.common.isLength
 import com.actiary.ui.common.labelId
+import com.actiary.ui.motion.Motion
+import com.actiary.ui.motion.rememberMotionReduced
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -443,6 +456,43 @@ internal fun RecordSheet(
                             }
                         }
                     }
+                    val reducedMotion = rememberMotionReduced()
+                    val focusLabels = freeformFocusLabels()
+                    val focusColon = stringResource(R.string.record_focus_colon)
+                    val freeformSelected = !rest && !waitingForType && current.entries.any { entry ->
+                        allTypes.firstOrNull { it.id == entry.typeId }?.builtinKey == "freeform"
+                    }
+                    var selectedFocusKeys by rememberSaveable(current.date.toEpochDay(), stateSaver = PhotoPathsSaver) {
+                        mutableStateOf(FreeformFocusNote.detectSelected(current.note, focusLabels).map { it.key })
+                    }
+                    AnimatedVisibility(
+                        visible = freeformSelected,
+                        enter = if (reducedMotion) fadeIn(tween(Motion.REDUCED_MAX_MS)) else {
+                            expandVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(180))
+                        },
+                        exit = if (reducedMotion) fadeOut(tween(Motion.REDUCED_MAX_MS)) else {
+                            shrinkVertically(tween(180)) + fadeOut(tween(140))
+                        },
+                    ) {
+                        val selectedSet = selectedFocusKeys.toSet()
+                        FreeformFocusCard(
+                            labels = focusLabels,
+                            selected = selectedSet,
+                            enabled = !rest && !busy,
+                            onToggle = { part ->
+                                val nowSelected = part.key !in selectedSet
+                                selectedFocusKeys = if (nowSelected) {
+                                    selectedFocusKeys + part.key
+                                } else {
+                                    selectedFocusKeys.filterNot { it == part.key }
+                                }
+                                val label = focusLabels.getValue(part)
+                                update { d ->
+                                    d.withNote(FreeformFocusNote.togglePartInNote(d.note, label, nowSelected, focusColon))
+                                }
+                            },
+                        )
+                    }
                     if (!waitingForType) {
                         current.entries.forEach { entry ->
                             val type = allTypes.firstOrNull { it.id == entry.typeId } ?: return@forEach
@@ -640,6 +690,93 @@ private fun TypeCell(type: ExerciseTypeEntity, selected: Boolean, enabled: Boole
         }
         if (selected) {
             Icon(Icons.Outlined.Check, null, Modifier.align(Alignment.TopEnd).size(14.dp), tint = t.accent.accentStroke.asColor())
+        }
+    }
+}
+
+internal fun freeformFocusPartIcon(part: FreeformFocusPart) = when (part) {
+    FreeformFocusPart.CHEST -> WorkoutPartIcons.Chest
+    FreeformFocusPart.BACK -> WorkoutPartIcons.Back
+    FreeformFocusPart.SHOULDERS -> WorkoutPartIcons.Shoulders
+    FreeformFocusPart.ARMS -> WorkoutPartIcons.Arms
+    FreeformFocusPart.LEGS -> WorkoutPartIcons.Legs
+    FreeformFocusPart.ABS -> WorkoutPartIcons.Abs
+}
+
+@Composable
+internal fun freeformFocusLabels(): Map<FreeformFocusPart, String> = mapOf(
+    FreeformFocusPart.CHEST to stringResource(R.string.type_chest),
+    FreeformFocusPart.BACK to stringResource(R.string.type_back),
+    FreeformFocusPart.SHOULDERS to stringResource(R.string.type_shoulders),
+    FreeformFocusPart.ARMS to stringResource(R.string.type_arms),
+    FreeformFocusPart.LEGS to stringResource(R.string.type_legs),
+    FreeformFocusPart.ABS to stringResource(R.string.type_abs),
+)
+
+@Composable
+private fun FreeformFocusCard(
+    labels: Map<FreeformFocusPart, String>,
+    selected: Set<String>,
+    enabled: Boolean,
+    onToggle: (FreeformFocusPart) -> Unit,
+) {
+    val t = LocalThemeTokens.current
+    val cardShape = RoundedCornerShape(14.dp)
+    val cellShape = RoundedCornerShape(10.dp)
+    val accent = t.accent.accentAction.asColor()
+    Column(
+        Modifier.fillMaxWidth().clip(cardShape).background(t.neutrals.surfaceMuted.asColor()).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        BasicText(
+            stringResource(R.string.record_freeform_focus),
+            style = TextStyle(t.neutrals.textSecondary.asColor(), 13.sp, FontWeight.Medium),
+        )
+        FreeformFocusPart.entries.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { part ->
+                    val isSelected = part.key in selected
+                    val fg = if (isSelected) accent else t.neutrals.textPrimary.asColor()
+                    Box(
+                        Modifier.weight(1f).heightIn(min = 56.dp).clip(cellShape)
+                            .background(if (isSelected) accent.copy(alpha = 0.16f) else t.neutrals.surface.asColor())
+                            .then(if (isSelected) Modifier.border(1.5.dp, accent, cellShape) else Modifier)
+                            .toggleable(isSelected, enabled = enabled, role = Role.Checkbox) { onToggle(part) }
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                    ) {
+                        Column(
+                            Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Icon(
+                                freeformFocusPartIcon(part),
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                                tint = fg,
+                            )
+                            BasicText(
+                                labels.getValue(part),
+                                style = TextStyle(
+                                    color = fg,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    textAlign = TextAlign.Center,
+                                ),
+                                maxLines = 1,
+                            )
+                        }
+                        if (isSelected) {
+                            Icon(
+                                Icons.Outlined.Check,
+                                contentDescription = null,
+                                modifier = Modifier.align(Alignment.TopEnd).size(14.dp),
+                                tint = accent,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

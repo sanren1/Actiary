@@ -157,7 +157,7 @@ class MigrationTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
             ActiaryDatabase::class.java,
             TEST_DB,
-        ).addMigrations(ActiaryDatabase.MIGRATION_5_6).build()
+        ).addMigrations(ActiaryDatabase.MIGRATION_5_6, ActiaryDatabase.MIGRATION_6_7).build()
         try {
             val dao = room.recordDao()
             val original = dao.get(100)!!
@@ -191,6 +191,24 @@ class MigrationTest {
                     listOf("running", null, "chest", "back", "shoulders", "arms", "legs", "abs"),
                     keys,
                 )
+            }
+        }
+    }
+
+    @Test
+    fun migrate6To7DropsUnusedBodyPartTypesAndArchivesUsedOnes() = runBlocking {
+        helper.createDatabase(TEST_DB, 6).use { db ->
+            db.execSQL("INSERT INTO exercise_type (id, builtinKey, name, sortOrder, archived, hasDistance) VALUES (1, 'freeform', NULL, 0, 0, 0)")
+            db.execSQL("INSERT INTO exercise_type (id, builtinKey, name, sortOrder, archived, hasDistance) VALUES (2, 'chest', NULL, 1, 0, 0)")
+            db.execSQL("INSERT INTO exercise_type (id, builtinKey, name, sortOrder, archived, hasDistance) VALUES (3, 'back', NULL, 2, 0, 0)")
+            db.execSQL("INSERT INTO daily_record (epochDay, status, note, updatedAt) VALUES (200, 'EXERCISED', '', 1234)")
+            db.execSQL("INSERT INTO exercise_entry (id, epochDay, typeId, sortOrder) VALUES (10, 200, 2, 0)")
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 7, true, ActiaryDatabase.MIGRATION_6_7).use { migrated ->
+            migrated.query("SELECT builtinKey, archived FROM exercise_type ORDER BY id").use { cursor ->
+                val rows = mutableListOf<Pair<String?, Int>>()
+                while (cursor.moveToNext()) rows.add(cursor.getString(0) to cursor.getInt(1))
+                assertEquals(listOf("freeform" to 0, "chest" to 1), rows)
             }
         }
     }

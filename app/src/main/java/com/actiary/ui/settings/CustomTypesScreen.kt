@@ -105,6 +105,7 @@ import androidx.lifecycle.viewModelScope
 import com.actiary.ActiaryApp
 import com.actiary.R
 import com.actiary.data.RecordRepository
+import com.actiary.data.db.ActiaryDatabase
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.domain.WorkoutMetric
 import com.actiary.domain.availableWorkoutMetrics
@@ -186,7 +187,9 @@ fun CustomTypesScreen(
     val haptics = LocalHapticFeedback.current
     val types by repository.types.collectAsStateWithLifecycle(emptyList())
     val allTypes by repository.allTypes.collectAsStateWithLifecycle(emptyList())
-    val hiddenBuiltins = remember(allTypes) { allTypes.filter { it.builtinKey != null && it.archived } }
+    val hiddenBuiltins = remember(allTypes) {
+        allTypes.filter { it.builtinKey in ActiaryDatabase.BUILTIN_TYPE_KEYS && it.archived }
+    }
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     val windowHeight = LocalWindowInfo.current.containerSize.height

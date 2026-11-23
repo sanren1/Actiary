@@ -60,6 +60,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -80,6 +81,9 @@ import androidx.lifecycle.lifecycleScope
 import com.actiary.data.appearance.AppLanguagePrefs
 import com.actiary.data.appearance.resolve
 import com.actiary.data.photo.recognizeWorkoutScreenshot
+import com.actiary.data.update.AppUpdater
+import com.actiary.data.update.ReleaseUpdate
+import com.actiary.data.update.UpdatePrefs
 import com.actiary.domain.WorkoutScreenshot
 import com.actiary.glass.GlassBottomBar
 import com.actiary.glass.GlassBottomBarHeight
@@ -127,6 +131,7 @@ import com.actiary.ui.settings.SettingsPage
 import com.actiary.ui.settings.SettingsScreen
 import com.actiary.ui.settings.StorageDetailsSheet
 import com.actiary.ui.settings.ThirdPartyNoticesSheet
+import com.actiary.ui.settings.UpdateDialog
 import com.actiary.ui.settings.parent
 import com.actiary.ui.settings.showsBottomBar
 import com.actiary.widget.TodayWidgetUpdater
@@ -274,6 +279,35 @@ class MainActivity : ComponentActivity() {
                 var storageDetailsOpen by rememberSaveable { mutableStateOf(false) }
                 var storageRefreshKey by rememberSaveable { mutableIntStateOf(0) }
                 var thirdPartyNoticesOpen by rememberSaveable { mutableStateOf(false) }
+                var availableUpdate by remember { mutableStateOf<ReleaseUpdate?>(null) }
+                var checkingUpdate by remember { mutableStateOf(false) }
+                val appVersion = remember {
+                    @Suppress("DEPRECATION")
+                    packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
+                }
+                LaunchedEffect(Unit) {
+                    val found = AppUpdater.checkForUpdate(appVersion).getOrNull() ?: return@LaunchedEffect
+                    if (found.version != UpdatePrefs.getIgnoredVersion(this@MainActivity)) {
+                        availableUpdate = found
+                    }
+                }
+                fun triggerManualUpdateCheck() {
+                    if (checkingUpdate) return
+                    checkingUpdate = true
+                    lifecycleScope.launch {
+                        val result = AppUpdater.checkForUpdate(appVersion)
+                        checkingUpdate = false
+                        result.onSuccess { found ->
+                            if (found != null) {
+                                availableUpdate = found
+                            } else {
+                                Toast.makeText(this@MainActivity, R.string.update_up_to_date, Toast.LENGTH_SHORT).show()
+                            }
+                        }.onFailure {
+                            Toast.makeText(this@MainActivity, R.string.update_check_failed, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
                 val holder = rememberSaveableStateHolder()
                 val push = rememberPushMotion(settingsPage, reducedMotion)
                 val tabTransition = updateTransition(tab, label = "tabs")
@@ -287,10 +321,11 @@ class MainActivity : ComponentActivity() {
                 val accentRemovalVisibility = rememberOverlayVisibility(pendingAccentRemoval != null)
                 val removalVisibility = rememberOverlayVisibility(pendingTypeRemoval != null)
                 val iconVisibility = rememberOverlayVisibility(pickingTypeIcon)
+                val updateVisibility = rememberOverlayVisibility(availableUpdate != null)
                 fun hasOverlay() = editing != null || viewing != null ||
                     accentEditorOpen || pendingAccentRemoval != null || accentRemovalVisibility.overlayPresent ||
                     pendingTypeRemoval != null || editingTypeOpen || pickingTypeIcon || scanningUri != null ||
-                    storageDetailsOpen || thirdPartyNoticesOpen ||
+                    storageDetailsOpen || thirdPartyNoticesOpen || availableUpdate != null || updateVisibility.overlayPresent ||
                     (screenshot != null && editing == null) || confirmAppearanceReset || backup.state != BackupState.Idle ||
                     scanVisibility.overlayPresent || dateVisibility.overlayPresent || resetVisibility.overlayPresent ||
                     removalVisibility.overlayPresent || iconVisibility.overlayPresent
@@ -546,6 +581,15 @@ class MainActivity : ComponentActivity() {
                                     onDismiss = { thirdPartyNoticesOpen = false },
                                 )
                             }
+                            UpdateDialog(
+                                update = availableUpdate,
+                                visibility = updateVisibility,
+                                onDismiss = { availableUpdate = null },
+                                onIgnore = { version ->
+                                    UpdatePrefs.setIgnoredVersion(this@MainActivity, version)
+                                    availableUpdate = null
+                                },
+                            )
                             BackupOverlay(backup)
                         },
                     ) {
@@ -668,6 +712,8 @@ class MainActivity : ComponentActivity() {
                                                             onStorageDetails = { if (!hasOverlay()) storageDetailsOpen = true },
                                                             storageRefreshKey = storageRefreshKey,
                                                             onOpenNotices = { if (!hasOverlay()) thirdPartyNoticesOpen = true },
+                                                            checkingUpdate = checkingUpdate,
+                                                            onCheckUpdate = { if (!hasOverlay()) triggerManualUpdateCheck() },
                                                         )
                                                     }
                                                 }

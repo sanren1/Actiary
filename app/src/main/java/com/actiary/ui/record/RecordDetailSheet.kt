@@ -1,9 +1,12 @@
 package com.actiary.ui.record
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -52,6 +55,8 @@ import com.actiary.data.db.DayStatus
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DraftPhoto
+import com.actiary.domain.FreeformFocusNote
+import com.actiary.domain.FreeformFocusPart
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassSheet
 import com.actiary.glass.overlayPresent
@@ -129,8 +134,16 @@ internal fun RecordDetailSheet(
                         Icon(if (rest) Icons.Outlined.Bedtime else Icons.Outlined.CheckCircle, null, Modifier.size(20.dp), tint = primary)
                         Text(stringResource(if (rest) R.string.day_rest else R.string.day_state_logged), color = primary)
                     }
+                    val focusLabels = freeformFocusLabels()
+                    val detectedFocus = remember(detail.note, focusLabels) {
+                        val set = FreeformFocusNote.detectSelected(detail.note, focusLabels)
+                        FreeformFocusPart.entries.filter { it in set }
+                    }
                     detail.entries.forEach { entry ->
-                        types[entry.typeId]?.let { DetailSession(it, entry) }
+                        types[entry.typeId]?.let { type ->
+                            val focus = if (type.builtinKey == "freeform") detectedFocus else emptyList()
+                            DetailSession(type, entry, focus, focusLabels)
+                        }
                     }
                     if (detail.empty) Text(stringResource(R.string.record_detail_empty), color = secondary)
                     if (detail.note.isNotBlank()) {
@@ -156,18 +169,51 @@ internal fun RecordDetailSheet(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DetailSession(type: ExerciseTypeEntity, entry: DetailEntry) {
+private fun DetailSession(
+    type: ExerciseTypeEntity,
+    entry: DetailEntry,
+    focusParts: List<FreeformFocusPart> = emptyList(),
+    focusLabels: Map<FreeformFocusPart, String> = emptyMap(),
+) {
     val t = LocalThemeTokens.current
     val primary = t.neutrals.textPrimary.asColor()
     val secondary = t.neutrals.textSecondary.asColor()
+    val accent = t.accent.accentAction.asColor()
     Column(
         Modifier.fillMaxWidth().background(t.neutrals.surface.asColor(), RoundedCornerShape(12.dp)).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(exerciseTypeIcon(type), null, Modifier.size(20.dp), tint = primary)
             Text(exerciseTypeLabel(type), Modifier.semantics { heading() }, color = primary, fontWeight = FontWeight.Medium)
+        }
+        if (focusParts.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val pillShape = RoundedCornerShape(8.dp)
+                focusParts.forEach { part ->
+                    Row(
+                        Modifier.clip(pillShape)
+                            .background(accent.copy(alpha = 0.14f))
+                            .border(1.dp, accent.copy(alpha = 0.45f), pillShape)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(freeformFocusPartIcon(part), null, Modifier.size(16.dp), tint = accent)
+                        Text(
+                            focusLabels[part].orEmpty(),
+                            color = accent,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+            }
         }
         entry.metrics.forEach { (label, value) ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

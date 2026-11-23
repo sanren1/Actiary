@@ -11,7 +11,7 @@ internal const val ACTIARY_DATABASE_NAME = "actiary.db"
 
 @Database(
     entities = [DailyRecordEntity::class, ExerciseTypeEntity::class, ExerciseEntryEntity::class, PhotoAttachmentEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class ActiaryDatabase : RoomDatabase() {
@@ -20,7 +20,6 @@ abstract class ActiaryDatabase : RoomDatabase() {
     companion object {
         val BUILTIN_TYPE_KEYS = listOf(
             "running", "cycling", "swimming", "hiking", "ball", "freeform",
-            "chest", "back", "shoulders", "arms", "legs", "abs",
         )
         private val DISTANCE_TYPE_KEYS = setOf("running", "cycling", "swimming", "hiking")
         private val BODY_PART_TYPE_KEYS = listOf("chest", "back", "shoulders", "arms", "legs", "abs")
@@ -83,6 +82,15 @@ abstract class ActiaryDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val keys = BODY_PART_TYPE_KEYS.joinToString(",") { "'$it'" }
+                // Body-part splits moved into Freeform sub-items: drop unused types, archive used ones to preserve history.
+                db.execSQL("DELETE FROM exercise_type WHERE builtinKey IN ($keys) AND id NOT IN (SELECT typeId FROM exercise_entry)")
+                db.execSQL("UPDATE exercise_type SET archived = 1 WHERE builtinKey IN ($keys)")
+            }
+        }
+
         fun seedBuiltinTypes(db: SupportSQLiteDatabase) {
             BUILTIN_TYPE_KEYS.forEachIndexed { i, key ->
                 val hasDistance = if (key in DISTANCE_TYPE_KEYS) 1 else 0
@@ -103,5 +111,6 @@ fun ActiaryDatabase.Companion.build(context: Context): ActiaryDatabase =
             ActiaryDatabase.MIGRATION_3_4,
             ActiaryDatabase.MIGRATION_4_5,
             ActiaryDatabase.MIGRATION_5_6,
+            ActiaryDatabase.MIGRATION_6_7,
         )
         .build()

@@ -44,6 +44,8 @@ internal fun SettingsScreen(
     onStorageDetails: () -> Unit,
     storageRefreshKey: Int,
     onOpenNotices: () -> Unit,
+    checkingUpdate: Boolean,
+    onCheckUpdate: () -> Unit,
 ) {
     val onBack = {
         val parent = page.parent()
@@ -74,6 +76,6 @@ internal fun SettingsScreen(
         )
         SettingsPage.TYPES -> typesContent(onBack)
         SettingsPage.DATA -> DataScreen(onBack, onExportBackup, onImportBackup, onCleanOrphanPhotos, onStorageDetails, storageRefreshKey)
-        SettingsPage.ABOUT -> AboutScreen(onBack, onOpenNotices)
+        SettingsPage.ABOUT -> AboutScreen(onBack, onOpenNotices, checkingUpdate, onCheckUpdate)
     }
 }
