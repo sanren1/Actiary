@@ -190,7 +190,7 @@ fun timelineItems(days: List<DayWithDetails>, range: DateRange, typeFilter: Long
             date.isBefore(range.from) || date.isAfter(range.to) -> null
             typeFilter == null -> d
             d.record.status != DayStatus.EXERCISED -> null
-            else -> d.copy(entries = d.entries.filter { it.typeId == typeFilter }).takeIf { it.entries.isNotEmpty() }
+            else -> d.copy(entriesWithLogs = d.entriesWithLogs.filter { it.entry.typeId == typeFilter }).takeIf { it.entries.isNotEmpty() }
         }
     }.sortedByDescending { it.record.epochDay }
     val out = mutableListOf<TimelineItem>()

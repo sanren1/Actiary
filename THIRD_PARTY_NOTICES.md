@@ -89,6 +89,14 @@
 - Project: <https://github.com/stleary/JSON-java>
 - Source: <https://github.com/stleary/JSON-java/blob/20240303/LICENSE>
 
+## free-exercise-db
+
+- Author: `yuhonas`
+- Purpose: Built-in strength exercise & muscle-group taxonomy reference (taxonomy and naming reference only; no upstream files copied).
+- License: Unlicense (Public Domain; full text below)
+- Project: <https://github.com/yuhonas/free-exercise-db>
+- Source: <https://github.com/yuhonas/free-exercise-db/blob/main/LICENSE>
+
 ## Apache License 2.0
 
 ```
@@ -325,4 +333,10 @@ SOFTWARE.
 
 ```
 Public Domain.
+```
+
+## Unlicense (free-exercise-db)
+
+```
+Unlicense (Public Domain).
 ```

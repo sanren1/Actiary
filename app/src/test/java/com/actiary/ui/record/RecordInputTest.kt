@@ -1,6 +1,7 @@
 package com.actiary.ui.record
 
 import com.actiary.domain.WorkoutMetric
+import com.actiary.domain.parseWeightKg
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -132,5 +133,36 @@ class RecordInputTest {
         assertEquals("1:40", formatWorkoutClock(paceSeconds(1500, 1500, 100)!!))
         assertNull(paceSeconds(null, 6000, 1000))
         assertNull(paceSeconds(1932, 0, 1000))
+    }
+
+    @Test fun strengthInputs() {
+        assertEquals(4, parseStrengthSets("4"))
+        assertEquals(1, parseStrengthSets("1"))
+        assertEquals(99, parseStrengthSets("99"))
+        assertNull(parseStrengthSets(""))
+        assertNull(parseStrengthSets("0"))
+        assertNull(parseStrengthSets("100"))
+        assertNull(parseStrengthSets("abc"))
+
+        assertEquals(10, parseStrengthReps("10"))
+        assertEquals(1, parseStrengthReps("1"))
+        assertEquals(999, parseStrengthReps("999"))
+        assertNull(parseStrengthReps(""))
+        assertNull(parseStrengthReps("0"))
+        assertNull(parseStrengthReps("1000"))
+        assertNull(parseStrengthReps("abc"))
+
+        assertNull(parseWeightKg(""))
+        assertNull(parseWeightKg("0"))
+        assertNull(parseWeightKg("0.4"))
+        assertEquals(0.5f, parseWeightKg("0.5"))
+        assertEquals(22.5f, parseWeightKg("22.5"))
+        assertEquals(500f, parseWeightKg("500"))
+        assertNull(parseWeightKg("500.1"))
+        assertNull(parseWeightKg("abc"))
+
+        assertEquals("22.5", sanitizeStrengthWeight("22,58"))
+        assertEquals("12", sanitizeStrengthSets("1a23"))
+        assertEquals("123", sanitizeStrengthReps("1a234"))
     }
 }

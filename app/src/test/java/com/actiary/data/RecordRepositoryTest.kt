@@ -7,10 +7,12 @@ import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.db.PhotoAttachmentEntity
 import com.actiary.data.db.RecordDao
+import com.actiary.data.db.StrengthLogItemEntity
 import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DayState
 import com.actiary.domain.DraftEntry
+import com.actiary.domain.DraftStrengthItem
 import com.actiary.domain.WorkoutMetric
 import com.actiary.domain.WorkoutMetrics
 import com.actiary.domain.effectiveWorkoutMetricMask
@@ -52,6 +54,7 @@ private class FakeDao : RecordDao {
     override suspend fun deleteEntries(epochDay: Long) = error("unused")
     override suspend fun deletePhotos(epochDay: Long) = error("unused")
     override suspend fun insertEntries(entries: List<ExerciseEntryEntity>) = error("unused")
+    override suspend fun insertStrengthLogs(items: List<StrengthLogItemEntity>) = error("unused")
     override suspend fun insertType(type: ExerciseTypeEntity): Long {
         val id = (typeRows.value.maxOfOrNull { it.id } ?: 0L) + 1
         typeRows.value = typeRows.value + type.copy(id = id)
@@ -92,9 +95,16 @@ private class FakeDao : RecordDao {
         record: DailyRecordEntity,
         entries: List<ExerciseEntryEntity>,
         photos: List<PhotoAttachmentEntity>,
+        strengthLogsByEntryIndex: Map<Int, List<StrengthLogItemEntity>>,
     ) {
         if (failReplace) throw IllegalStateException("db")
-        rows.value = rows.value + (record.epochDay to DayWithDetails(record, entries, photos))
+        val entriesWithLogs = entries.mapIndexed { index, entry ->
+            com.actiary.data.db.EntryWithStrengthLogs(
+                entry = entry,
+                strengthLogs = strengthLogsByEntryIndex[index].orEmpty(),
+            )
+        }
+        rows.value = rows.value + (record.epochDay to DayWithDetails(record, entriesWithLogs, photos))
     }
     override suspend fun deleteDay(epochDay: Long) { rows.value = rows.value - epochDay }
     override suspend fun getAllTypes() = error("unused")
@@ -310,5 +320,42 @@ class RecordRepositoryTest {
         repo().setBuiltinTypeHidden(id, false)
         assertTrue(repo().types.first().any { it.id == id })
         assertFalse(repo().allTypes.first().single { it.id == id }.archived)
+    }
+
+    @Test fun savePersistsPlanIdAndStrengthLogsByEntryIndex() = runBlocking {
+        val d = DayDraft(
+            date = date,
+            status = DayStatus.EXERCISED,
+            entries = listOf(
+                DraftEntry(typeId = 1L, durationMinutes = 30, id = 1),
+                DraftEntry(
+                    typeId = 9L,
+                    durationMinutes = 50,
+                    id = 2,
+                    planId = 3L,
+                    strengthItems = listOf(
+                        DraftStrengthItem(exerciseId = 10L, sets = 4, reps = 10, weightKg = 60f, localId = 1L),
+                        DraftStrengthItem(exerciseId = 11L, sets = 3, reps = 15, weightKg = null, localId = 2L),
+                    ),
+                ),
+            ),
+            note = "combo",
+            photos = emptyList(),
+        )
+        repo().save(d)
+        val saved = dao.get(date.toEpochDay())!!
+        assertEquals(2, saved.entriesWithLogs.size)
+        assertNull(saved.entriesWithLogs[0].entry.planId)
+        assertTrue(saved.entriesWithLogs[0].strengthLogs.isEmpty())
+
+        val second = saved.entriesWithLogs[1]
+        assertEquals(3L, second.entry.planId)
+        assertEquals(
+            listOf(
+                StrengthLogItemEntity(id = 0, entryId = 0, exerciseId = 10L, sets = 4, reps = 10, weightKg = 60f, sortOrder = 0),
+                StrengthLogItemEntity(id = 0, entryId = 0, exerciseId = 11L, sets = 3, reps = 15, weightKg = null, sortOrder = 1),
+            ),
+            second.strengthLogs,
+        )
     }
 }

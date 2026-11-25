@@ -116,11 +116,17 @@ class MigrationTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
             ActiaryDatabase::class.java,
             TEST_DB,
-        ).addMigrations(ActiaryDatabase.MIGRATION_4_5, ActiaryDatabase.MIGRATION_5_6).build()
+        ).addMigrations(
+            ActiaryDatabase.MIGRATION_4_5,
+            ActiaryDatabase.MIGRATION_5_6,
+            ActiaryDatabase.MIGRATION_6_7,
+            ActiaryDatabase.MIGRATION_7_8,
+            ActiaryDatabase.MIGRATION_8_9,
+        ).build()
         try {
             val dao = room.recordDao()
             assertEquals(
-                listOf("yoga", "freeform", null, "chest", "back", "shoulders", "arms", "legs", "abs"),
+                listOf("yoga", "freeform", null),
                 dao.observeAllTypes().first().map { it.builtinKey },
             )
             val day = dao.get(100)!!
@@ -157,7 +163,12 @@ class MigrationTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
             ActiaryDatabase::class.java,
             TEST_DB,
-        ).addMigrations(ActiaryDatabase.MIGRATION_5_6, ActiaryDatabase.MIGRATION_6_7).build()
+        ).addMigrations(
+            ActiaryDatabase.MIGRATION_5_6,
+            ActiaryDatabase.MIGRATION_6_7,
+            ActiaryDatabase.MIGRATION_7_8,
+            ActiaryDatabase.MIGRATION_8_9,
+        ).build()
         try {
             val dao = room.recordDao()
             val original = dao.get(100)!!
@@ -209,6 +220,39 @@ class MigrationTest {
                 val rows = mutableListOf<Pair<String?, Int>>()
                 while (cursor.moveToNext()) rows.add(cursor.getString(0) to cursor.getInt(1))
                 assertEquals(listOf("freeform" to 0, "chest" to 1), rows)
+            }
+        }
+    }
+
+    @Test
+    fun migrate7To8AddsStrengthTablesSeedsDefaultsAndPreservesNotes() = runBlocking {
+        helper.createDatabase(TEST_DB, 7).use { db ->
+            db.execSQL("INSERT INTO exercise_type (id, builtinKey, name, sortOrder, archived, hasDistance) VALUES (1, 'freeform', NULL, 0, 0, 0)")
+            db.execSQL("INSERT INTO daily_record (epochDay, status, note, updatedAt) VALUES (300, 'EXERCISED', '胸：卧推', 1234)")
+            db.execSQL("INSERT INTO exercise_entry (id, epochDay, typeId, durationMinutes, sortOrder) VALUES (10, 300, 1, 45, 0)")
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 8, true, ActiaryDatabase.MIGRATION_7_8).use { migrated ->
+            migrated.query("SELECT note FROM daily_record WHERE epochDay = 300").use { cursor ->
+                assertEquals(1, cursor.count)
+                cursor.moveToFirst()
+                assertEquals("胸：卧推", cursor.getString(0))
+            }
+            migrated.query("SELECT planId FROM exercise_entry WHERE id = 10").use { cursor ->
+                assertEquals(1, cursor.count)
+                cursor.moveToFirst()
+                assertNull(cursor.getString(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM strength_exercise").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(com.actiary.domain.BuiltinStrengthCatalog.exercises.size, cursor.getInt(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM workout_plan").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(3, cursor.getInt(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM workout_plan_item").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(15, cursor.getInt(0))
             }
         }
     }

@@ -85,6 +85,13 @@ internal val thirdPartyProjects = listOf(
         "https://github.com/stleary/JSON-java",
         "JSON-java 20240303 License",
     ),
+    ThirdPartyProject(
+        "free-exercise-db",
+        R.string.notice_free_exercise_db_use,
+        R.string.notice_public_domain,
+        "https://github.com/yuhonas/free-exercise-db",
+        "Unlicense (free-exercise-db)",
+    ),
 )
 
 internal fun readNoticeSections(text: String): Map<String, String> =

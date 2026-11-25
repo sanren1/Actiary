@@ -5,6 +5,7 @@ import com.actiary.data.db.DayStatus
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DraftEntry
 import com.actiary.domain.DraftPhoto
+import com.actiary.domain.DraftStrengthItem
 import com.actiary.domain.WorkoutMetrics
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -69,5 +70,35 @@ class DraftSaverTest {
 
     @Test fun emptyDraftRestoresToNull() {
         assertEquals(null, roundTrip(null))
+    }
+
+    @Test fun preservesPlanIdAndStrengthItems() {
+        val draft = DayDraft(
+            date = date,
+            status = DayStatus.EXERCISED,
+            entries = listOf(
+                DraftEntry(
+                    typeId = 9,
+                    durationMinutes = 55,
+                    id = 1,
+                    planId = 2L,
+                    strengthItems = listOf(
+                        DraftStrengthItem(exerciseId = 10, sets = 4, reps = 10, weightKg = 22.5f, localId = 1L, sourcePlanId = 2L),
+                        DraftStrengthItem(exerciseId = 11, sets = 3, reps = 15, weightKg = null, localId = 2L, sourcePlanId = null),
+                    ),
+                ),
+                DraftEntry(
+                    typeId = 1,
+                    durationMinutes = 30,
+                    distanceMeters = 5000,
+                    id = 2,
+                    planId = null,
+                    strengthItems = emptyList(),
+                ),
+            ),
+            note = "strength",
+            photos = emptyList(),
+        )
+        assertEquals(draft, roundTrip(draft))
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -34,14 +35,36 @@ import com.actiary.R
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.DayWithDetails
 import com.actiary.data.db.ExerciseTypeEntity
+import com.actiary.data.db.StrengthExerciseEntity
+import com.actiary.data.db.StrengthLogItemEntity
 import com.actiary.data.photo.PhotoStore
+import com.actiary.domain.MuscleGroup
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
+import com.actiary.ui.common.labelRes
+import com.actiary.ui.common.summarizeStrengthMuscles
 import com.actiary.ui.records.entryMetrics
 
 private const val PHOTO_COLUMNS = 3
+
+internal fun buildStrengthSummaryText(
+    logs: List<StrengthLogItemEntity>,
+    exercises: Map<Long, StrengthExerciseEntity>,
+    muscleLabel: (MuscleGroup) -> String,
+    countsLabel: (Int, Int) -> String,
+): String? {
+    if (logs.isEmpty()) return null
+    val primaryMasks = logs.mapNotNull { exercises[it.exerciseId]?.primaryMuscleMask }
+    val topMuscles = summarizeStrengthMuscles(primaryMasks, maxMuscles = 2)
+    val counts = countsLabel(logs.size, logs.sumOf { it.sets })
+    return if (topMuscles.isNotEmpty()) {
+        (topMuscles.map(muscleLabel) + counts).joinToString(" · ")
+    } else {
+        counts
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -53,6 +76,7 @@ fun DayDetail(
     photoStore: PhotoStore,
     modifier: Modifier = Modifier,
     loading: Boolean = false,
+    exercises: Map<Long, StrengthExerciseEntity> = emptyMap(),
 ) {
     val t = LocalThemeTokens.current
     val primary = t.neutrals.textPrimary.asColor()
@@ -68,19 +92,26 @@ fun DayDetail(
             style = TextStyle(primary, 18.sp, FontWeight.SemiBold),
         )
         if (loading) return@Column
-        val entries = detail?.entries.orEmpty()
+        val entriesWithLogs = detail?.entriesWithLogs.orEmpty().sortedBy { it.entry.sortOrder }
         when {
             detail == null -> BasicText(stringResource(R.string.day_unrecorded), style = TextStyle(secondary, 15.sp))
             detail.record.status == DayStatus.REST ->
                 BasicText(stringResource(R.string.day_rest), style = TextStyle(primary, 15.sp, FontWeight.Medium))
-            entries.isEmpty() ->
+            entriesWithLogs.isEmpty() ->
                 BasicText(stringResource(R.string.day_checked_in), style = TextStyle(primary, 15.sp, FontWeight.Medium))
             else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                entries.forEach { entry ->
+                entriesWithLogs.forEach { entryWithLogs ->
+                    val entry = entryWithLogs.entry
                     val type = types[entry.typeId] ?: return@forEach // unknown type: render nothing, keep the state
                     val metrics = entryMetrics(entry, type, includeOptional = true) { id, arg ->
                         resources.getString(id, arg)
                     }
+                    val strengthSummary = buildStrengthSummaryText(
+                        logs = entryWithLogs.strengthLogs,
+                        exercises = exercises,
+                        muscleLabel = { resources.getString(it.labelRes()) },
+                        countsLabel = { count, sets -> resources.getString(R.string.strength_summary_counts, count, sets) },
+                    )
                     Column(
                         Modifier.fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
@@ -94,6 +125,14 @@ fun DayDetail(
                         ) {
                             Icon(exerciseTypeIcon(type), null, Modifier.size(18.dp), tint = primary)
                             BasicText(exerciseTypeLabel(type), style = TextStyle(primary, 15.sp, FontWeight.SemiBold))
+                        }
+                        if (strengthSummary != null) {
+                            BasicText(
+                                strengthSummary,
+                                style = TextStyle(secondary, 13.sp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                         if (metrics.isNotEmpty()) {
                             FlowRow(

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -23,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Edit
@@ -45,26 +47,34 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.actiary.R
 import com.actiary.data.RecordRepository
+import com.actiary.data.StrengthRepository
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DraftPhoto
 import com.actiary.domain.FreeformFocusNote
 import com.actiary.domain.FreeformFocusPart
+import com.actiary.domain.MuscleActivation
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassSheet
 import com.actiary.glass.overlayPresent
 import com.actiary.glass.rememberOverlayVisibility
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
+import com.actiary.ui.common.AnatomyBodyMap
+import com.actiary.ui.common.BodyMapStyle
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
+import com.actiary.ui.common.formatStrengthItemMetrics
+import com.actiary.ui.common.isChineseLocale
+import com.actiary.ui.common.labelRes
 import kotlinx.coroutines.flow.combine
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -73,6 +83,7 @@ import java.time.format.DateTimeFormatter
 internal fun RecordDetailSheet(
     date: LocalDate,
     repository: RecordRepository,
+    strengthRepository: StrengthRepository,
     photoStore: PhotoStore,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
@@ -84,14 +95,26 @@ internal fun RecordDetailSheet(
     val title = date.format(
         DateTimeFormatter.ofPattern(stringResource(R.string.day_accessibility_pattern), LocalConfiguration.current.locales[0]),
     )
-    val loaded by remember(repository, date) {
-        repository.observeDay(date).combine(repository.allTypes) { day, types ->
-            day to types.associateBy { it.id }
+    val loaded by remember(repository, strengthRepository, date) {
+        combine(
+            repository.observeDay(date),
+            repository.allTypes,
+            strengthRepository.allExercises,
+        ) { day, types, exercises ->
+            Triple(day, types.associateBy { it.id }, exercises.associateBy { it.id })
         }
     }.collectAsStateWithLifecycle(null)
     val types = loaded?.second.orEmpty()
+    val exercises = loaded?.third.orEmpty()
+    val isChinese = isChineseLocale()
     val detail = loaded?.first?.let { day ->
-        buildDetailModel(day, types) { format, value -> resources.getString(format, value) }
+        buildDetailModel(
+            day = day,
+            types = types,
+            format = { format, value -> resources.getString(format, value) },
+            exercises = exercises,
+            isChinese = isChinese,
+        )
     }
     var visible by rememberSaveable { mutableStateOf(true) }
     var editing by rememberSaveable { mutableStateOf(false) }
@@ -99,13 +122,17 @@ internal fun RecordDetailSheet(
     val photoIndex = viewingPhoto
     val photo = photoIndex?.let { detail?.photos?.getOrNull(it) }
     val photoVisibility = rememberOverlayVisibility(photo != null)
+    var historyExerciseId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var historyOpen by rememberSaveable { mutableStateOf(false) }
+    var historyPresent by remember { mutableStateOf(historyOpen) }
+    val historyExercise = historyExerciseId?.let { exercises[it] }
 
     GlassSheet(
         visible = visible,
         onRequestClose = { visible = false; true },
         onExited = { if (editing) onEdit() else onDismiss() },
         title = title,
-        covered = photoVisibility.overlayPresent,
+        covered = photoVisibility.overlayPresent || historyOpen || historyPresent,
     ) {
         Column(
             Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp).fillMaxWidth()
@@ -141,8 +168,20 @@ internal fun RecordDetailSheet(
                     }
                     detail.entries.forEach { entry ->
                         types[entry.typeId]?.let { type ->
-                            val focus = if (type.builtinKey == "freeform") detectedFocus else emptyList()
-                            DetailSession(type, entry, focus, focusLabels)
+                            val focus = if (type.builtinKey == "freeform" && entry.strengthItems.isEmpty()) detectedFocus else emptyList()
+                            DetailSession(
+                                type = type,
+                                entry = entry,
+                                focusParts = focus,
+                                focusLabels = focusLabels,
+                                onExerciseClick = { exerciseId ->
+                                    if (visible && !editing && exercises[exerciseId] != null) {
+                                        historyExerciseId = exerciseId
+                                        historyOpen = true
+                                        historyPresent = true
+                                    }
+                                },
+                            )
                         }
                     }
                     if (detail.empty) Text(stringResource(R.string.record_detail_empty), color = secondary)
@@ -167,6 +206,18 @@ internal fun RecordDetailSheet(
     ) {
         viewingPhoto = null
     }
+    ExerciseHistorySheet(
+        visible = historyOpen && historyExercise != null,
+        exercise = historyExercise,
+        strengthRepository = strengthRepository,
+        onDismiss = { historyOpen = false },
+        onExited = {
+            if (!historyOpen) {
+                historyPresent = false
+                historyExerciseId = null
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -176,6 +227,7 @@ private fun DetailSession(
     entry: DetailEntry,
     focusParts: List<FreeformFocusPart> = emptyList(),
     focusLabels: Map<FreeformFocusPart, String> = emptyMap(),
+    onExerciseClick: (Long) -> Unit = {},
 ) {
     val t = LocalThemeTokens.current
     val primary = t.neutrals.textPrimary.asColor()
@@ -189,7 +241,77 @@ private fun DetailSession(
             Icon(exerciseTypeIcon(type), null, Modifier.size(20.dp), tint = primary)
             Text(exerciseTypeLabel(type), Modifier.semantics { heading() }, color = primary, fontWeight = FontWeight.Medium)
         }
-        if (focusParts.isNotEmpty()) {
+        if (entry.strengthItems.isNotEmpty()) {
+            val primaryMuscles = remember(entry.muscleActivations) {
+                entry.muscleActivations.filterValues { it == MuscleActivation.PRIMARY }.keys.toList()
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(t.neutrals.surfaceMuted.asColor())
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                AnatomyBodyMap(
+                    style = BodyMapStyle.Highlight(entry.muscleActivations),
+                    modifier = Modifier.fillMaxWidth().height(150.dp),
+                    showLabels = true,
+                    onMuscleClick = null,
+                )
+                if (primaryMuscles.isNotEmpty()) {
+                    val muscleText = primaryMuscles.map { stringResource(it.labelRes()) }.joinToString(" · ")
+                    Text(
+                        stringResource(R.string.strength_active_muscles, muscleText),
+                        color = secondary,
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                entry.strengthItems.forEach { item ->
+                    val itemMetrics = formatStrengthItemMetrics(
+                        sets = item.sets,
+                        reps = item.reps,
+                        weightKg = item.weightKg,
+                        isTimed = item.isTimed,
+                    )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(t.neutrals.surfaceMuted.asColor())
+                            .clickable(enabled = item.exerciseId > 0L, role = Role.Button) {
+                                onExerciseClick(item.exerciseId)
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            item.name,
+                            Modifier.weight(1f),
+                            color = primary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(itemMetrics, color = secondary, fontSize = 13.sp)
+                        if (item.exerciseId > 0L) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = secondary.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
+                }
+            }
+        } else if (focusParts.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),

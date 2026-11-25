@@ -8,6 +8,7 @@ import com.actiary.data.appearance.appearanceDataStore
 import com.actiary.data.backup.BackupRepository
 import com.actiary.data.db.ActiaryDatabase
 import com.actiary.data.RecordRepository
+import com.actiary.data.StrengthRepository
 import com.actiary.data.db.build
 import com.actiary.data.photo.PhotoStore
 import com.actiary.data.photo.compressPhotoToJpeg
@@ -35,6 +36,9 @@ class AppContainer(private val context: Context) {
             { context.contentResolver.openInputStream(Uri.parse(it)) ?: throw FileNotFoundException(it) },
             onChanged = refreshWidgets,
         )
+    }
+    val strengthRepository: StrengthRepository by lazy {
+        StrengthRepository(database.strengthDao())
     }
 
     init {

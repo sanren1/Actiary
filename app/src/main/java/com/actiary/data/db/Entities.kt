@@ -45,8 +45,14 @@ data class ExerciseTypeEntity(
             childColumns = ["typeId"],
             onDelete = ForeignKey.RESTRICT,
         ),
+        ForeignKey(
+            entity = WorkoutPlanEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["planId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
-    indices = [Index("epochDay"), Index("typeId")],
+    indices = [Index("epochDay"), Index("typeId"), Index("planId")],
 )
 data class ExerciseEntryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -58,6 +64,7 @@ data class ExerciseEntryEntity(
     val avgHeartRate: Int?,
     val sortOrder: Int,
     @Embedded val metrics: WorkoutMetrics = WorkoutMetrics(),
+    val planId: Long? = null,
 )
 
 @Entity(
@@ -82,6 +89,26 @@ data class PhotoAttachmentEntity(
 
 data class DayWithDetails(
     @Embedded val record: DailyRecordEntity,
-    @Relation(parentColumn = "epochDay", entityColumn = "epochDay") val entries: List<ExerciseEntryEntity>,
+    @Relation(
+        entity = ExerciseEntryEntity::class,
+        parentColumn = "epochDay",
+        entityColumn = "epochDay",
+    )
+    val entriesWithLogs: List<EntryWithStrengthLogs>,
     @Relation(parentColumn = "epochDay", entityColumn = "epochDay") val photos: List<PhotoAttachmentEntity>,
-)
+) {
+    val entries: List<ExerciseEntryEntity>
+        get() = entriesWithLogs.map { it.entry }
+
+    companion object {
+        operator fun invoke(
+            record: DailyRecordEntity,
+            entries: List<ExerciseEntryEntity>,
+            photos: List<PhotoAttachmentEntity>,
+        ): DayWithDetails = DayWithDetails(
+            record = record,
+            entriesWithLogs = entries.map { EntryWithStrengthLogs(it) },
+            photos = photos,
+        )
+    }
+}

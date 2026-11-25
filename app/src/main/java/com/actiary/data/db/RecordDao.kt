@@ -40,7 +40,10 @@ interface RecordDao {
     suspend fun deletePhotos(epochDay: Long)
 
     @Insert
-    suspend fun insertEntries(entries: List<ExerciseEntryEntity>)
+    suspend fun insertEntries(entries: List<ExerciseEntryEntity>): List<Long>
+
+    @Insert
+    suspend fun insertStrengthLogs(items: List<StrengthLogItemEntity>)
 
     @Insert
     suspend fun insertType(type: ExerciseTypeEntity): Long
@@ -95,11 +98,22 @@ interface RecordDao {
         record: DailyRecordEntity,
         entries: List<ExerciseEntryEntity>,
         photos: List<PhotoAttachmentEntity>,
+        strengthLogsByEntryIndex: Map<Int, List<StrengthLogItemEntity>> = emptyMap(),
     ) {
         upsertRecord(record)
         deleteEntries(record.epochDay)
         deletePhotos(record.epochDay)
-        insertEntries(entries)
+        val entryIds = insertEntries(entries)
+        if (strengthLogsByEntryIndex.isNotEmpty()) {
+            val logs = buildList {
+                entryIds.forEachIndexed { entryIndex, entryId ->
+                    strengthLogsByEntryIndex[entryIndex]?.forEach { log ->
+                        add(log.copy(id = 0, entryId = entryId))
+                    }
+                }
+            }
+            if (logs.isNotEmpty()) insertStrengthLogs(logs)
+        }
         insertPhotos(photos)
     }
 

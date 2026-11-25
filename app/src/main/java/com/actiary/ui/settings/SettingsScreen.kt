@@ -2,6 +2,7 @@ package com.actiary.ui.settings
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.ListAlt
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
@@ -38,6 +39,7 @@ internal fun SettingsScreen(
     onCustomColor: (String?) -> Unit,
     onChartPalette: (ChartPalette) -> Unit,
     typesContent: @Composable (() -> Unit) -> Unit,
+    workoutPlansContent: @Composable (() -> Unit) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onCleanOrphanPhotos: () -> Unit,
@@ -62,6 +64,9 @@ internal fun SettingsScreen(
                     stringResource(R.string.settings_custom_types), Icons.Outlined.FitnessCenter, chevron, shape = rowShape,
                 ) { onPage(SettingsPage.TYPES) }
                 SettingsRow(
+                    stringResource(R.string.strength_plans_title), Icons.AutoMirrored.Outlined.ListAlt, chevron, shape = rowShape,
+                ) { onPage(SettingsPage.WORKOUT_PLANS) }
+                SettingsRow(
                     stringResource(R.string.settings_data), Icons.Outlined.Folder, chevron, shape = rowShape,
                 ) { onPage(SettingsPage.DATA) }
                 SettingsRow(
@@ -75,6 +80,7 @@ internal fun SettingsScreen(
             onGlassLevel, onAmbient, onBack, onResetAppearance, onCustomColor, onChartPalette,
         )
         SettingsPage.TYPES -> typesContent(onBack)
+        SettingsPage.WORKOUT_PLANS -> workoutPlansContent(onBack)
         SettingsPage.DATA -> DataScreen(onBack, onExportBackup, onImportBackup, onCleanOrphanPhotos, onStorageDetails, storageRefreshKey)
         SettingsPage.ABOUT -> AboutScreen(onBack, onOpenNotices, checkingUpdate, onCheckUpdate)
     }

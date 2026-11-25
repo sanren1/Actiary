@@ -3,14 +3,6 @@ package com.actiary.ui.record
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -66,16 +59,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.actiary.R
+import com.actiary.data.PlanItemInput
 import com.actiary.data.RecordRepository
+import com.actiary.data.StrengthRepository
 import com.actiary.data.db.DayStatus
+import com.actiary.data.db.ExercisePerformanceRow
 import com.actiary.data.db.ExerciseTypeEntity
+import com.actiary.data.db.WorkoutPlanWithItems
 import com.actiary.data.photo.CameraCapture
 import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DraftEntry
 import com.actiary.domain.DraftPhoto
-import com.actiary.domain.FreeformFocusNote
+import com.actiary.domain.DraftStrengthItem
 import com.actiary.domain.FreeformFocusPart
+import com.actiary.domain.MuscleGroup
 import com.actiary.domain.WorkoutMetric
 import com.actiary.domain.WorkoutMetrics
 import com.actiary.domain.WorkoutScreenshot
@@ -93,8 +91,6 @@ import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
 import com.actiary.ui.common.isLength
 import com.actiary.ui.common.labelId
-import com.actiary.ui.motion.Motion
-import com.actiary.ui.motion.rememberMotionReduced
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -136,6 +132,19 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
                     metrics.strokeCount ?: -1,
                 )
             }),
+            ArrayList(d.entries.map { it.planId ?: -1L }),
+            ArrayList(d.entries.map { entry ->
+                ArrayList(entry.strengthItems.map { item ->
+                    arrayListOf<Any>(
+                        item.exerciseId,
+                        item.sets,
+                        item.reps,
+                        item.weightKg ?: -1f,
+                        item.localId,
+                        item.sourcePlanId ?: -1L,
+                    )
+                })
+            }),
         )
     },
     restore = { v ->
@@ -148,12 +157,27 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
             val hr = l.getOrElse(8) { emptyList<Int>() } as List<Int>
             val entryIds = l.getOrElse(9) { emptyList<Long>() } as List<Long>
             val metrics = l.getOrElse(10) { emptyList<List<Int>>() } as List<List<Int>>
+            val planIds = l.getOrElse(11) { emptyList<Long>() } as List<Long>
+            val strengthItemsByEntry = l.getOrElse(12) { emptyList<List<List<Any>>>() } as List<List<List<Any>>>
             DayDraft(
                 date = LocalDate.ofEpochDay(l[0] as Long),
                 status = DayStatus.valueOf(l[1] as String),
                 entries = ids.mapIndexed { i, id ->
                     val values = metrics.getOrNull(i)
                     fun metric(index: Int) = values?.getOrNull(index)?.takeIf { it >= 0 }
+                    val planId = planIds.getOrElse(i) { -1L }.takeIf { it >= 0L }
+                    val strengthItems = strengthItemsByEntry.getOrNull(i).orEmpty().mapIndexed { idx, raw ->
+                        val weight = (raw[3] as Float).takeIf { it >= 0f }
+                        val sourcePlanId = (raw.getOrNull(5) as? Long)?.takeIf { it >= 0L }
+                        DraftStrengthItem(
+                            exerciseId = raw[0] as Long,
+                            sets = raw[1] as Int,
+                            reps = raw[2] as Int,
+                            weightKg = weight,
+                            localId = (raw.getOrNull(4) as? Long) ?: (idx + 1L),
+                            sourcePlanId = sourcePlanId,
+                        )
+                    }
                     DraftEntry(
                         id,
                         dur[i].takeIf { it >= 0 },
@@ -162,6 +186,8 @@ internal val DraftSaver = Saver<DayDraft?, Any>(
                         hr.getOrElse(i) { -1 }.takeIf { it >= 0 },
                         entryIds.getOrElse(i) { -i.toLong() - 1 },
                         WorkoutMetrics(metric(0), metric(1), metric(2), metric(3), metric(4), metric(5), metric(6)),
+                        planId,
+                        strengthItems,
                     )
                 },
                 note = l[2] as String,
@@ -192,8 +218,10 @@ internal fun RecordSheet(
     date: LocalDate,
     firstDayOfWeek: DayOfWeek,
     repository: RecordRepository,
+    strengthRepository: StrengthRepository,
     photoStore: PhotoStore,
     onDismiss: () -> Unit,
+    onManagePlans: () -> Unit = {},
     onSaved: (LocalDate) -> Unit = {},
     screenshot: WorkoutScreenshot? = null,
 ) {
@@ -226,6 +254,20 @@ internal fun RecordSheet(
     val busy = isBusy()
     val types by repository.types.collectAsState(emptyList())
     val allTypes by repository.allTypes.collectAsState(emptyList())
+    val plans by strengthRepository.plans.collectAsState(emptyList())
+    val activeExercises by strengthRepository.activeExercises.collectAsState(emptyList())
+    val allExercises by strengthRepository.allExercises.collectAsState(emptyList())
+    val exercisesById = remember(allExercises) { allExercises.associateBy { it.id } }
+    var latestFreeformPlanId by remember { mutableStateOf<Long?>(null) }
+    var lastPerformanceByExercise by remember { mutableStateOf<Map<Long, ExercisePerformanceRow>>(emptyMap()) }
+    var pickerEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pickerMuscleKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickerOpen by rememberSaveable { mutableStateOf(false) }
+    var pickerPresent by remember { mutableStateOf(pickerOpen) }
+    var saveAsPlanEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var planResetToken by rememberSaveable { mutableIntStateOf(0) }
+    var pendingManagePlans by rememberSaveable { mutableStateOf(false) }
+    var navigateToManagePlans by rememberSaveable { mutableStateOf(false) }
 
     fun cleanupCaptures() {
         capturePaths.forEach { CameraCapture.cleanup(File(it)) }
@@ -278,16 +320,25 @@ internal fun RecordSheet(
     }
 
     val current = draft
+    val currentDate = current?.date
+    LaunchedEffect(currentDate) {
+        latestFreeformPlanId = currentDate?.let { strengthRepository.latestFreeformPlanId(it) }
+        lastPerformanceByExercise = currentDate?.let { strengthRepository.latestPerformanceByExercise(it) }.orEmpty()
+    }
     val dirty = current != null && original?.let { current.isChangedFrom(it) } == true
     val photo = viewing?.let { current?.photos?.getOrNull(it) }
     LaunchedEffect(viewing, photo) { if (viewing != null && photo == null) viewing = null }
+    val saveAsPlanEntry = saveAsPlanEntryId?.let { id -> current?.entries?.firstOrNull { it.id == id } }
     val datePickerVisibility = rememberOverlayVisibility(showDatePicker)
     val photoVisibility = rememberOverlayVisibility(photo != null)
     val discardVisibility = rememberOverlayVisibility(showDiscard)
     val restVisibility = rememberOverlayVisibility(showRest)
     val clearVisibility = rememberOverlayVisibility(showClear)
+    val savePlanVisibility = rememberOverlayVisibility(saveAsPlanEntry != null && saveAsPlanEntry.strengthItems.isNotEmpty())
     val covered = datePickerVisibility.overlayPresent || photoVisibility.overlayPresent ||
-        discardVisibility.overlayPresent || restVisibility.overlayPresent || clearVisibility.overlayPresent
+        discardVisibility.overlayPresent || restVisibility.overlayPresent || clearVisibility.overlayPresent ||
+        savePlanVisibility.overlayPresent ||
+        pickerOpen || pickerPresent
     fun close() { visible = false }
     fun requestClose(): Boolean {
         if (isBusy() || !visible) return false
@@ -298,11 +349,33 @@ internal fun RecordSheet(
         close()
         return true
     }
+    fun requestManagePlans() {
+        if (isBusy() || !visible) return
+        if (dirty) {
+            pendingManagePlans = true
+            showDiscard = true
+        } else {
+            navigateToManagePlans = true
+            close()
+        }
+    }
     fun update(f: (DayDraft) -> DayDraft) {
         showInvalid = false
         val updated = draft?.let(f) ?: return
         invalidEntryIds = invalidEntryIds.intersect(updated.entries.map { it.id }.toSet())
         draft = updated
+    }
+    fun togglePlanOnEntry(entryId: Long, plan: WorkoutPlanWithItems) {
+        val mapped = plan.items.sortedBy { it.sortOrder }.map { item ->
+            DraftStrengthItem(
+                exerciseId = item.exerciseId,
+                sets = item.defaultSets,
+                reps = item.defaultReps,
+                weightKg = item.defaultWeightKg,
+                sourcePlanId = plan.plan.id,
+            )
+        }
+        update { it.togglePlanOnEntry(entryId, plan.plan.id, mapped) }
     }
 
     LaunchedEffect(pendingPickerUris) {
@@ -384,7 +457,12 @@ internal fun RecordSheet(
         onExited = {
             cleanupStagedPhotos(draft?.photos.orEmpty())
             cleanupCaptures()
-            onDismiss()
+            if (navigateToManagePlans) {
+                navigateToManagePlans = false
+                onManagePlans()
+            } else {
+                onDismiss()
+            }
         },
         title = stringResource(R.string.record_title),
         covered = covered,
@@ -457,43 +535,6 @@ internal fun RecordSheet(
                             }
                         }
                     }
-                    val reducedMotion = rememberMotionReduced()
-                    val focusLabels = freeformFocusLabels()
-                    val focusColon = stringResource(R.string.record_focus_colon)
-                    val freeformSelected = !rest && !waitingForType && current.entries.any { entry ->
-                        allTypes.firstOrNull { it.id == entry.typeId }?.builtinKey == "freeform"
-                    }
-                    var selectedFocusKeys by rememberSaveable(current.date.toEpochDay(), stateSaver = PhotoPathsSaver) {
-                        mutableStateOf(FreeformFocusNote.detectSelected(current.note, focusLabels).map { it.key })
-                    }
-                    AnimatedVisibility(
-                        visible = freeformSelected,
-                        enter = if (reducedMotion) fadeIn(tween(Motion.REDUCED_MAX_MS)) else {
-                            expandVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(180))
-                        },
-                        exit = if (reducedMotion) fadeOut(tween(Motion.REDUCED_MAX_MS)) else {
-                            shrinkVertically(tween(180)) + fadeOut(tween(140))
-                        },
-                    ) {
-                        val selectedSet = selectedFocusKeys.toSet()
-                        FreeformFocusCard(
-                            labels = focusLabels,
-                            selected = selectedSet,
-                            enabled = !rest && !busy,
-                            onToggle = { part ->
-                                val nowSelected = part.key !in selectedSet
-                                selectedFocusKeys = if (nowSelected) {
-                                    selectedFocusKeys + part.key
-                                } else {
-                                    selectedFocusKeys.filterNot { it == part.key }
-                                }
-                                val label = focusLabels.getValue(part)
-                                update { d ->
-                                    d.withNote(FreeformFocusNote.togglePartInNote(d.note, label, nowSelected, focusColon))
-                                }
-                            },
-                        )
-                    }
                     if (!waitingForType) {
                         current.entries.forEach { entry ->
                             val type = allTypes.firstOrNull { it.id == entry.typeId } ?: return@forEach
@@ -508,6 +549,35 @@ internal fun RecordSheet(
                                     onValidity = { valid ->
                                         invalidEntryIds = if (valid) invalidEntryIds - entry.id else invalidEntryIds + entry.id
                                     },
+                                    strengthContent = if (type.builtinKey == "freeform") {
+                                        { onStrengthValidity ->
+                                            FreeformStrengthSection(
+                                                entry = entry,
+                                                plans = plans,
+                                                exercisesById = exercisesById,
+                                                latestPlanId = latestFreeformPlanId,
+                                                lastPerformanceByExercise = lastPerformanceByExercise,
+                                                planResetToken = planResetToken,
+                                                enabled = !rest && !busy,
+                                                onTogglePlan = { plan -> togglePlanOnEntry(entry.id, plan) },
+                                                onManagePlans = ::requestManagePlans,
+                                                onOpenPicker = { muscle ->
+                                                    pickerEntryId = entry.id
+                                                    pickerMuscleKey = muscle?.key
+                                                    pickerOpen = true
+                                                    pickerPresent = true
+                                                },
+                                                onSaveAsPlan = { saveAsPlanEntryId = entry.id },
+                                                onClearAll = {
+                                                    update { it.clearStrengthItems(entry.id) }
+                                                    planResetToken++
+                                                },
+                                                onUpdateItem = { updatedItem -> update { it.updateStrengthItem(entry.id, updatedItem) } },
+                                                onRemoveItem = { localId -> update { it.removeStrengthItem(entry.id, localId) } },
+                                                onValidityChange = onStrengthValidity,
+                                            )
+                                        }
+                                    } else null,
                                 )
                             }
                         }
@@ -633,10 +703,19 @@ internal fun RecordSheet(
         onConfirm = {
             showDiscard = false
             val p = pendingDate
+            val manage = pendingManagePlans
             pendingDate = null
-            if (p != null) changeDate(LocalDate.ofEpochDay(p)) else close()
+            pendingManagePlans = false
+            when {
+                p != null -> changeDate(LocalDate.ofEpochDay(p))
+                manage -> {
+                    navigateToManagePlans = true
+                    close()
+                }
+                else -> close()
+            }
         },
-        onDismiss = { showDiscard = false; pendingDate = null },
+        onDismiss = { showDiscard = false; pendingDate = null; pendingManagePlans = false },
         visibility = discardVisibility,
     )
     GlassDialog(
@@ -659,6 +738,64 @@ internal fun RecordSheet(
         },
         onDismiss = { showClear = false },
         visibility = clearVisibility,
+    )
+    SaveAsPlanDialog(
+        visible = saveAsPlanEntry != null && saveAsPlanEntry.strengthItems.isNotEmpty(),
+        visibility = savePlanVisibility,
+        onSave = { planName ->
+            val items = saveAsPlanEntry?.strengthItems.orEmpty().map { item ->
+                PlanItemInput(
+                    exerciseId = item.exerciseId,
+                    defaultSets = item.sets,
+                    defaultReps = item.reps,
+                    defaultWeightKg = item.weightKg,
+                )
+            }
+            if (items.isNotEmpty()) {
+                strengthRepository.createPlan(planName, items)
+            }
+        },
+        onDismiss = { saveAsPlanEntryId = null },
+    )
+    val pickerMuscleFilter = pickerMuscleKey?.let { key -> MuscleGroup.entries.firstOrNull { it.key == key } }
+    ExercisePickerSheet(
+        visible = pickerOpen,
+        exercises = activeExercises,
+        initialMuscleFilter = pickerMuscleFilter,
+        onCreateCustomExercise = { name, region, primaryMask, secondaryMask, defaultSets, defaultReps, isTimed ->
+            strengthRepository.addCustomExercise(
+                name = name,
+                region = region,
+                primaryMuscleMask = primaryMask,
+                secondaryMuscleMask = secondaryMask,
+                defaultSets = defaultSets,
+                defaultReps = defaultReps,
+                isTimed = isTimed,
+            )
+        },
+        onConfirm = { chosen ->
+            val targetId = pickerEntryId
+            pickerOpen = false
+            if (targetId != null && chosen.isNotEmpty()) {
+                val newItems = chosen.map { ex ->
+                    DraftStrengthItem(
+                        exerciseId = ex.id,
+                        sets = ex.defaultSets,
+                        reps = ex.defaultReps,
+                        weightKg = null,
+                    )
+                }
+                update { it.addStrengthItems(targetId, newItems) }
+            }
+        },
+        onDismiss = { pickerOpen = false },
+        onExited = {
+            if (!pickerOpen) {
+                pickerPresent = false
+                pickerEntryId = null
+                pickerMuscleKey = null
+            }
+        },
     )
 }
 
@@ -695,6 +832,7 @@ private fun TypeCell(type: ExerciseTypeEntity, selected: Boolean, enabled: Boole
     }
 }
 
+// Legacy helpers retained for RecordDetailSheet until Task 9.
 internal fun freeformFocusPartIcon(part: FreeformFocusPart) = when (part) {
     FreeformFocusPart.CHEST -> WorkoutPartIcons.Chest
     FreeformFocusPart.BACK -> WorkoutPartIcons.Back
@@ -714,74 +852,6 @@ internal fun freeformFocusLabels(): Map<FreeformFocusPart, String> = mapOf(
     FreeformFocusPart.ABS to stringResource(R.string.type_abs),
 )
 
-@Composable
-private fun FreeformFocusCard(
-    labels: Map<FreeformFocusPart, String>,
-    selected: Set<String>,
-    enabled: Boolean,
-    onToggle: (FreeformFocusPart) -> Unit,
-) {
-    val t = LocalThemeTokens.current
-    val cardShape = RoundedCornerShape(14.dp)
-    val cellShape = RoundedCornerShape(10.dp)
-    val accent = t.accent.accentAction.asColor()
-    Column(
-        Modifier.fillMaxWidth().clip(cardShape).background(t.neutrals.surfaceMuted.asColor()).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        BasicText(
-            stringResource(R.string.record_freeform_focus),
-            style = TextStyle(t.neutrals.textSecondary.asColor(), 13.sp, FontWeight.Medium),
-        )
-        FreeformFocusPart.entries.chunked(3).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { part ->
-                    val isSelected = part.key in selected
-                    val fg = if (isSelected) accent else t.neutrals.textPrimary.asColor()
-                    Box(
-                        Modifier.weight(1f).heightIn(min = 56.dp).clip(cellShape)
-                            .background(if (isSelected) accent.copy(alpha = 0.16f) else t.neutrals.surface.asColor())
-                            .then(if (isSelected) Modifier.border(1.5.dp, accent, cellShape) else Modifier)
-                            .toggleable(isSelected, enabled = enabled, role = Role.Checkbox) { onToggle(part) }
-                            .padding(horizontal = 6.dp, vertical = 6.dp),
-                    ) {
-                        Column(
-                            Modifier.align(Alignment.Center),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
-                        ) {
-                            Icon(
-                                freeformFocusPartIcon(part),
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp),
-                                tint = fg,
-                            )
-                            BasicText(
-                                labels.getValue(part),
-                                style = TextStyle(
-                                    color = fg,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    textAlign = TextAlign.Center,
-                                ),
-                                maxLines = 1,
-                            )
-                        }
-                        if (isSelected) {
-                            Icon(
-                                Icons.Outlined.Check,
-                                contentDescription = null,
-                                modifier = Modifier.align(Alignment.TopEnd).size(14.dp),
-                                tint = accent,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 private fun entryInputInvalid(
     distance: String,
     hasDistance: Boolean,
@@ -800,6 +870,7 @@ private fun EntryFields(
     onChange: (DraftEntry) -> Unit,
     onRemove: (() -> Unit)?,
     onValidity: (Boolean) -> Unit,
+    strengthContent: (@Composable (onValidityChange: (Boolean) -> Unit) -> Unit)? = null,
 ) {
     val t = LocalThemeTokens.current
     val hasDistance = type.hasDistance
@@ -822,12 +893,15 @@ private fun EntryFields(
         (metricMask and metric.bit) != 0 || metricInputs[metric.ordinal].isNotEmpty()
     }
 
+    var metricsValid by remember { mutableStateOf(true) }
+    var strengthValid by remember { mutableStateOf(true) }
     fun report() {
         val invalidMetric = WorkoutMetric.entries.any { metric ->
             val text = metricInputs[metric.ordinal]
             text.isNotEmpty() && parseWorkoutMetric(metric, text) == null
         }
-        onValidity(!invalidMetric && !entryInputInvalid(distance, hasDistance, swimming, calories, heartRate))
+        metricsValid = !invalidMetric && !entryInputInvalid(distance, hasDistance, swimming, calories, heartRate)
+        onValidity(metricsValid && strengthValid)
     }
     LaunchedEffect(Unit) { report() }
 
@@ -923,6 +997,10 @@ private fun EntryFields(
                     Icon(Icons.Outlined.Close, stringResource(R.string.record_remove_entry), Modifier.size(18.dp), tint = t.neutrals.textSecondary.asColor())
                 }
             }
+        }
+        strengthContent?.invoke { valid ->
+            strengthValid = valid
+            onValidity(metricsValid && valid)
         }
         fields.chunked(2).forEach { row ->
             Row(

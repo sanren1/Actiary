@@ -134,6 +134,9 @@ import com.actiary.ui.settings.SettingsScreen
 import com.actiary.ui.settings.StorageDetailsSheet
 import com.actiary.ui.settings.ThirdPartyNoticesSheet
 import com.actiary.ui.settings.UpdateDialog
+import com.actiary.ui.settings.WorkoutPlansOverlayState
+import com.actiary.ui.settings.WorkoutPlansOverlays
+import com.actiary.ui.settings.WorkoutPlansScreen
 import com.actiary.ui.settings.parent
 import com.actiary.ui.settings.showsBottomBar
 import com.actiary.widget.TodayWidgetUpdater
@@ -324,6 +327,7 @@ class MainActivity : ComponentActivity() {
                 val defaultTypeIcon = CUSTOM_TYPE_ICONS.first().key
                 var typeIcon by rememberSaveable { mutableStateOf<String?>(defaultTypeIcon) }
                 var pickingTypeIcon by rememberSaveable { mutableStateOf(false) }
+                val workoutPlansOverlay = remember { WorkoutPlansOverlayState() }
                 var storageDetailsOpen by rememberSaveable { mutableStateOf(false) }
                 var storageRefreshKey by rememberSaveable { mutableIntStateOf(0) }
                 var thirdPartyNoticesOpen by rememberSaveable { mutableStateOf(false) }
@@ -368,11 +372,14 @@ class MainActivity : ComponentActivity() {
                 val resetVisibility = rememberOverlayVisibility(confirmAppearanceReset)
                 val accentRemovalVisibility = rememberOverlayVisibility(pendingAccentRemoval != null)
                 val removalVisibility = rememberOverlayVisibility(pendingTypeRemoval != null)
+                val planDeleteVisibility = rememberOverlayVisibility(workoutPlansOverlay.pendingPlanDelete != null)
+                val customExerciseVisibility = rememberOverlayVisibility(workoutPlansOverlay.customExerciseOpen)
                 val iconVisibility = rememberOverlayVisibility(pickingTypeIcon)
                 val updateVisibility = rememberOverlayVisibility(availableUpdate != null)
                 fun hasOverlay() = editing != null || viewing != null ||
                     accentEditorOpen || pendingAccentRemoval != null || accentRemovalVisibility.overlayPresent ||
                     pendingTypeRemoval != null || editingTypeOpen || pickingTypeIcon || scanningUri != null ||
+                    workoutPlansOverlay.hasVisibleOverlay(planDeleteVisibility, customExerciseVisibility) ||
                     storageDetailsOpen || thirdPartyNoticesOpen || availableUpdate != null || updateVisibility.overlayPresent ||
                     (screenshot != null && editing == null) || confirmAppearanceReset || backup.state != BackupState.Idle ||
                     scanVisibility.overlayPresent || dateVisibility.overlayPresent || resetVisibility.overlayPresent ||
@@ -514,6 +521,7 @@ class MainActivity : ComponentActivity() {
                                     RecordDetailSheet(
                                         date = LocalDate.ofEpochDay(day),
                                         repository = container.recordRepository,
+                                        strengthRepository = container.strengthRepository,
                                         photoStore = container.photoStore,
                                         onDismiss = { viewing = null },
                                         onEdit = {
@@ -529,10 +537,18 @@ class MainActivity : ComponentActivity() {
                                         date = LocalDate.ofEpochDay(day),
                                         firstDayOfWeek = firstDayOfWeek,
                                         repository = container.recordRepository,
+                                        strengthRepository = container.strengthRepository,
                                         photoStore = container.photoStore,
                                         onDismiss = {
                                             clearScreenshot()
                                             editing = null
+                                        },
+                                        onManagePlans = {
+                                            clearScreenshot()
+                                            editing = null
+                                            push.navigate(SettingsPage.WORKOUT_PLANS, reduced = true)
+                                            settingsPage = SettingsPage.WORKOUT_PLANS
+                                            tab = Tab.SETTINGS
                                         },
                                         onSaved = { selected = it },
                                         screenshot = screenshot,
@@ -618,6 +634,12 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = { pickingTypeIcon = false },
                                 visibility = iconVisibility,
                             )
+                            WorkoutPlansOverlays(
+                                repository = container.strengthRepository,
+                                state = workoutPlansOverlay,
+                                deleteVisibility = planDeleteVisibility,
+                                customExerciseVisibility = customExerciseVisibility,
+                            )
                             if (storageDetailsOpen) {
                                 StorageDetailsSheet(
                                     onCacheCleared = { storageRefreshKey++ },
@@ -666,6 +688,7 @@ class MainActivity : ComponentActivity() {
                                             Tab.CALENDAR -> holder.SaveableStateProvider(destination.name) {
                                                 HomeScreen(
                                                     repository = container.recordRepository,
+                                                    strengthRepository = container.strengthRepository,
                                                     photoStore = container.photoStore,
                                                     selected = selected,
                                                     firstDayOfWeek = firstDayOfWeek,
@@ -676,6 +699,7 @@ class MainActivity : ComponentActivity() {
                                             Tab.RECORDS -> holder.SaveableStateProvider(destination.name) {
                                                 RecordsScreen(
                                                     repository = container.recordRepository,
+                                                    strengthRepository = container.strengthRepository,
                                                     photoStore = container.photoStore,
                                                     initialView = recordsView,
                                                     firstDayOfWeek = firstDayOfWeek,
@@ -745,6 +769,30 @@ class MainActivity : ComponentActivity() {
                                                                         }
                                                                     },
                                                                     onRequestRemoval = { pendingTypeRemoval = it },
+                                                                )
+                                                            },
+                                                            workoutPlansContent = { onBack ->
+                                                                WorkoutPlansScreen(
+                                                                    repository = container.strengthRepository,
+                                                                    onBack = onBack,
+                                                                    onRequestNewPlan = {
+                                                                        if (!hasOverlay()) workoutPlansOverlay.openNewPlan()
+                                                                    },
+                                                                    onRequestEditPlan = { plan ->
+                                                                        if (!hasOverlay()) workoutPlansOverlay.openEditPlan(plan)
+                                                                    },
+                                                                    onRequestDeletePlan = { plan ->
+                                                                        if (!hasOverlay()) workoutPlansOverlay.requestDeletePlan(plan)
+                                                                    },
+                                                                    onRequestNewExercise = {
+                                                                        if (!hasOverlay()) workoutPlansOverlay.openNewExercise()
+                                                                    },
+                                                                    onRequestEditExercise = { exercise ->
+                                                                        if (!hasOverlay()) workoutPlansOverlay.openEditExercise(exercise)
+                                                                    },
+                                                                    onRequestExerciseHistory = { exercise ->
+                                                                        if (!hasOverlay()) workoutPlansOverlay.openExerciseHistory(exercise)
+                                                                    },
                                                                 )
                                                             },
                                                             onExportBackup = {

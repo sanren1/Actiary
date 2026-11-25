@@ -9,6 +9,8 @@ private const val MAX_KM_HUNDREDTHS = 1_000_000 // 10,000 km
 private const val MAX_CALORIES = 9999
 private const val MIN_HEART_RATE = 30
 private const val MAX_HEART_RATE = 230
+private const val MAX_STRENGTH_SETS = 99
+private const val MAX_STRENGTH_REPS = 999
 
 fun sanitizeMinutes(text: String): String =
     text.filter { it in '0'..'9' }.take(6).let { s -> s.takeIf { (it.toIntOrNull() ?: 0) <= MAX_MINUTES } ?: s.dropLast(1) }
@@ -105,3 +107,35 @@ internal fun paceSeconds(durationSeconds: Int?, distanceMeters: Int?, distanceUn
     val distance = distanceMeters?.takeIf { it > 0 } ?: return null
     return (time.toLong() * distanceUnit + distance / 2) / distance
 }
+
+fun sanitizeStrengthSets(text: String): String = text.filter { it in '0'..'9' }.take(2)
+
+fun sanitizeStrengthReps(text: String): String = text.filter { it in '0'..'9' }.take(3)
+
+/** Keeps up to 3 integer digits and a single separator (normalised to '.') with at most one decimal digit. */
+fun sanitizeStrengthWeight(text: String): String {
+    val sb = StringBuilder()
+    var sep = false
+    var decimals = 0
+    for (c in text) {
+        when {
+            c in '0'..'9' -> if (!sep) {
+                if (sb.length < 3) sb.append(c)
+            } else if (decimals < 1) {
+                sb.append(c)
+                decimals++
+            }
+            (c == '.' || c == ',') && !sep -> {
+                sb.append('.')
+                sep = true
+            }
+        }
+    }
+    return sb.toString()
+}
+
+fun parseStrengthSets(text: String): Int? =
+    text.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.toIntOrNull()?.takeIf { it in 1..MAX_STRENGTH_SETS }
+
+fun parseStrengthReps(text: String): Int? =
+    text.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.toIntOrNull()?.takeIf { it in 1..MAX_STRENGTH_REPS }

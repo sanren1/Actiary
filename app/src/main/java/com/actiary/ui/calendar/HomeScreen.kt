@@ -62,6 +62,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.actiary.R
 import com.actiary.data.RecordRepository
+import com.actiary.data.StrengthRepository
 import com.actiary.data.db.DayWithDetails
 import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.toDayState
@@ -94,6 +95,7 @@ internal fun canEditDayDetail(selected: LocalDate, loaded: LocalDate?, displayed
 @Composable
 fun HomeScreen(
     repository: RecordRepository,
+    strengthRepository: StrengthRepository,
     photoStore: PhotoStore,
     selected: LocalDate,
     firstDayOfWeek: DayOfWeek,
@@ -138,6 +140,8 @@ fun HomeScreen(
         .collectAsStateWithLifecycle(null)
     val types by repository.allTypes.collectAsStateWithLifecycle(emptyList())
     val typesById = remember(types) { types.associateBy { it.id } }
+    val exercises by strengthRepository.allExercises.collectAsStateWithLifecycle(emptyList())
+    val exercisesById = remember(exercises) { exercises.associateBy { it.id } }
     val dateFormatter = DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)
     val spokenDateFormatter = DateTimeFormatter.ofPattern(stringResource(R.string.day_accessibility_pattern), locale)
     val scope = rememberCoroutineScope()
@@ -264,6 +268,7 @@ fun HomeScreen(
                             photoStore = photoStore,
                             modifier = interaction.padding(16.dp),
                             loading = shown == null,
+                            exercises = exercisesById,
                         )
                     }
                     if (animationsOff) {

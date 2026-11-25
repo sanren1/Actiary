@@ -6,6 +6,7 @@ import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.db.PhotoAttachmentEntity
 import com.actiary.data.db.RecordDao
+import com.actiary.data.db.StrengthLogItemEntity
 import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DayState
@@ -78,14 +79,35 @@ class RecordRepository(
                     }
                 }
                 val now = clock()
+                val strengthLogsByEntryIndex = buildMap<Int, List<StrengthLogItemEntity>> {
+                    draft.entries.forEachIndexed { entryIndex, entry ->
+                        if (entry.strengthItems.isNotEmpty()) {
+                            put(
+                                entryIndex,
+                                entry.strengthItems.mapIndexed { itemIndex, item ->
+                                    StrengthLogItemEntity(
+                                        id = 0,
+                                        entryId = 0,
+                                        exerciseId = item.exerciseId,
+                                        sets = item.sets,
+                                        reps = item.reps,
+                                        weightKg = item.weightKg,
+                                        sortOrder = itemIndex,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
                 dao.replaceDay(
                     DailyRecordEntity(epochDay, draft.status, draft.note, now),
                     draft.entries.mapIndexed { i, e ->
                         ExerciseEntryEntity(
-                            0, epochDay, e.typeId, e.durationMinutes, e.distanceMeters, e.calories, e.avgHeartRate, i, e.metrics,
+                            0, epochDay, e.typeId, e.durationMinutes, e.distanceMeters, e.calories, e.avgHeartRate, i, e.metrics, e.planId,
                         )
                     },
                     names.mapIndexed { i, n -> PhotoAttachmentEntity(0, epochDay, n, i, now) },
+                    strengthLogsByEntryIndex,
                 )
                 names
             } catch (e: Throwable) {

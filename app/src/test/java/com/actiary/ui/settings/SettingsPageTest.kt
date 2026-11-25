@@ -18,6 +18,7 @@ class SettingsPageTest {
         val subpages = listOf(
             SettingsPage.APPEARANCE,
             SettingsPage.TYPES,
+            SettingsPage.WORKOUT_PLANS,
             SettingsPage.DATA,
             SettingsPage.ABOUT,
         )

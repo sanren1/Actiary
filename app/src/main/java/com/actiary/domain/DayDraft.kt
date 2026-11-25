@@ -10,6 +10,15 @@ sealed interface DraftPhoto {
     data class Staged(val fileName: String) : DraftPhoto
 }
 
+data class DraftStrengthItem(
+    val exerciseId: Long,
+    val sets: Int,
+    val reps: Int,
+    val weightKg: Float? = null,
+    val localId: Long = 0,
+    val sourcePlanId: Long? = null,
+)
+
 data class DraftEntry(
     val typeId: Long,
     val durationMinutes: Int? = null,
@@ -18,6 +27,8 @@ data class DraftEntry(
     val avgHeartRate: Int? = null,
     val id: Long = 0,
     val metrics: WorkoutMetrics = WorkoutMetrics(),
+    val planId: Long? = null,
+    val strengthItems: List<DraftStrengthItem> = emptyList(),
 )
 
 data class DayDraft(
@@ -39,6 +50,101 @@ data class DayDraft(
 
     fun withEntry(entry: DraftEntry): DayDraft = copy(entries = entries.map { if (it.id == entry.id) entry else it })
 
+    fun togglePlanOnEntry(entryId: Long, planId: Long, items: List<DraftStrengthItem>): DayDraft =
+        copy(
+            entries = entries.map { entry ->
+                if (entry.id != entryId) entry
+                else {
+                    val hasTaggedForPlan = entry.strengthItems.any { it.sourcePlanId == planId }
+                    val hasLegacyForPlan = entry.planId == planId && entry.strengthItems.any { it.sourcePlanId == null }
+                    if (hasTaggedForPlan || hasLegacyForPlan) {
+                        val remaining = if (hasTaggedForPlan) {
+                            entry.strengthItems.filterNot { it.sourcePlanId == planId }
+                        } else {
+                            val planExerciseIds = items.mapTo(HashSet()) { it.exerciseId }
+                            entry.strengthItems.filterNot { it.sourcePlanId == null && it.exerciseId in planExerciseIds }
+                        }
+                        entry.copy(
+                            planId = remaining.mapNotNull { it.sourcePlanId }.lastOrNull(),
+                            strengthItems = remaining,
+                        )
+                    } else {
+                        val existingExerciseIds = entry.strengthItems.mapTo(HashSet()) { it.exerciseId }
+                        val base = entry.strengthItems.maxOfOrNull { it.localId } ?: 0L
+                        val appended = items
+                            .filter { it.exerciseId !in existingExerciseIds }
+                            .mapIndexed { idx, item ->
+                                item.copy(localId = base + idx + 1L, sourcePlanId = planId)
+                            }
+                        entry.copy(
+                            planId = planId,
+                            strengthItems = entry.strengthItems + appended,
+                        )
+                    }
+                }
+            },
+        )
+
+    fun clearStrengthItems(entryId: Long): DayDraft =
+        copy(
+            entries = entries.map { entry ->
+                if (entry.id != entryId) entry
+                else entry.copy(planId = null, strengthItems = emptyList())
+            },
+        )
+
+    fun applyPlanToEntry(entryId: Long, planId: Long, items: List<DraftStrengthItem>, replace: Boolean): DayDraft =
+        copy(
+            entries = entries.map { entry ->
+                if (entry.id != entryId) entry
+                else if (replace) {
+                    entry.copy(
+                        planId = planId,
+                        strengthItems = items.mapIndexed { idx, item -> item.copy(localId = idx + 1L) },
+                    )
+                } else {
+                    val base = entry.strengthItems.maxOfOrNull { it.localId } ?: 0L
+                    entry.copy(
+                        planId = entry.planId ?: planId,
+                        strengthItems = entry.strengthItems + items.mapIndexed { idx, item -> item.copy(localId = base + idx + 1L) },
+                    )
+                }
+            },
+        )
+
+    fun addStrengthItems(entryId: Long, items: List<DraftStrengthItem>): DayDraft {
+        if (items.isEmpty()) return this
+        return copy(
+            entries = entries.map { entry ->
+                if (entry.id != entryId) entry
+                else {
+                    val base = entry.strengthItems.maxOfOrNull { it.localId } ?: 0L
+                    entry.copy(
+                        strengthItems = entry.strengthItems + items.mapIndexed { idx, item -> item.copy(localId = base + idx + 1L) },
+                    )
+                }
+            },
+        )
+    }
+
+    fun updateStrengthItem(entryId: Long, item: DraftStrengthItem): DayDraft =
+        copy(
+            entries = entries.map { entry ->
+                if (entry.id != entryId) entry
+                else entry.copy(
+                    strengthItems = entry.strengthItems.map { if (it.localId == item.localId) item else it },
+                )
+            },
+        )
+
+    fun removeStrengthItem(entryId: Long, localId: Long): DayDraft =
+        copy(
+            entries = entries.map { entry ->
+                if (entry.id != entryId) entry
+                else entry.copy(strengthItems = entry.strengthItems.filterNot { it.localId == localId })
+            },
+        )
+
     fun removeEntry(id: Long): DayDraft = copy(entries = entries.filterNot { it.id == id })
 
     fun withNote(text: String): DayDraft = copy(note = text.take(NOTE_LIMIT))
@@ -59,8 +165,19 @@ data class DayDraft(
 
     val needsRestConfirm: Boolean get() = status == DayStatus.EXERCISED && entries.isNotEmpty()
 
+    private fun normalizedForDiff(): DayDraft = copy(
+        entries = entries.mapIndexed { entryIndex, entry ->
+            entry.copy(
+                id = entryIndex.toLong(),
+                strengthItems = entry.strengthItems.mapIndexed { itemIndex, item ->
+                    item.copy(localId = itemIndex.toLong(), sourcePlanId = null)
+                },
+            )
+        },
+    )
+
     fun isChangedFrom(original: DayDraft): Boolean =
-        copy(entries = entries.mapIndexed { i, entry -> entry.copy(id = original.entries.getOrNull(i)?.id ?: entry.id) }) != original
+        normalizedForDiff() != original.normalizedForDiff()
 
     companion object {
         const val NOTE_LIMIT = 200
@@ -71,8 +188,27 @@ data class DayDraft(
             else DayDraft(
                 date = date,
                 status = day.record.status,
-                entries = day.entries.sortedBy { it.sortOrder }
-                    .map { DraftEntry(it.typeId, it.durationMinutes, it.distanceMeters, it.calories, it.avgHeartRate, it.id, it.metrics) },
+                entries = day.entriesWithLogs.sortedBy { it.entry.sortOrder }.map { e ->
+                    DraftEntry(
+                        typeId = e.entry.typeId,
+                        durationMinutes = e.entry.durationMinutes,
+                        distanceMeters = e.entry.distanceMeters,
+                        calories = e.entry.calories,
+                        avgHeartRate = e.entry.avgHeartRate,
+                        id = e.entry.id,
+                        metrics = e.entry.metrics,
+                        planId = e.entry.planId,
+                        strengthItems = e.strengthLogs.sortedBy { it.sortOrder }.mapIndexed { idx, log ->
+                            DraftStrengthItem(
+                                exerciseId = log.exerciseId,
+                                sets = log.sets,
+                                reps = log.reps,
+                                weightKg = log.weightKg,
+                                localId = idx + 1L,
+                            )
+                        },
+                    )
+                },
                 note = day.record.note,
                 photos = day.photos.sortedBy { it.sortOrder }.map { DraftPhoto.Saved(it.fileName) },
             )

@@ -34,8 +34,8 @@ android {
         applicationId = "com.actiary"
         minSdk = 31
         targetSdk = 35
-        versionCode = 31
-        versionName = "1.1.0"
+        versionCode = 32
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += "arm64-v8a"

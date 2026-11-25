@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Bedtime
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,17 +83,26 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.actiary.R
 import com.actiary.data.RecordRepository
+import com.actiary.data.StrengthRepository
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.DayWithDetails
 import com.actiary.data.db.ExerciseTypeEntity
+import com.actiary.data.db.StrengthExerciseEntity
 import com.actiary.data.photo.PhotoStore
 import com.actiary.data.appearance.ChartPalette
 import com.actiary.data.appearance.RecordsView
 import com.actiary.domain.Bucket
 import com.actiary.domain.ChartMetric
 import com.actiary.domain.DateRange
+import com.actiary.domain.MuscleGroup
+import com.actiary.domain.MuscleRangeStats
 import com.actiary.domain.RangeKind
+import com.actiary.domain.activeTypeIdsInRange
+import com.actiary.domain.computeMuscleLastTrainedDaysAgo
+import com.actiary.domain.computeMuscleStats
+import com.actiary.domain.filterDaysByMuscle
 import com.actiary.domain.rangeOf
+import com.actiary.domain.resolveEffectiveTypeFilter
 import com.actiary.domain.shiftRange
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassPanel
@@ -100,12 +111,17 @@ import com.actiary.theme.ChartColors
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.theme.resolveChartColors
+import com.actiary.ui.calendar.buildStrengthSummaryText
+import com.actiary.ui.common.AnatomyBodyMap
+import com.actiary.ui.common.BodyMapStyle
 import com.actiary.ui.common.LocalFloatingInsets
 import com.actiary.ui.common.PinnedScrollPage
 import com.actiary.ui.common.RootTitle
 import com.actiary.ui.common.SelectionMenuRow
 import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
+import com.actiary.ui.common.formatDaysAgoLabel
+import com.actiary.ui.common.labelRes
 import com.actiary.ui.motion.Motion
 import com.actiary.ui.motion.rememberMotionReduced
 import kotlinx.coroutines.flow.map
@@ -152,6 +168,7 @@ internal fun maxValueIndex(values: List<Int?>): Int {
 @Composable
 fun RecordsScreen(
     repository: RecordRepository,
+    strengthRepository: StrengthRepository,
     photoStore: PhotoStore,
     initialView: RecordsView,
     firstDayOfWeek: DayOfWeek,
@@ -173,6 +190,7 @@ fun RecordsScreen(
     var anchor by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
     var metricIx by rememberSaveable { mutableIntStateOf(initialView.metric.ordinal) }
     var filterId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var selectedMuscle by rememberSaveable { mutableStateOf<MuscleGroup?>(null) }
     val range = rangeOf(LocalDate.ofEpochDay(anchor), KINDS[kindIx], firstDayOfWeek)
     val prev = shiftRange(range, -1, today, firstDayOfWeek)?.takeIf { !it.from.isBefore(today.minusYears(10)) }
     val next = shiftRange(range, 1, today, firstDayOfWeek)
@@ -183,9 +201,72 @@ fun RecordsScreen(
     val displayRange = loaded?.first ?: range
     val types by repository.allTypes.collectAsStateWithLifecycle(emptyList())
     val typeById = remember(types) { types.associateBy { it.id } }
-    val filter = filterId?.takeIf { it in typeById }
-    val presentation = remember(loaded, filter) {
-        loaded?.let { (loadedRange, days) -> recordsPresentation(loadedRange, days, filter) }
+    val exercisesOrNull by strengthRepository.allExercises.collectAsStateWithLifecycle(null)
+    val exerciseById = remember(exercisesOrNull) { exercisesOrNull.orEmpty().associateBy { it.id } }
+
+    val activeTypeIds = remember(loaded) {
+        loaded?.let { (loadedRange, days) -> activeTypeIdsInRange(days, loadedRange) }.orEmpty()
+    }
+    val activeTypes = remember(types, activeTypeIds) {
+        types.filter { it.id in activeTypeIds }
+    }
+    val effectiveFilter = remember(loaded, filterId, activeTypeIds, typeById) {
+        if (loaded == null) {
+            filterId?.takeIf { it in typeById }
+        } else {
+            resolveEffectiveTypeFilter(filterId, activeTypeIds)?.takeIf { it in typeById }
+        }
+    }
+    val muscleStats = remember(loaded, effectiveFilter, exerciseById) {
+        val current = loaded
+        if (current == null) {
+            MuscleRangeStats(emptyList(), emptyMap())
+        } else {
+            computeMuscleStats(current.second, current.first, exerciseById, typeFilter = effectiveFilter)
+        }
+    }
+    val showMuscleDistribution = muscleStats.ranked.isNotEmpty()
+    var latestEpochDayByExercise by remember { mutableStateOf<Map<Long, Long>>(emptyMap()) }
+    LaunchedEffect(loaded, today) {
+        latestEpochDayByExercise = strengthRepository.latestEpochDayByExercise(today)
+    }
+    val lastTrainedDaysAgo = remember(latestEpochDayByExercise, today, exerciseById) {
+        computeMuscleLastTrainedDaysAgo(latestEpochDayByExercise, today, exerciseById)
+    }
+    val effectiveSelectedMuscle = selectedMuscle?.takeIf { showMuscleDistribution && it in muscleStats.levels }
+
+    LaunchedEffect(loaded, effectiveFilter) {
+        if (loaded != null && filterId != null && effectiveFilter == null) {
+            filterId = null
+            selectedMuscle = null
+        }
+    }
+    LaunchedEffect(loaded, exercisesOrNull, showMuscleDistribution, muscleStats) {
+        if (loaded != null && exercisesOrNull != null && selectedMuscle != null && (!showMuscleDistribution || selectedMuscle !in muscleStats.levels)) {
+            selectedMuscle = null
+        }
+    }
+
+    val presentation = remember(loaded, effectiveFilter) {
+        loaded?.let { (loadedRange, days) -> recordsPresentation(loadedRange, days, effectiveFilter) }
+    }
+    val displayedTimeline = remember(presentation, loaded, effectiveFilter, effectiveSelectedMuscle, exerciseById) {
+        val currentPresentation = presentation ?: return@remember emptyList()
+        val currentLoaded = loaded ?: return@remember currentPresentation.timeline
+        if (effectiveSelectedMuscle == null) {
+            currentPresentation.timeline
+        } else {
+            timelineItems(
+                days = filterDaysByMuscle(
+                    currentLoaded.second,
+                    effectiveSelectedMuscle,
+                    exerciseById,
+                    typeFilter = effectiveFilter,
+                ),
+                range = currentLoaded.first,
+                typeFilter = effectiveFilter,
+            )
+        }
     }
 
     val primary = t.neutrals.textPrimary.asColor()
@@ -267,16 +348,37 @@ fun RecordsScreen(
                         typeById, colors, reduced,
                     ) {
                         val options = listOf(null to stringResource(R.string.records_all)) +
-                            types.map { it.id to exerciseTypeLabel(it) }
+                            activeTypes.map { it.id to exerciseTypeLabel(it) }
                         SelectionMenuRow(
                             label = stringResource(R.string.settings_custom_types),
                             options = options,
-                            selected = filter,
-                            onSelect = { filterId = it },
+                            selected = effectiveFilter,
+                            onSelect = {
+                                if (it != filterId) selectedMuscle = null
+                                filterId = it
+                            },
                         )
                     }
                 }
-                items(presentation.timeline, key = { if (it is TimelineItem.Day) it.day.record.epochDay else "m${(it as TimelineItem.Month).month}" }) { item ->
+                if (showMuscleDistribution) {
+                    item(key = "muscleDistribution") {
+                        val cardAnimation = if (reduced) Modifier else Modifier.animateItem(
+                            fadeInSpec = tween(Motion.FADE_IN_MS),
+                            fadeOutSpec = tween(Motion.FADE_OUT_MS),
+                        )
+                        MuscleDistributionCard(
+                            muscleStats = muscleStats,
+                            lastTrainedDaysAgo = lastTrainedDaysAgo,
+                            selectedMuscle = effectiveSelectedMuscle,
+                            onToggleMuscle = { muscle ->
+                                selectedMuscle = if (selectedMuscle == muscle) null else muscle
+                            },
+                            onClearMuscle = { selectedMuscle = null },
+                            modifier = cardAnimation,
+                        )
+                    }
+                }
+                items(displayedTimeline, key = { if (it is TimelineItem.Day) it.day.record.epochDay else "m${(it as TimelineItem.Month).month}" }) { item ->
                     val firstEntrance = item is TimelineItem.Day && item.day.record.epochDay !in entered
                     val animation = if (reduced) Modifier else Modifier.animateItem(
                         fadeInSpec = if (firstEntrance) null else tween(Motion.FADE_IN_MS),
@@ -296,7 +398,7 @@ fun RecordsScreen(
                                 )
                                 Modifier.graphicsLayer { alpha = opacity.value }
                             }
-                            DayCard(item.day, typeById, photoStore, cardDateFmt, spokenDateFmt, animation.then(entrance)) {
+                            DayCard(item.day, typeById, exerciseById, photoStore, cardDateFmt, spokenDateFmt, animation.then(entrance)) {
                                 onView(LocalDate.ofEpochDay(id))
                             }
                         }
@@ -539,9 +641,208 @@ private fun BarChart(chart: RecordsChart, colors: ChartColors, reduced: Boolean,
 }
 
 @Composable
+private fun MuscleDistributionCard(
+    muscleStats: MuscleRangeStats,
+    lastTrainedDaysAgo: Map<MuscleGroup, Int>,
+    selectedMuscle: MuscleGroup?,
+    onToggleMuscle: (MuscleGroup) -> Unit,
+    onClearMuscle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val t = LocalThemeTokens.current
+    val primary = t.neutrals.textPrimary.asColor()
+    val secondary = t.neutrals.textSecondary.asColor()
+    val accent = t.accent.accentAction.asColor()
+
+    GlassPanel(modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                BasicText(
+                    stringResource(R.string.records_muscle_title),
+                    Modifier.weight(1f).semantics { heading() },
+                    style = TextStyle(primary, 16.sp, FontWeight.SemiBold),
+                )
+                if (selectedMuscle != null) {
+                    val chipShape = RoundedCornerShape(50)
+                    val clearLabel = stringResource(R.string.strength_picker_clear_muscle)
+                    Row(
+                        Modifier
+                            .clip(chipShape)
+                            .background(t.accent.accentSubtle.asColor())
+                            .border(1.dp, t.accent.accentStroke.asColor(), chipShape)
+                            .clickable(role = Role.Button, onClickLabel = clearLabel, onClick = onClearMuscle)
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        BasicText(
+                            stringResource(R.string.records_muscle_filtered, stringResource(selectedMuscle.labelRes())),
+                            style = TextStyle(accent, 12.sp, FontWeight.Medium),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Icon(
+                            Icons.Outlined.Close,
+                            clearLabel,
+                            Modifier.size(14.dp),
+                            tint = accent,
+                        )
+                    }
+                }
+            }
+
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(t.neutrals.surface.asColor())
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AnatomyBodyMap(
+                    style = BodyMapStyle.Heatmap(muscleStats.levels, selected = selectedMuscle),
+                    modifier = Modifier.fillMaxWidth().height(170.dp),
+                    onMuscleClick = { muscle ->
+                        if (muscle in muscleStats.levels) {
+                            onToggleMuscle(muscle)
+                        }
+                    },
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        BasicText(
+                            stringResource(R.string.records_muscle_legend_less),
+                            style = TextStyle(secondary, 11.sp),
+                        )
+                        val neutralFill = secondary.copy(alpha = if (t.dark) 0.12f else 0.085f)
+                        listOf(
+                            neutralFill,
+                            accent.copy(alpha = 0.28f),
+                            accent.copy(alpha = 0.60f),
+                            accent.copy(alpha = 0.95f),
+                        ).forEach { swatchColor ->
+                            Box(
+                                Modifier
+                                    .size(10.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(swatchColor),
+                            )
+                        }
+                        BasicText(
+                            stringResource(R.string.records_muscle_legend_more),
+                            style = TextStyle(secondary, 11.sp),
+                        )
+                    }
+                }
+            }
+
+            val maxSets = muscleStats.ranked.first().totalSets.coerceAtLeast(1)
+            val barTrack = t.neutrals.surfaceMuted.asColor()
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                muscleStats.ranked.forEach { stat ->
+                    val isSelected = selectedMuscle == stat.muscle
+                    val fraction = (stat.totalSets / maxSets.toFloat()).coerceIn(0f, 1f)
+                    val rowShape = RoundedCornerShape(10.dp)
+                    val barColor = when {
+                        isSelected -> accent
+                        stat.heatLevel == 3 -> accent.copy(alpha = 0.95f)
+                        stat.heatLevel == 2 -> accent.copy(alpha = 0.72f)
+                        else -> accent.copy(alpha = 0.45f)
+                    }
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(rowShape)
+                            .background(
+                                if (isSelected) t.accent.accentSubtle.asColor()
+                                else t.neutrals.surface.asColor(),
+                            )
+                            .then(
+                                if (isSelected) Modifier.border(1.dp, t.accent.accentStroke.asColor(), rowShape)
+                                else Modifier,
+                            )
+                            .clickable(role = Role.Button) { onToggleMuscle(stat.muscle) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                BasicText(
+                                    stringResource(stat.muscle.labelRes()),
+                                    Modifier.weight(1f, fill = false),
+                                    style = TextStyle(
+                                        color = if (isSelected) accent else primary,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                val daysAgo = lastTrainedDaysAgo[stat.muscle]
+                                if (daysAgo != null) {
+                                    BasicText(
+                                        formatDaysAgoLabel(daysAgo),
+                                        style = TextStyle(secondary, 11.sp),
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                            BasicText(
+                                stringResource(R.string.records_muscle_days, stat.days),
+                                style = TextStyle(secondary, 12.sp),
+                            )
+                            BasicText(
+                                stringResource(R.string.records_muscle_sets, stat.totalSets),
+                                style = TextStyle(primary, 13.sp, FontWeight.SemiBold),
+                            )
+                        }
+                        Canvas(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(barTrack),
+                        ) {
+                            val barWidth = size.width * fraction
+                            val x = if (layoutDirection == LayoutDirection.Rtl) size.width - barWidth else 0f
+                            drawRoundRect(
+                                barColor,
+                                Offset(x, 0f),
+                                Size(barWidth, size.height),
+                                CornerRadius(size.height / 2f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun DayCard(
     day: DayWithDetails,
     typeById: Map<Long, ExerciseTypeEntity>,
+    exerciseById: Map<Long, StrengthExerciseEntity>,
     photoStore: PhotoStore,
     dateFmt: DateTimeFormatter,
     spokenDateFmt: DateTimeFormatter,
@@ -572,18 +873,36 @@ private fun DayCard(
             } else if (day.entries.isEmpty()) {
                 BasicText(stringResource(R.string.day_checked_in), style = TextStyle(secondary, 14.sp))
             } else {
-                day.entries.forEach { e ->
+                day.entriesWithLogs.sortedBy { it.entry.sortOrder }.forEach { entryWithLogs ->
+                    val e = entryWithLogs.entry
                     val type = typeById[e.typeId] ?: return@forEach
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(exerciseTypeIcon(type), null, Modifier.size(18.dp), tint = primary)
-                        BasicText(exerciseTypeLabel(type), style = TextStyle(primary, 14.sp))
-                        val metrics = entryMetrics(e, type) { unit, value -> resources.getString(unit, value) }
-                            .filterNot { (label, _) -> label == R.string.record_heart_rate }
-                            .joinToString(" · ") { it.second }
-                        if (metrics.isNotEmpty()) {
+                    val strengthSummary = buildStrengthSummaryText(
+                        logs = entryWithLogs.strengthLogs,
+                        exercises = exerciseById,
+                        muscleLabel = { resources.getString(it.labelRes()) },
+                        countsLabel = { count, sets -> resources.getString(R.string.strength_summary_counts, count, sets) },
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(exerciseTypeIcon(type), null, Modifier.size(18.dp), tint = primary)
+                            BasicText(exerciseTypeLabel(type), style = TextStyle(primary, 14.sp))
+                            val metrics = entryMetrics(e, type) { unit, value -> resources.getString(unit, value) }
+                                .filterNot { (label, _) -> label == R.string.record_heart_rate }
+                                .joinToString(" · ") { it.second }
+                            if (metrics.isNotEmpty()) {
+                                BasicText(
+                                    metrics, Modifier.weight(1f), style = TextStyle(secondary, 13.sp),
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                        if (strengthSummary != null) {
                             BasicText(
-                                metrics, Modifier.weight(1f), style = TextStyle(secondary, 13.sp),
-                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                strengthSummary,
+                                Modifier.padding(start = 24.dp),
+                                style = TextStyle(secondary, 12.sp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
