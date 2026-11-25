@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -665,12 +666,27 @@ private fun MuscleDistributionCard(
                     stringResource(R.string.records_muscle_title),
                     Modifier.weight(1f).semantics { heading() },
                     style = TextStyle(primary, 16.sp, FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 if (selectedMuscle != null) {
                     val chipShape = RoundedCornerShape(50)
                     val clearLabel = stringResource(R.string.strength_picker_clear_muscle)
+                    val muscleName = stringResource(selectedMuscle.labelRes())
+                    val selectedStat = muscleStats.ranked.firstOrNull { it.muscle == selectedMuscle }
+                    val chipLabel = if (selectedStat != null) {
+                        stringResource(
+                            R.string.records_muscle_filtered_stats,
+                            muscleName,
+                            selectedStat.days,
+                            selectedStat.totalSets,
+                        )
+                    } else {
+                        stringResource(R.string.records_muscle_filtered, muscleName)
+                    }
                     Row(
                         Modifier
+                            .widthIn(max = 220.dp)
                             .clip(chipShape)
                             .background(t.accent.accentSubtle.asColor())
                             .border(1.dp, t.accent.accentStroke.asColor(), chipShape)
@@ -680,7 +696,8 @@ private fun MuscleDistributionCard(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         BasicText(
-                            stringResource(R.string.records_muscle_filtered, stringResource(selectedMuscle.labelRes())),
+                            chipLabel,
+                            Modifier.weight(1f, fill = false),
                             style = TextStyle(accent, 12.sp, FontWeight.Medium),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

@@ -20,9 +20,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -74,9 +71,18 @@ import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseDisplayName
 import com.actiary.ui.common.isChineseLocale
 import com.actiary.ui.common.workoutPlanLabel
+import com.actiary.ui.record.CompactStrengthField
+import com.actiary.ui.record.CompactStrengthStepperField
 import com.actiary.ui.record.CustomExerciseDialog
 import com.actiary.ui.record.ExerciseHistorySheet
 import com.actiary.ui.record.ExercisePickerSheet
+import com.actiary.ui.record.StrengthRowActionButtons
+import com.actiary.ui.record.parseStrengthReps
+import com.actiary.ui.record.parseStrengthSets
+import com.actiary.ui.record.sanitizeStrengthReps
+import com.actiary.ui.record.sanitizeStrengthSets
+import com.actiary.ui.record.stepStrengthReps
+import com.actiary.ui.record.stepStrengthSets
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -436,6 +442,7 @@ private fun PlanEditorSheet(
                 )
             }
 
+            val showReorder = draftItems.size > 1
             draftItems.forEachIndexed { index, item ->
                 key(item.key) {
                     val exercise = exerciseMap[item.exerciseId]
@@ -444,17 +451,22 @@ private fun PlanEditorSheet(
                         name = name,
                         isTimed = exercise?.isTimed == true,
                         item = item,
-                        canMoveUp = index > 0 && !saving,
-                        canMoveDown = index < draftItems.lastIndex && !saving,
+                        showReorder = showReorder,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < draftItems.lastIndex,
                         enabled = !saving,
                         onUpdate = { updated -> draftItems[index] = updated },
                         onMoveUp = {
-                            val removed = draftItems.removeAt(index)
-                            draftItems.add(index - 1, removed)
+                            if (index > 0) {
+                                val removed = draftItems.removeAt(index)
+                                draftItems.add(index - 1, removed)
+                            }
                         },
                         onMoveDown = {
-                            val removed = draftItems.removeAt(index)
-                            draftItems.add(index + 1, removed)
+                            if (index < draftItems.lastIndex) {
+                                val removed = draftItems.removeAt(index)
+                                draftItems.add(index + 1, removed)
+                            }
                         },
                         onRemove = { draftItems.removeAt(index) },
                     )
@@ -548,6 +560,7 @@ private fun DraftPlanItemRow(
     name: String,
     isTimed: Boolean,
     item: DraftPlanItem,
+    showReorder: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     enabled: Boolean,
@@ -559,6 +572,10 @@ private fun DraftPlanItemRow(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val shape = RoundedCornerShape(12.dp)
+    val currentSets = parseStrengthSets(item.setsText) ?: 4
+    val fallbackReps = if (isTimed) 60 else 10
+    val currentReps = parseStrengthReps(item.repsText) ?: fallbackReps
+    val minReps = if (isTimed) 5 else 1
     Column(
         Modifier
             .fillMaxWidth()
@@ -579,133 +596,76 @@ private fun DraftPlanItemRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (canMoveUp) {
-                SmallRowIconButton(
-                    icon = Icons.Outlined.KeyboardArrowUp,
-                    contentDescription = stringResource(R.string.custom_type_move_up, name),
-                    enabled = enabled,
-                    onClick = onMoveUp,
-                )
-            }
-            if (canMoveDown) {
-                SmallRowIconButton(
-                    icon = Icons.Outlined.KeyboardArrowDown,
-                    contentDescription = stringResource(R.string.custom_type_move_down, name),
-                    enabled = enabled,
-                    onClick = onMoveDown,
-                )
-            }
-            SmallRowIconButton(
-                icon = Icons.Outlined.Close,
-                contentDescription = stringResource(R.string.custom_type_delete_named, name),
+            StrengthRowActionButtons(
+                showReorder = showReorder,
+                canMoveUp = canMoveUp,
+                canMoveDown = canMoveDown,
                 enabled = enabled,
-                onClick = onRemove,
+                onMoveUp = onMoveUp,
+                onMoveDown = onMoveDown,
+                onRemove = onRemove,
+                removeContentDescription = stringResource(R.string.custom_type_delete_named, name),
             )
         }
 
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            PlanMetricField(
+            CompactStrengthStepperField(
                 value = item.setsText,
                 suffix = stringResource(R.string.strength_sets_label),
                 placeholder = "4",
-                keyboardType = KeyboardType.Number,
                 enabled = enabled,
-                onValueChange = { raw -> onUpdate(item.copy(setsText = raw.filter(Char::isDigit).take(2))) },
+                canDecrease = currentSets > 1,
+                canIncrease = currentSets < 99,
+                onValueChange = { raw -> onUpdate(item.copy(setsText = sanitizeStrengthSets(raw))) },
+                onDecrease = {
+                    val next = stepStrengthSets(currentSets, -1)
+                    onUpdate(item.copy(setsText = next.toString()))
+                },
+                onIncrease = {
+                    val next = stepStrengthSets(currentSets, 1)
+                    onUpdate(item.copy(setsText = next.toString()))
+                },
                 modifier = Modifier.weight(1f),
             )
-            PlanMetricField(
+            BasicText(
+                "×",
+                style = TextStyle(n.textSecondary.asColor(), 14.sp, FontWeight.Medium),
+            )
+            CompactStrengthStepperField(
                 value = item.repsText,
                 suffix = stringResource(if (isTimed) R.string.strength_secs_label else R.string.strength_reps_label),
                 placeholder = if (isTimed) "60" else "10",
-                keyboardType = KeyboardType.Number,
                 enabled = enabled,
-                onValueChange = { raw -> onUpdate(item.copy(repsText = raw.filter(Char::isDigit).take(3))) },
+                canDecrease = currentReps > minReps,
+                canIncrease = currentReps < 999,
+                onValueChange = { raw -> onUpdate(item.copy(repsText = sanitizeStrengthReps(raw))) },
+                onDecrease = {
+                    val next = stepStrengthReps(currentReps, -1, isTimed)
+                    onUpdate(item.copy(repsText = next.toString()))
+                },
+                onIncrease = {
+                    val next = stepStrengthReps(currentReps, 1, isTimed)
+                    onUpdate(item.copy(repsText = next.toString()))
+                },
                 modifier = Modifier.weight(1f),
             )
-            val weightUnit = stringResource(R.string.strength_weight_unit)
-            PlanMetricField(
-                value = item.weightText,
-                suffix = if (item.weightText.isEmpty()) "" else weightUnit,
-                placeholder = stringResource(R.string.strength_weight_optional),
-                keyboardType = KeyboardType.Decimal,
-                enabled = enabled,
-                onValueChange = { raw -> onUpdate(item.copy(weightText = filterDecimalWeight(raw))) },
-                modifier = Modifier.weight(1.3f),
-                contentDescription = weightUnit,
-            )
         }
-    }
-}
 
-@Composable
-private fun SmallRowIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val n = LocalThemeTokens.current.neutrals
-    Box(
-        Modifier
-            .size(32.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription, Modifier.size(18.dp), tint = n.textSecondary.asColor())
-    }
-}
-
-@Composable
-private fun PlanMetricField(
-    value: String,
-    suffix: String,
-    placeholder: String,
-    keyboardType: KeyboardType,
-    enabled: Boolean,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    contentDescription: String = suffix,
-) {
-    val t = LocalThemeTokens.current
-    val n = t.neutrals
-    val a = t.accent
-    val shape = RoundedCornerShape(10.dp)
-    Row(
-        modifier
-            .heightIn(min = 38.dp)
-            .clip(shape)
-            .background(n.surfaceMuted.asColor())
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (value.isEmpty()) {
-                BasicText(
-                    placeholder,
-                    style = TextStyle(n.textSecondary.asColor().copy(alpha = 0.6f), 13.sp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                enabled = enabled,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-                textStyle = TextStyle(n.textPrimary.asColor(), 14.sp, FontWeight.Medium),
-                cursorBrush = SolidColor(a.accentAction.asColor()),
-                modifier = Modifier.fillMaxWidth().semantics { this.contentDescription = contentDescription },
-            )
-        }
-        if (suffix.isNotEmpty()) {
-            BasicText(suffix, style = TextStyle(n.textSecondary.asColor(), 12.sp))
-        }
+        val weightUnit = stringResource(R.string.strength_weight_unit)
+        CompactStrengthField(
+            value = item.weightText,
+            suffix = if (item.weightText.isEmpty()) "" else weightUnit,
+            placeholder = stringResource(R.string.strength_weight_optional),
+            keyboardType = KeyboardType.Decimal,
+            enabled = enabled,
+            onValueChange = { raw -> onUpdate(item.copy(weightText = filterDecimalWeight(raw))) },
+            modifier = Modifier.fillMaxWidth(),
+            contentDescription = weightUnit,
+        )
     }
 }
 

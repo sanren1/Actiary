@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -54,8 +55,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -65,6 +68,7 @@ import com.actiary.data.RecordRepository
 import com.actiary.data.StrengthRepository
 import com.actiary.data.db.DayWithDetails
 import com.actiary.data.photo.PhotoStore
+import com.actiary.domain.computeHomeStreakSummary
 import com.actiary.domain.toDayState
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassPanel
@@ -135,6 +139,12 @@ fun HomeScreen(
         repository.observeRange(visible.minusMonths(1).atDay(1), visible.plusMonths(1).atEndOfMonth())
             .map { days -> days.associate { LocalDate.ofEpochDay(it.record.epochDay) to it.record.toDayState() } }
     }.collectAsStateWithLifecycle(emptyMap())
+    val recentDays by remember(repository, today) {
+        repository.observeRange(today.minusDays(365), today)
+    }.collectAsStateWithLifecycle(emptyList())
+    val streakSummary = remember(recentDays, today, firstDayOfWeek) {
+        computeHomeStreakSummary(recentDays, today, firstDayOfWeek)
+    }
     // The collector retains the last dated result while the new date loads.
     val day by remember(repository, selected) { repository.observeDay(selected).map { selected to it } }
         .collectAsStateWithLifecycle(null)
@@ -204,6 +214,40 @@ fun HomeScreen(
                 .padding(start = 16.dp, end = 16.dp, top = headerHeight + 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (streakSummary.weekExercisedDays > 0 || streakSummary.currentStreakDays > 0) {
+                val progressParts = buildList {
+                    if (streakSummary.weekExercisedDays > 0) {
+                        add(stringResource(R.string.home_week_progress, streakSummary.weekExercisedDays))
+                    }
+                    if (streakSummary.currentStreakDays > 0) {
+                        add(stringResource(R.string.home_streak_days, streakSummary.currentStreakDays))
+                    }
+                }
+                GlassPanel(shape = RoundedCornerShape(50)) {
+                    Row(
+                        Modifier
+                            .semantics(mergeDescendants = true) {}
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        progressParts.forEachIndexed { index, part ->
+                            if (index > 0) {
+                                BasicText(
+                                    "·",
+                                    style = TextStyle(t.neutrals.textSecondary.asColor(), 12.sp),
+                                )
+                            }
+                            BasicText(
+                                part,
+                                style = TextStyle(primary, 12.sp, FontWeight.Medium),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
             GlassPanel(
                 Modifier.fillMaxWidth().draggable(
                     state = rememberDraggableState { delta ->

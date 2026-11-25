@@ -139,3 +139,12 @@ fun parseStrengthSets(text: String): Int? =
 
 fun parseStrengthReps(text: String): Int? =
     text.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.toIntOrNull()?.takeIf { it in 1..MAX_STRENGTH_REPS }
+
+internal fun stepStrengthSets(current: Int, delta: Int): Int =
+    (current + delta).coerceIn(1, MAX_STRENGTH_SETS)
+
+internal fun stepStrengthReps(current: Int, deltaSteps: Int, isTimed: Boolean): Int {
+    val step = if (isTimed) 5 else 1
+    val min = if (isTimed) 5 else 1
+    return (current + deltaSteps * step).coerceIn(min, MAX_STRENGTH_REPS)
+}

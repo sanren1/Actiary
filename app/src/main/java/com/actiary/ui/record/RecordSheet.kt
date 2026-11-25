@@ -574,6 +574,7 @@ internal fun RecordSheet(
                                                 },
                                                 onUpdateItem = { updatedItem -> update { it.updateStrengthItem(entry.id, updatedItem) } },
                                                 onRemoveItem = { localId -> update { it.removeStrengthItem(entry.id, localId) } },
+                                                onMoveItem = { from, to -> update { it.moveStrengthItem(entry.id, from, to) } },
                                                 onValidityChange = onStrengthValidity,
                                             )
                                         }

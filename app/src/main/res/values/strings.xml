@@ -48,6 +48,8 @@
     <string name="day_unrecorded">未记录</string>
     <string name="home_prev_month">上一月</string>
     <string name="home_next_month">下一月</string>
+    <string name="home_week_progress">本周 %1$d 天</string>
+    <string name="home_streak_days">连续 %1$d 天</string>
     <string name="home_month_pattern">yyyy 年 M 月</string>
     <string name="day_title_pattern">M 月 d 日（E）</string>
     <string name="day_accessibility_pattern">yyyy年M月d日</string>
@@ -271,6 +273,8 @@
     <string name="widget_action_rest_active">已休息</string>
     <string name="widget_week_streak">近7天 %1$d 天</string>
     <string name="widget_strip_meta">%1$s · 近7天%2$d天</string>
+    <string name="widget_recommended_plan">推荐：%1$s</string>
+    <string name="widget_streak_short">连续 %1$d 天</string>
     <string name="data_storage_details">查看空间明细</string>
     <string name="data_storage_cache">缓存</string>
     <string name="data_storage_photo_count">照片数量</string>
@@ -365,6 +369,11 @@
     <string name="strength_item_format_timed_no_weight">%1$d × %2$ds</string>
     <string name="strength_item_format_timed_weight">%1$d × %2$ds · %3$s kg</string>
     <string name="strength_last_perf">上次 %1$s</string>
+    <string name="strength_apply_last_perf_cd">沿用上次成绩</string>
+    <string name="strength_decrease">减少</string>
+    <string name="strength_increase">增加</string>
+    <string name="strength_move_up">上移</string>
+    <string name="strength_move_down">下移</string>
     <string name="strength_history_title">训练记录</string>
     <string name="strength_history_empty">暂无该动作记录</string>
     <string name="strength_history_sessions">共 %1$d 次</string>
@@ -377,6 +386,7 @@
     <string name="records_muscle_legend_less">少</string>
     <string name="records_muscle_legend_more">多</string>
     <string name="records_muscle_filtered">已筛选：%1$s</string>
+    <string name="records_muscle_filtered_stats">已筛选：%1$s · %2$d 次 · %3$d 组</string>
     <string name="records_muscle_today">今天</string>
     <string name="records_muscle_yesterday">昨天</string>
     <string name="records_muscle_days_ago">%1$d天前</string>

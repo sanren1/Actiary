@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -24,6 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -38,9 +42,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -51,6 +58,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,6 +105,7 @@ internal fun FreeformStrengthSection(
     onClearAll: () -> Unit,
     onUpdateItem: (DraftStrengthItem) -> Unit,
     onRemoveItem: (Long) -> Unit,
+    onMoveItem: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
     onValidityChange: (Boolean) -> Unit,
 ) {
     val t = LocalThemeTokens.current
@@ -187,11 +196,12 @@ internal fun FreeformStrengthSection(
         }
 
         if (entry.strengthItems.isNotEmpty()) {
+            val showReorder = entry.strengthItems.size > 1
             Column(
                 Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                entry.strengthItems.forEach { item ->
+                entry.strengthItems.forEachIndexed { index, item ->
                     key(planResetToken, item.localId) {
                         val exercise = exercisesById[item.exerciseId]
                         StrengthItemRow(
@@ -200,6 +210,11 @@ internal fun FreeformStrengthSection(
                             lastPerf = lastPerformanceByExercise[item.exerciseId],
                             isChinese = isChinese,
                             enabled = enabled,
+                            showReorder = showReorder,
+                            canMoveUp = index > 0,
+                            canMoveDown = index < entry.strengthItems.lastIndex,
+                            onMoveUp = { onMoveItem(index, index - 1) },
+                            onMoveDown = { onMoveItem(index, index + 1) },
                             onUpdate = onUpdateItem,
                             onRemove = { onRemoveItem(item.localId) },
                             onValidityChange = { valid ->
@@ -379,12 +394,19 @@ private fun StrengthItemRow(
     lastPerf: ExercisePerformanceRow?,
     isChinese: Boolean,
     enabled: Boolean,
+    showReorder: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     onUpdate: (DraftStrengthItem) -> Unit,
     onRemove: () -> Unit,
     onValidityChange: (Boolean) -> Unit,
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
+    val a = t.accent
+    val haptics = LocalHapticFeedback.current
     val isTimed = exercise?.isTimed == true
     val name = exercise?.let { exerciseDisplayName(it, isChinese) }.orEmpty()
     val primaryMuscles = exercise?.let { ex ->
@@ -414,6 +436,10 @@ private fun StrengthItemRow(
         onValidityChange(setsValid && repsValid && weightValid)
     }
 
+    val currentSets = parseStrengthSets(setsText) ?: item.sets
+    val currentReps = parseStrengthReps(repsText) ?: item.reps
+    val minReps = if (isTimed) 5 else 1
+
     Column(
         Modifier
             .fillMaxWidth()
@@ -424,10 +450,10 @@ private fun StrengthItemRow(
     ) {
         Row(
             Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 BasicText(
                     name,
                     style = TextStyle(n.textPrimary.asColor(), 14.sp, FontWeight.Medium),
@@ -449,28 +475,45 @@ private fun StrengthItemRow(
                         weightKg = lastPerf.weightKg,
                         isTimed = isTimed,
                     )
-                    BasicText(
-                        stringResource(R.string.strength_last_perf, formattedLast),
-                        style = TextStyle(n.textSecondary.asColor(), 11.sp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    val applyLastCd = stringResource(R.string.strength_apply_last_perf_cd)
+                    val pillShape = RoundedCornerShape(50)
+                    Box(
+                        Modifier
+                            .clip(pillShape)
+                            .background(a.accentSubtle.asColor())
+                            .border(1.dp, a.accentStroke.asColor().copy(alpha = 0.4f), pillShape)
+                            .clickable(enabled = enabled, role = Role.Button) {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                val nextSets = lastPerf.sets.coerceIn(1, 99)
+                                val nextReps = lastPerf.reps.coerceIn(1, 999)
+                                val nextWeight = lastPerf.weightKg
+                                setsText = nextSets.toString()
+                                repsText = nextReps.toString()
+                                weightText = nextWeight?.let(::formatWeightKg).orEmpty()
+                                onUpdate(item.copy(sets = nextSets, reps = nextReps, weightKg = nextWeight))
+                            }
+                            .semantics { contentDescription = applyLastCd }
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    ) {
+                        BasicText(
+                            stringResource(R.string.strength_last_perf, formattedLast),
+                            style = TextStyle(a.accentAction.asColor(), 11.sp, FontWeight.Medium),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
-            Box(
-                Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(enabled = enabled, role = Role.Button, onClick = onRemove),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Outlined.Close,
-                    stringResource(R.string.record_remove_entry),
-                    Modifier.size(16.dp),
-                    tint = n.textSecondary.asColor(),
-                )
-            }
+            StrengthRowActionButtons(
+                showReorder = showReorder,
+                canMoveUp = canMoveUp,
+                canMoveDown = canMoveDown,
+                enabled = enabled,
+                onMoveUp = onMoveUp,
+                onMoveDown = onMoveDown,
+                onRemove = onRemove,
+                removeContentDescription = stringResource(R.string.record_remove_entry),
+            )
         }
 
         Row(
@@ -478,12 +521,13 @@ private fun StrengthItemRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            CompactStrengthField(
+            CompactStrengthStepperField(
                 value = setsText,
                 suffix = stringResource(R.string.strength_sets_label),
                 placeholder = "4",
-                keyboardType = KeyboardType.Number,
                 enabled = enabled,
+                canDecrease = currentSets > 1,
+                canIncrease = currentSets < 99,
                 invalid = !setsValid,
                 onValueChange = { raw ->
                     val next = sanitizeStrengthSets(raw)
@@ -492,18 +536,29 @@ private fun StrengthItemRow(
                         onUpdate(item.copy(sets = parsed))
                     }
                 },
-                modifier = Modifier.weight(0.85f),
+                onDecrease = {
+                    val next = stepStrengthSets(currentSets, -1)
+                    setsText = next.toString()
+                    onUpdate(item.copy(sets = next))
+                },
+                onIncrease = {
+                    val next = stepStrengthSets(currentSets, 1)
+                    setsText = next.toString()
+                    onUpdate(item.copy(sets = next))
+                },
+                modifier = Modifier.weight(1f),
             )
             BasicText(
                 "×",
                 style = TextStyle(n.textSecondary.asColor(), 14.sp, FontWeight.Medium),
             )
-            CompactStrengthField(
+            CompactStrengthStepperField(
                 value = repsText,
                 suffix = stringResource(if (isTimed) R.string.strength_secs_label else R.string.strength_reps_label),
                 placeholder = if (isTimed) "60" else "10",
-                keyboardType = KeyboardType.Number,
                 enabled = enabled,
+                canDecrease = currentReps > minReps,
+                canIncrease = currentReps < 999,
                 invalid = !repsValid,
                 onValueChange = { raw ->
                     val next = sanitizeStrengthReps(raw)
@@ -512,42 +567,228 @@ private fun StrengthItemRow(
                         onUpdate(item.copy(reps = parsed))
                     }
                 },
-                modifier = Modifier.weight(0.85f),
-            )
-            val weightUnit = stringResource(R.string.strength_weight_unit)
-            CompactStrengthField(
-                value = weightText,
-                suffix = if (weightText.isEmpty()) "" else weightUnit,
-                placeholder = stringResource(R.string.strength_weight_optional),
-                keyboardType = KeyboardType.Decimal,
-                enabled = enabled,
-                invalid = !weightValid,
-                onValueChange = { raw ->
-                    val next = sanitizeStrengthWeight(raw)
-                    weightText = next
-                    if (next.isEmpty()) {
-                        onUpdate(item.copy(weightKg = null))
-                    } else {
-                        parseWeightKg(next)?.let { parsed ->
-                            onUpdate(item.copy(weightKg = parsed))
-                        }
-                    }
+                onDecrease = {
+                    val next = stepStrengthReps(currentReps, -1, isTimed)
+                    repsText = next.toString()
+                    onUpdate(item.copy(reps = next))
                 },
-                modifier = Modifier.weight(1.3f),
-                contentDescription = weightUnit,
+                onIncrease = {
+                    val next = stepStrengthReps(currentReps, 1, isTimed)
+                    repsText = next.toString()
+                    onUpdate(item.copy(reps = next))
+                },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        val weightUnit = stringResource(R.string.strength_weight_unit)
+        CompactStrengthField(
+            value = weightText,
+            suffix = if (weightText.isEmpty()) "" else weightUnit,
+            placeholder = stringResource(R.string.strength_weight_optional),
+            keyboardType = KeyboardType.Decimal,
+            enabled = enabled,
+            invalid = !weightValid,
+            onValueChange = { raw ->
+                val next = sanitizeStrengthWeight(raw)
+                weightText = next
+                if (next.isEmpty()) {
+                    onUpdate(item.copy(weightKg = null))
+                } else {
+                    parseWeightKg(next)?.let { parsed ->
+                        onUpdate(item.copy(weightKg = parsed))
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            contentDescription = weightUnit,
+        )
+    }
+}
+
+@Composable
+internal fun StrengthRowActionButtons(
+    showReorder: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    enabled: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRemove: () -> Unit,
+    removeContentDescription: String,
+) {
+    val haptics = LocalHapticFeedback.current
+    val n = LocalThemeTokens.current.neutrals
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (showReorder) {
+            val upEnabled = enabled && canMoveUp
+            Box(
+                Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .alpha(if (upEnabled) 1f else 0.3f)
+                    .clickable(enabled = upEnabled, role = Role.Button) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onMoveUp()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.KeyboardArrowUp,
+                    stringResource(R.string.strength_move_up),
+                    Modifier.size(18.dp),
+                    tint = n.textSecondary.asColor(),
+                )
+            }
+            val downEnabled = enabled && canMoveDown
+            Box(
+                Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .alpha(if (downEnabled) 1f else 0.3f)
+                    .clickable(enabled = downEnabled, role = Role.Button) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onMoveDown()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.KeyboardArrowDown,
+                    stringResource(R.string.strength_move_down),
+                    Modifier.size(18.dp),
+                    tint = n.textSecondary.asColor(),
+                )
+            }
+        }
+        Box(
+            Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(enabled = enabled, role = Role.Button, onClick = onRemove),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Outlined.Close,
+                removeContentDescription,
+                Modifier.size(16.dp),
+                tint = n.textSecondary.asColor(),
             )
         }
     }
 }
 
 @Composable
-private fun CompactStrengthField(
+internal fun CompactStrengthStepperField(
+    value: String,
+    suffix: String,
+    placeholder: String,
+    enabled: Boolean,
+    canDecrease: Boolean,
+    canIncrease: Boolean,
+    invalid: Boolean = false,
+    onValueChange: (String) -> Unit,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = suffix,
+) {
+    val t = LocalThemeTokens.current
+    val n = t.neutrals
+    val a = t.accent
+    val haptics = LocalHapticFeedback.current
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        modifier
+            .heightIn(min = 38.dp)
+            .clip(shape)
+            .background(n.surfaceMuted.asColor())
+            .then(if (invalid) Modifier.border(1.dp, a.accentStroke.asColor(), shape) else Modifier)
+            .padding(horizontal = 2.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val decEnabled = enabled && canDecrease
+        Box(
+            Modifier
+                .size(width = 28.dp, height = 34.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .alpha(if (decEnabled) 1f else 0.32f)
+                .clickable(enabled = decEnabled, role = Role.Button) {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onDecrease()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Outlined.Remove,
+                stringResource(R.string.strength_decrease),
+                Modifier.size(15.dp),
+                tint = n.textPrimary.asColor(),
+            )
+        }
+        Row(
+            Modifier
+                .weight(1f)
+                .padding(horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+        ) {
+            Box(Modifier.weight(1f, fill = false), contentAlignment = Alignment.Center) {
+                if (value.isEmpty()) {
+                    BasicText(
+                        placeholder,
+                        style = TextStyle(n.textSecondary.asColor().copy(alpha = 0.6f), 12.sp, textAlign = TextAlign.Center),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    enabled = enabled,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    textStyle = TextStyle(n.textPrimary.asColor(), 14.sp, FontWeight.Medium, textAlign = TextAlign.Center),
+                    cursorBrush = SolidColor(a.accentAction.asColor()),
+                    modifier = Modifier.widthIn(min = 24.dp).semantics { this.contentDescription = contentDescription },
+                )
+            }
+            if (suffix.isNotEmpty()) {
+                BasicText(suffix, style = TextStyle(n.textSecondary.asColor(), 11.sp), maxLines = 1)
+            }
+        }
+        val incEnabled = enabled && canIncrease
+        Box(
+            Modifier
+                .size(width = 28.dp, height = 34.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .alpha(if (incEnabled) 1f else 0.32f)
+                .clickable(enabled = incEnabled, role = Role.Button) {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onIncrease()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Outlined.Add,
+                stringResource(R.string.strength_increase),
+                Modifier.size(15.dp),
+                tint = n.textPrimary.asColor(),
+            )
+        }
+    }
+}
+
+@Composable
+internal fun CompactStrengthField(
     value: String,
     suffix: String,
     placeholder: String,
     keyboardType: KeyboardType,
     enabled: Boolean,
-    invalid: Boolean,
+    invalid: Boolean = false,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     contentDescription: String = suffix,

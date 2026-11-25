@@ -38,7 +38,7 @@ class AppContainer(private val context: Context) {
         )
     }
     val strengthRepository: StrengthRepository by lazy {
-        StrengthRepository(database.strengthDao())
+        StrengthRepository(database.strengthDao(), onChanged = refreshWidgets)
     }
 
     init {

@@ -9,6 +9,7 @@ import com.actiary.data.db.PhotoAttachmentEntity
 import com.actiary.domain.DayState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
@@ -83,6 +84,80 @@ class WidgetSnapshotTest {
                 DayState.EXERCISED,
             ),
             snapshot.weekDots.map { it.state },
+        )
+        assertEquals(0, snapshot.streakDays)
+        assertNull(snapshot.strengthSummary)
+        assertNull(snapshot.recommendedPlanLabel)
+    }
+
+    @Test
+    fun buildWidgetSnapshotAndResolveSummaryForStrengthAndNonFreeformTypes() {
+        val types = mapOf(
+            1L to ExerciseTypeEntity(id = 1L, builtinKey = "freeform", name = "Freeform", sortOrder = 0),
+            2L to ExerciseTypeEntity(id = 2L, builtinKey = "running", name = "Running", sortOrder = 1),
+        )
+        val recent = listOf(
+            day(today.minusDays(2), DayStatus.EXERCISED, typeIds = listOf(2L)),
+            day(today.minusDays(1), DayStatus.EXERCISED, typeIds = listOf(1L)),
+            day(today, DayStatus.EXERCISED, typeIds = listOf(1L, 2L)),
+        )
+
+        val snapshot = buildWidgetSnapshot(
+            today = today,
+            recentDays = recent,
+            typesById = types,
+            streakDays = 5,
+            strengthSummary = "胸大肌 · 肱三头肌 · 3 动作 · 10 组",
+            recommendedPlanLabel = "拉日",
+        ) { it.name.orEmpty() }
+
+        assertEquals(5, snapshot.streakDays)
+        assertEquals("胸大肌 · 肱三头肌 · 3 动作 · 10 组", snapshot.strengthSummary)
+        assertNull(snapshot.recommendedPlanLabel)
+        assertEquals(listOf("Running"), snapshot.nonFreeformTypeLabels)
+        assertEquals(
+            "胸大肌 · 肱三头肌 · 3 动作 · 10 组 · Running",
+            resolveWidgetSummary(
+                snapshot = snapshot,
+                checkedInFallback = "Checked in",
+                restSummary = "Rest day",
+                emptySummary = "No workout logged today",
+                recommendedPlanText = { "Next: $it" },
+            ),
+        )
+    }
+
+    @Test
+    fun buildWidgetSnapshotAndResolveSummaryForUnrecordedRecommendedPlan() {
+        val types = mapOf(
+            1L to ExerciseTypeEntity(id = 1L, builtinKey = "freeform", name = "Freeform", sortOrder = 0),
+        )
+        val recent = listOf(
+            day(today.minusDays(1), DayStatus.EXERCISED, typeIds = listOf(1L)),
+        )
+
+        val snapshot = buildWidgetSnapshot(
+            today = today,
+            recentDays = recent,
+            typesById = types,
+            streakDays = 3,
+            strengthSummary = "ignored when unrecorded",
+            recommendedPlanLabel = "拉日",
+        ) { it.name.orEmpty() }
+
+        assertEquals(DayState.UNRECORDED, snapshot.todayState)
+        assertEquals(3, snapshot.streakDays)
+        assertNull(snapshot.strengthSummary)
+        assertEquals("拉日", snapshot.recommendedPlanLabel)
+        assertEquals(
+            "推荐：拉日",
+            resolveWidgetSummary(
+                snapshot = snapshot,
+                checkedInFallback = "Checked in",
+                restSummary = "Rest day",
+                emptySummary = "No workout logged today",
+                recommendedPlanText = { "推荐：$it" },
+            ),
         )
     }
 }

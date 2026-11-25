@@ -1,5 +1,6 @@
 package com.actiary.ui.common
 
+import android.content.res.Resources
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
@@ -45,6 +46,13 @@ internal fun builtinPlanLabelRes(builtinKey: String?): Int? = when (builtinKey) 
     "pull" -> R.string.strength_plan_pull
     "legs" -> R.string.strength_plan_legs
     else -> null
+}
+
+fun workoutPlanLabel(plan: WorkoutPlanEntity, resources: Resources): String {
+    val customName = plan.name
+    if (!customName.isNullOrBlank()) return customName
+    val resId = builtinPlanLabelRes(plan.builtinKey) ?: return ""
+    return resources.getString(resId)
 }
 
 @Composable

@@ -165,4 +165,22 @@ class RecordInputTest {
         assertEquals("12", sanitizeStrengthSets("1a23"))
         assertEquals("123", sanitizeStrengthReps("1a234"))
     }
+
+    @Test fun stepStrengthSetsAndRepsClampAndRespectTimedMode() {
+        assertEquals(5, stepStrengthSets(4, 1))
+        assertEquals(3, stepStrengthSets(4, -1))
+        assertEquals(1, stepStrengthSets(1, -1))
+        assertEquals(99, stepStrengthSets(99, 1))
+
+        assertEquals(11, stepStrengthReps(10, 1, isTimed = false))
+        assertEquals(9, stepStrengthReps(10, -1, isTimed = false))
+        assertEquals(1, stepStrengthReps(1, -1, isTimed = false))
+        assertEquals(999, stepStrengthReps(999, 1, isTimed = false))
+
+        assertEquals(35, stepStrengthReps(30, 1, isTimed = true))
+        assertEquals(25, stepStrengthReps(30, -1, isTimed = true))
+        assertEquals(5, stepStrengthReps(8, -1, isTimed = true))
+        assertEquals(5, stepStrengthReps(5, -1, isTimed = true))
+        assertEquals(999, stepStrengthReps(997, 1, isTimed = true))
+    }
 }

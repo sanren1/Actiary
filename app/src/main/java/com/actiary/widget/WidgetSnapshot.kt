@@ -24,6 +24,10 @@ internal data class WidgetSnapshot(
     val todayState: DayState,
     val typeLabels: List<String>,
     val weekDots: List<WidgetDayDot>,
+    val streakDays: Int = 0,
+    val strengthSummary: String? = null,
+    val recommendedPlanLabel: String? = null,
+    val nonFreeformTypeLabels: List<String> = emptyList(),
 ) {
     val recentExercisedDays: Int get() = weekDots.count { it.state == DayState.EXERCISED }
 }
@@ -42,22 +46,56 @@ internal fun decideWidgetRestAction(todayDetail: DayWithDetails?): WidgetRestAct
     else -> WidgetRestAction.OPEN_EDITOR
 }
 
+internal fun resolveWidgetSummary(
+    snapshot: WidgetSnapshot,
+    checkedInFallback: String,
+    restSummary: String,
+    emptySummary: String,
+    recommendedPlanText: (String) -> String,
+): String = when (snapshot.todayState) {
+    DayState.EXERCISED -> {
+        val strength = snapshot.strengthSummary?.takeIf { it.isNotBlank() }
+        when {
+            strength != null -> (listOf(strength) + snapshot.nonFreeformTypeLabels).joinToString(" · ")
+            snapshot.typeLabels.isNotEmpty() -> snapshot.typeLabels.joinToString(" · ")
+            else -> checkedInFallback
+        }
+    }
+    DayState.REST -> restSummary
+    DayState.UNRECORDED -> {
+        val plan = snapshot.recommendedPlanLabel?.takeIf { it.isNotBlank() }
+        if (plan != null) recommendedPlanText(plan) else emptySummary
+    }
+}
+
 internal fun buildWidgetSnapshot(
     today: LocalDate,
     recentDays: List<DayWithDetails>,
     typesById: Map<Long, ExerciseTypeEntity>,
+    streakDays: Int = 0,
+    strengthSummary: String? = null,
+    recommendedPlanLabel: String? = null,
     labelOf: (ExerciseTypeEntity) -> String,
 ): WidgetSnapshot {
     val byEpoch = recentDays.associateBy { it.record.epochDay }
     val todayDetail = byEpoch[today.toEpochDay()]
     val todayState = todayDetail?.record?.toDayState() ?: DayState.UNRECORDED
-    val labels = if (todayState == DayState.EXERCISED) {
+    val todayEntries = if (todayState == DayState.EXERCISED) {
         todayDetail?.entries.orEmpty()
-            .mapNotNull { entry -> typesById[entry.typeId]?.let(labelOf)?.takeIf(String::isNotBlank) }
-            .distinct()
     } else {
         emptyList()
     }
+    val labels = todayEntries
+        .mapNotNull { entry -> typesById[entry.typeId]?.let(labelOf)?.takeIf(String::isNotBlank) }
+        .distinct()
+    val nonFreeformLabels = todayEntries
+        .mapNotNull { entry ->
+            typesById[entry.typeId]
+                ?.takeIf { it.builtinKey != "freeform" }
+                ?.let(labelOf)
+                ?.takeIf(String::isNotBlank)
+        }
+        .distinct()
     val weekDots = (6 downTo 0).map { offset ->
         val date = today.minusDays(offset.toLong())
         val state = byEpoch[date.toEpochDay()]?.record?.toDayState() ?: DayState.UNRECORDED
@@ -68,5 +106,9 @@ internal fun buildWidgetSnapshot(
         todayState = todayState,
         typeLabels = labels,
         weekDots = weekDots,
+        streakDays = streakDays.coerceAtLeast(0),
+        strengthSummary = strengthSummary?.takeIf { todayState == DayState.EXERCISED && it.isNotBlank() },
+        recommendedPlanLabel = recommendedPlanLabel?.takeIf { todayState == DayState.UNRECORDED && it.isNotBlank() },
+        nonFreeformTypeLabels = nonFreeformLabels,
     )
 }

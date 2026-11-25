@@ -17,6 +17,8 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.os.Bundle
 import android.util.SizeF
+import android.util.TypedValue
+import android.view.View
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import com.actiary.ActiaryApp
@@ -26,9 +28,15 @@ import com.actiary.data.appearance.AppLanguagePrefs
 import com.actiary.data.db.DayStatus
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DayState
+import com.actiary.domain.computeCurrentStreak
+import com.actiary.domain.recommendNextPlanId
+import com.actiary.domain.toDayState
 import com.actiary.theme.ThemeTokens
 import com.actiary.theme.resolveTheme
+import com.actiary.ui.calendar.buildStrengthSummaryText
 import com.actiary.ui.common.exerciseTypeLabel
+import com.actiary.ui.common.labelRes
+import com.actiary.ui.common.workoutPlanLabel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -150,15 +158,58 @@ internal object TodayWidgetUpdater {
         val localized = AppLanguagePrefs.wrapContext(appContext)
         val container = (appContext as ActiaryApp).container
         val today = LocalDate.now()
-        val recent = container.recordRepository.observeRange(today.minusDays(6), today).first()
+        val history = container.recordRepository.observeRange(today.minusDays(365), today).first()
+        val exercisedEpochDays = history
+            .filter { it.record.status == DayStatus.EXERCISED }
+            .mapTo(HashSet()) { it.record.epochDay }
+        val streakDays = computeCurrentStreak(exercisedEpochDays, today)
+        val recentCutoff = today.minusDays(6).toEpochDay()
+        val recent = history.filter { it.record.epochDay >= recentCutoff }
+        val todayDetail = recent.firstOrNull { it.record.epochDay == today.toEpochDay() }
+        val todayState = todayDetail?.record?.toDayState() ?: DayState.UNRECORDED
         val types = container.recordRepository.allTypes.first().associateBy { it.id }
+        val allExercises = container.strengthRepository.allExercises.first().associateBy { it.id }
+        val todayLogs = todayDetail?.entriesWithLogs
+            .orEmpty()
+            .sortedBy { it.entry.sortOrder }
+            .flatMap { it.strengthLogs }
+        val strengthSummary = if (todayState == DayState.EXERCISED && todayLogs.isNotEmpty()) {
+            buildStrengthSummaryText(
+                logs = todayLogs,
+                exercises = allExercises,
+                muscleLabel = { localized.getString(it.labelRes()) },
+                countsLabel = { exCount, setCount ->
+                    localized.getString(R.string.strength_summary_counts, exCount, setCount)
+                },
+            )
+        } else {
+            null
+        }
+        val recommendedPlanLabel = if (todayState == DayState.UNRECORDED) {
+            val plans = container.strengthRepository.plans.first().sortedBy { it.plan.sortOrder }
+            val lastPlanId = container.strengthRepository.latestFreeformPlanId(today)
+            val recommendedId = recommendNextPlanId(plans.map { it.plan.id }, lastPlanId)
+            plans.firstOrNull { it.plan.id == recommendedId }
+                ?.plan
+                ?.let { workoutPlanLabel(it, localized.resources) }
+                ?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
         val settings = container.appearanceRepository.settings.first()
         val systemDark = (localized.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
             Configuration.UI_MODE_NIGHT_YES
         val dynamicSeed = ContextCompat.getColor(appContext, android.R.color.system_accent1_500)
         val tokens = resolveTheme(settings, systemDark, dynamicSeed)
 
-        val snapshot = buildWidgetSnapshot(today, recent, types) { type ->
+        val snapshot = buildWidgetSnapshot(
+            today = today,
+            recentDays = recent,
+            typesById = types,
+            streakDays = streakDays,
+            strengthSummary = strengthSummary,
+            recommendedPlanLabel = recommendedPlanLabel,
+        ) { type ->
             exerciseTypeLabel(type, localized.resources)
         }
         val strip = buildStripViews(appContext, localized, snapshot, tokens)
@@ -207,8 +258,8 @@ internal object TodayWidgetUpdater {
                 views.setInt(R.id.widget_dot_today, "setColorFilter", withAlpha(n.textSecondary, 0xCC))
             }
             DayState.UNRECORDED -> {
-                views.setImageViewResource(R.id.widget_dot_today, R.drawable.widget_dot_ring)
-                views.setInt(R.id.widget_dot_today, "setColorFilter", a.accentStroke)
+                views.setImageViewResource(R.id.widget_dot_today, R.drawable.widget_dot_ring_today)
+                views.setInt(R.id.widget_dot_today, "setColorFilter", a.accentAction)
             }
         }
 
@@ -257,10 +308,20 @@ internal object TodayWidgetUpdater {
         views.setTextViewText(R.id.widget_date, dateText)
         views.setTextColor(R.id.widget_date, n.textPrimary)
 
-        views.setTextViewText(
-            R.id.widget_streak,
-            localized.getString(R.string.widget_week_streak, snapshot.recentExercisedDays),
-        )
+        val weekText = localized.getString(R.string.widget_week_streak, snapshot.recentExercisedDays)
+        val streakText = if (snapshot.streakDays > 0) {
+            "$weekText · ${localized.getString(R.string.widget_streak_short, snapshot.streakDays)}"
+        } else {
+            weekText
+        }
+        views.setTextViewText(R.id.widget_streak, streakText)
+        if (compact) {
+            views.setTextViewTextSize(
+                R.id.widget_streak,
+                TypedValue.COMPLEX_UNIT_SP,
+                if (snapshot.streakDays > 0) 13f else 15f,
+            )
+        }
         views.setTextColor(R.id.widget_streak, if (compact) n.textPrimary else n.textSecondary)
 
         val (badgeText, badgeBg, badgeFg) = when (snapshot.todayState) {
@@ -284,22 +345,25 @@ internal object TodayWidgetUpdater {
         views.setColorStateList(R.id.widget_status_badge, "setBackgroundTintList", ColorStateList.valueOf(badgeBg))
         views.setTextColor(R.id.widget_status_badge, badgeFg)
 
-        val summary = when (snapshot.todayState) {
-            DayState.EXERCISED -> if (snapshot.typeLabels.isNotEmpty()) {
-                snapshot.typeLabels.joinToString(" · ")
-            } else {
-                localized.getString(R.string.day_checked_in)
-            }
-            DayState.REST -> localized.getString(R.string.widget_today_rest_summary)
-            DayState.UNRECORDED -> localized.getString(R.string.widget_today_empty_summary)
-        }
+        val summary = resolveWidgetSummary(
+            snapshot = snapshot,
+            checkedInFallback = localized.getString(R.string.day_checked_in),
+            restSummary = localized.getString(R.string.widget_today_rest_summary),
+            emptySummary = localized.getString(R.string.widget_today_empty_summary),
+            recommendedPlanText = { plan -> localized.getString(R.string.widget_recommended_plan, plan) },
+        )
         views.setTextViewText(R.id.widget_summary, summary)
         views.setTextColor(
             R.id.widget_summary,
-            if (snapshot.todayState == DayState.EXERCISED) n.textPrimary else n.textSecondary,
+            when {
+                snapshot.todayState == DayState.EXERCISED -> n.textPrimary
+                snapshot.todayState == DayState.UNRECORDED && snapshot.recommendedPlanLabel != null -> a.accentAction
+                else -> n.textSecondary
+            },
         )
 
         val dayFmt = DateTimeFormatter.ofPattern("EEEEE", locale)
+        val mutedRingColor = withAlpha(n.textSecondary, if (tokens.dark) 0x66 else 0x55)
         snapshot.weekDots.forEachIndexed { index, dot ->
             val id = dotIds[index]
             when (dot.state) {
@@ -312,8 +376,34 @@ internal object TodayWidgetUpdater {
                     views.setInt(id, "setColorFilter", withAlpha(n.textSecondary, 0x99))
                 }
                 DayState.UNRECORDED -> {
-                    views.setImageViewResource(id, R.drawable.widget_dot_ring)
-                    views.setInt(id, "setColorFilter", if (dot.isToday) a.accentStroke else n.divider)
+                    views.setImageViewResource(
+                        id,
+                        if (dot.isToday) R.drawable.widget_dot_ring_today else R.drawable.widget_dot_ring,
+                    )
+                    views.setInt(id, "setColorFilter", if (dot.isToday) a.accentAction else mutedRingColor)
+                }
+            }
+            if (dot.isToday) {
+                when (dot.state) {
+                    DayState.EXERCISED -> {
+                        views.setViewVisibility(R.id.widget_dot_6_ring, View.VISIBLE)
+                        views.setInt(
+                            R.id.widget_dot_6_ring,
+                            "setColorFilter",
+                            withAlpha(a.accentAction, if (tokens.dark) 0x85 else 0x66),
+                        )
+                    }
+                    DayState.REST -> {
+                        views.setViewVisibility(R.id.widget_dot_6_ring, View.VISIBLE)
+                        views.setInt(
+                            R.id.widget_dot_6_ring,
+                            "setColorFilter",
+                            withAlpha(n.textSecondary, 0x66),
+                        )
+                    }
+                    DayState.UNRECORDED -> {
+                        views.setViewVisibility(R.id.widget_dot_6_ring, View.GONE)
+                    }
                 }
             }
             if (!compact) {
@@ -386,19 +476,45 @@ internal object TodayWidgetUpdater {
         val h = height.toFloat()
         val rect = RectF(0f, 0f, w, h)
         val radius = 24f * (width / 220f).coerceIn(1f, 1.4f)
+        val isAmoled = tokens.dark && tokens.neutrals.background == 0xFF000000.toInt()
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        // Clean neutral frosted glass gradient (no hue-shifted purple cast, no flat opaque white).
-        val topLeft = if (tokens.dark) 0xB824282E.toInt() else 0xC8F6F7F8.toInt()
-        val bottomRight = if (tokens.dark) 0xCC14171B.toInt() else 0xBCEAECEF.toInt()
+        val topLeft = when {
+            isAmoled -> 0xD215181D.toInt()
+            tokens.dark -> 0xC4252930.toInt()
+            else -> 0xD6FAFBFB.toInt()
+        }
+        val bottomRight = when {
+            isAmoled -> 0xE4090B0E.toInt()
+            tokens.dark -> 0xD615181C.toInt()
+            else -> 0xC6ECEEF1.toInt()
+        }
         paint.shader = LinearGradient(0f, 0f, w, h, topLeft, bottomRight, Shader.TileMode.CLAMP)
         canvas.drawRoundRect(rect, radius, radius, paint)
 
-        // Gentle frosted sheen from top-left for subtle glass depth.
+        // Top-edge glass sheen + gentle top-left specular glow for depth.
+        val topEdgeSheen = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f, 0f, 0f, h * 0.36f,
+                when {
+                    isAmoled -> 0x14FFFFFF
+                    tokens.dark -> 0x18FFFFFF
+                    else -> 0x36FFFFFF
+                },
+                0x00000000,
+                Shader.TileMode.CLAMP,
+            )
+        }
+        canvas.drawRoundRect(rect, radius, radius, topEdgeSheen)
+
         val sheen = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = RadialGradient(
                 w * 0.18f, h * 0.12f, maxOf(w, h) * 0.78f,
-                if (tokens.dark) 0x1AFFFFFF else 0x38FFFFFF,
+                when {
+                    isAmoled -> 0x12FFFFFF
+                    tokens.dark -> 0x1AFFFFFF
+                    else -> 0x30FFFFFF
+                },
                 0x00000000,
                 Shader.TileMode.CLAMP,
             )
@@ -406,8 +522,8 @@ internal object TodayWidgetUpdater {
         canvas.drawRoundRect(rect, radius, radius, sheen)
 
         // Subtle deterministic matte frosted grain.
-        val grainLight = Paint().apply { color = if (tokens.dark) 0x10FFFFFF else 0x18FFFFFF }
-        val grainDark = Paint().apply { color = if (tokens.dark) 0x10000000 else 0x0A000000 }
+        val grainLight = Paint().apply { color = if (tokens.dark) 0x0EFFFFFF else 0x16FFFFFF }
+        val grainDark = Paint().apply { color = if (tokens.dark) 0x10000000 else 0x09000000 }
         var seed = 0x51A7C3E1
         val step = 2
         var y = 0
@@ -423,22 +539,38 @@ internal object TodayWidgetUpdater {
             y += step
         }
 
-        // Whisper-soft specular rim.
+        // Crisp outer hairline in light mode so card edges stay distinct on bright wallpapers.
+        if (!tokens.dark) {
+            val outerHairline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 1f
+                color = 0x1C000000
+            }
+            val outerInset = 0.5f
+            canvas.drawRoundRect(
+                RectF(outerInset, outerInset, w - outerInset, h - outerInset),
+                radius,
+                radius,
+                outerHairline,
+            )
+        }
+
+        // Specular glass rim.
         val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 1.25f
+            strokeWidth = 1.4f
             shader = LinearGradient(
                 0f, 0f, w, h,
-                intArrayOf(
-                    if (tokens.dark) 0x34FFFFFF else 0x8CFFFFFF.toInt(),
-                    if (tokens.dark) 0x0EFFFFFF else 0x26FFFFFF,
-                    if (tokens.dark) 0x22FFFFFF else 0x60FFFFFF,
-                ),
+                when {
+                    isAmoled -> intArrayOf(0x38FFFFFF, 0x12FFFFFF, 0x20FFFFFF)
+                    tokens.dark -> intArrayOf(0x46FFFFFF, 0x16FFFFFF, 0x2AFFFFFF)
+                    else -> intArrayOf(0xA8FFFFFF.toInt(), 0x32FFFFFF, 0x6EFFFFFF)
+                },
                 floatArrayOf(0f, 0.5f, 1f),
                 Shader.TileMode.CLAMP,
             )
         }
-        val inset = 0.75f
+        val inset = if (tokens.dark) 0.9f else 1.4f
         canvas.drawRoundRect(RectF(inset, inset, w - inset, h - inset), radius, radius, rimPaint)
         return bitmap
     }

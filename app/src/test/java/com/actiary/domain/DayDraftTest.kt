@@ -359,4 +359,35 @@ class DayDraftTest {
             updatedEntry.strengthItems,
         )
     }
+
+    @Test fun moveStrengthItemReordersHandlesBoundsAndMarksDirty() {
+        val original = DayDraft(
+            date = date,
+            status = DayStatus.EXERCISED,
+            entries = listOf(
+                DraftEntry(
+                    typeId = 9,
+                    id = 5,
+                    strengthItems = listOf(
+                        DraftStrengthItem(exerciseId = 10, sets = 4, reps = 10, localId = 1L),
+                        DraftStrengthItem(exerciseId = 20, sets = 3, reps = 12, localId = 2L),
+                        DraftStrengthItem(exerciseId = 30, sets = 5, reps = 8, localId = 3L),
+                    ),
+                ),
+            ),
+            note = "",
+            photos = emptyList(),
+        )
+
+        val moved = original.moveStrengthItem(entryId = 5L, fromIndex = 0, toIndex = 2)
+        assertEquals(listOf(20L, 30L, 10L), moved.entries.single().strengthItems.map { it.exerciseId })
+        assertTrue(moved.isChangedFrom(original))
+        assertFalse(moved.moveStrengthItem(entryId = 5L, fromIndex = 2, toIndex = 0).isChangedFrom(original))
+
+        // Same-index and out-of-bounds moves are no-ops
+        assertEquals(original, original.moveStrengthItem(entryId = 5L, fromIndex = 1, toIndex = 1))
+        assertEquals(original, original.moveStrengthItem(entryId = 5L, fromIndex = -1, toIndex = 1))
+        assertEquals(original, original.moveStrengthItem(entryId = 5L, fromIndex = 0, toIndex = 3))
+        assertEquals(original, original.moveStrengthItem(entryId = 999L, fromIndex = 0, toIndex = 1))
+    }
 }

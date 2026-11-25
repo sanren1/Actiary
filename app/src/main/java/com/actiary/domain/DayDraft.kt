@@ -145,6 +145,17 @@ data class DayDraft(
             },
         )
 
+    fun moveStrengthItem(entryId: Long, fromIndex: Int, toIndex: Int): DayDraft {
+        if (fromIndex == toIndex) return this
+        val entryIndex = entries.indexOfFirst { it.id == entryId }
+        if (entryIndex < 0) return this
+        val entry = entries[entryIndex]
+        val items = entry.strengthItems
+        if (fromIndex !in items.indices || toIndex !in items.indices) return this
+        val reordered = items.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+        return copy(entries = entries.mapIndexed { idx, item -> if (idx == entryIndex) item.copy(strengthItems = reordered) else item })
+    }
+
     fun removeEntry(id: Long): DayDraft = copy(entries = entries.filterNot { it.id == id })
 
     fun withNote(text: String): DayDraft = copy(note = text.take(NOTE_LIMIT))

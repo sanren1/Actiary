@@ -44,9 +44,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="6dp"
+                android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#FF586068"
-                android:textSize="12sp"
+                android:textSize="11.5sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -114,7 +115,10 @@
 
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
                 <TextView android:id="@+id/widget_day_label_6" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textStyle="bold" android:textColor="#FF22262A" />
-                <ImageView android:id="@+id/widget_dot_6" android:layout_width="13dp" android:layout_height="13dp" android:layout_marginTop="3dp" android:importantForAccessibility="no" android:src="@drawable/widget_dot_ring" />
+                <FrameLayout android:layout_width="19dp" android:layout_height="19dp" android:layout_marginTop="1dp">
+                    <ImageView android:id="@+id/widget_dot_6_ring" android:layout_width="19dp" android:layout_height="19dp" android:layout_gravity="center" android:importantForAccessibility="no" android:src="@drawable/widget_dot_ring" android:visibility="gone" />
+                    <ImageView android:id="@+id/widget_dot_6" android:layout_width="13dp" android:layout_height="13dp" android:layout_gravity="center" android:importantForAccessibility="no" android:src="@drawable/widget_dot_ring_today" />
+                </FrameLayout>
             </LinearLayout>
         </LinearLayout>
 

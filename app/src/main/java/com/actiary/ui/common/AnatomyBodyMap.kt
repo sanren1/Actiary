@@ -1,5 +1,8 @@
 package com.actiary.ui.common
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -18,12 +21,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -34,6 +39,8 @@ import com.actiary.domain.MuscleGroup
 import com.actiary.theme.LocalThemeTokens
 import com.actiary.theme.ThemeTokens
 import com.actiary.theme.asColor
+import com.actiary.ui.motion.Motion
+import com.actiary.ui.motion.rememberMotionReduced
 
 enum class BodySide { FRONT, BACK }
 
@@ -386,6 +393,9 @@ fun AnatomyBodyMap(
     onMuscleClick: ((MuscleGroup) -> Unit)? = null,
 ) {
     val tokens = LocalThemeTokens.current
+    val reduced = rememberMotionReduced()
+    val musclePaints = rememberAnimatedMusclePaints(style = style, tokens = tokens, reduced = reduced)
+    val selectedMuscle = (style as? BodyMapStyle.Heatmap)?.selected
     BoxWithConstraints(modifier = modifier) {
         val hasBoundedHeight = constraints.hasBoundedHeight
         Row(
@@ -396,7 +406,8 @@ fun AnatomyBodyMap(
             AnatomyFigureColumn(
                 side = BodySide.FRONT,
                 label = if (showLabels) stringResource(R.string.strength_body_front) else null,
-                style = style,
+                musclePaints = musclePaints,
+                selectedMuscle = selectedMuscle,
                 tokens = tokens,
                 hasBoundedHeight = hasBoundedHeight,
                 onMuscleClick = onMuscleClick,
@@ -405,7 +416,8 @@ fun AnatomyBodyMap(
             AnatomyFigureColumn(
                 side = BodySide.BACK,
                 label = if (showLabels) stringResource(R.string.strength_body_back) else null,
-                style = style,
+                musclePaints = musclePaints,
+                selectedMuscle = selectedMuscle,
                 tokens = tokens,
                 hasBoundedHeight = hasBoundedHeight,
                 onMuscleClick = onMuscleClick,
@@ -416,10 +428,34 @@ fun AnatomyBodyMap(
 }
 
 @Composable
+private fun rememberAnimatedMusclePaints(
+    style: BodyMapStyle,
+    tokens: ThemeTokens,
+    reduced: Boolean,
+): Map<MuscleGroup, MusclePaint> {
+    val spec = if (reduced) snap() else tween<Color>(Motion.FADE_IN_MS)
+    return MuscleGroup.entries.associateWith { muscle ->
+        val target = resolveMusclePaint(muscle, style, tokens)
+        val fill by animateColorAsState(
+            targetValue = target.fill,
+            animationSpec = spec,
+            label = "muscleFill_${muscle.key}",
+        )
+        val stroke by animateColorAsState(
+            targetValue = target.stroke,
+            animationSpec = spec,
+            label = "muscleStroke_${muscle.key}",
+        )
+        target.copy(fill = fill, stroke = stroke)
+    }
+}
+
+@Composable
 private fun AnatomyFigureColumn(
     side: BodySide,
     label: String?,
-    style: BodyMapStyle,
+    musclePaints: Map<MuscleGroup, MusclePaint>,
+    selectedMuscle: MuscleGroup?,
     tokens: ThemeTokens,
     hasBoundedHeight: Boolean,
     onMuscleClick: ((MuscleGroup) -> Unit)?,
@@ -460,7 +496,8 @@ private fun AnatomyFigureColumn(
             drawAnatomicalFigure(
                 side = side,
                 polygons = polygons,
-                style = style,
+                musclePaints = musclePaints,
+                selectedMuscle = selectedMuscle,
                 tokens = tokens,
                 rect = rect,
             )
@@ -481,6 +518,7 @@ private data class MusclePaint(
     val fill: Color,
     val stroke: Color,
     val strokeWidthDp: Float,
+    val hasSheen: Boolean,
 )
 
 private fun resolveMusclePaint(
@@ -500,16 +538,19 @@ private fun resolveMusclePaint(
                     fill = accent.copy(alpha = 0.94f),
                     stroke = accent,
                     strokeWidthDp = 1.15f,
+                    hasSheen = true,
                 )
                 MuscleActivation.SECONDARY -> MusclePaint(
                     fill = accent.copy(alpha = 0.35f),
                     stroke = accent.copy(alpha = 0.68f),
                     strokeWidthDp = 0.9f,
+                    hasSheen = false,
                 )
                 MuscleActivation.NONE -> MusclePaint(
                     fill = neutralFill,
                     stroke = neutralStroke,
                     strokeWidthDp = 0.65f,
+                    hasSheen = false,
                 )
             }
         }
@@ -530,7 +571,7 @@ private fun resolveMusclePaint(
             }
             val stroke = if (isSelected) tokens.neutrals.textPrimary.asColor() else baseStroke
             val strokeWidth = if (isSelected) 1.75f else if (level > 0) 0.95f else 0.65f
-            MusclePaint(fill = fill, stroke = stroke, strokeWidthDp = strokeWidth)
+            MusclePaint(fill = fill, stroke = stroke, strokeWidthDp = strokeWidth, hasSheen = level >= 2)
         }
     }
 }
@@ -538,7 +579,8 @@ private fun resolveMusclePaint(
 private fun DrawScope.drawAnatomicalFigure(
     side: BodySide,
     polygons: List<MusclePolygon>,
-    style: BodyMapStyle,
+    musclePaints: Map<MuscleGroup, MusclePaint>,
+    selectedMuscle: MuscleGroup?,
     tokens: ThemeTokens,
     rect: FigureRect,
 ) {
@@ -562,16 +604,20 @@ private fun DrawScope.drawAnatomicalFigure(
     drawPath(path = bodyPath, color = bodyOutline, style = outlineStroke)
 
     // 2. Muscle regions (smooth closed Bezier contours)
-    val selectedMuscle = (style as? BodyMapStyle.Heatmap)?.selected
     for (polygon in polygons) {
         if (polygon.muscle == selectedMuscle) continue
-        drawMusclePolygon(polygon, style, tokens, rect, scaleFactor)
+        musclePaints[polygon.muscle]?.let { paint ->
+            drawMusclePolygon(polygon, paint, tokens, rect, scaleFactor)
+        }
     }
     // Draw selected muscle last so its highlight stroke sits cleanly on top
     if (selectedMuscle != null) {
-        for (polygon in polygons) {
-            if (polygon.muscle == selectedMuscle) {
-                drawMusclePolygon(polygon, style, tokens, rect, scaleFactor)
+        val paint = musclePaints[selectedMuscle]
+        if (paint != null) {
+            for (polygon in polygons) {
+                if (polygon.muscle == selectedMuscle) {
+                    drawMusclePolygon(polygon, paint, tokens, rect, scaleFactor)
+                }
             }
         }
     }
@@ -582,14 +628,38 @@ private fun DrawScope.drawAnatomicalFigure(
 
 private fun DrawScope.drawMusclePolygon(
     polygon: MusclePolygon,
-    style: BodyMapStyle,
+    paint: MusclePaint,
     tokens: ThemeTokens,
     rect: FigureRect,
     scaleFactor: Float,
 ) {
     val path = buildSmoothClosedPath(polygon.points, rect)
-    val paint = resolveMusclePaint(polygon.muscle, style, tokens)
     drawPath(path = path, color = paint.fill)
+    if (paint.hasSheen) {
+        val bounds = path.getBounds()
+        if (bounds.height > 0f) {
+            val sheenColor = Color.White.copy(alpha = if (tokens.dark) 0.28f else 0.40f)
+            val sheenBrush = Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0f to sheenColor,
+                    0.48f to Color.Transparent,
+                ),
+                startY = bounds.top,
+                endY = bounds.bottom,
+            )
+            clipPath(path) {
+                drawPath(
+                    path = path,
+                    brush = sheenBrush,
+                    style = Stroke(
+                        width = 2.0.dp.toPx() * scaleFactor,
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+                )
+            }
+        }
+    }
     drawPath(
         path = path,
         color = paint.stroke,

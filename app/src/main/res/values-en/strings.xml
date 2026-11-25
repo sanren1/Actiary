@@ -48,6 +48,8 @@
     <string name="day_unrecorded">No record</string>
     <string name="home_prev_month">Previous month</string>
     <string name="home_next_month">Next month</string>
+    <string name="home_week_progress">This week %1$d d</string>
+    <string name="home_streak_days">%1$d d streak</string>
     <string name="home_month_pattern">MMM yyyy</string>
     <string name="day_title_pattern">EEE, MMM d</string>
     <string name="day_accessibility_pattern">MMMM d, yyyy</string>
@@ -274,6 +276,8 @@
     <string name="widget_action_rest_active">Rested</string>
     <string name="widget_week_streak">%1$d/7 days</string>
     <string name="widget_strip_meta">%1$s · %2$d/7d</string>
+    <string name="widget_recommended_plan">Next: %1$s</string>
+    <string name="widget_streak_short">%1$d d streak</string>
     <string name="data_storage_details">Storage details</string>
     <string name="data_storage_cache">Cache</string>
     <string name="data_storage_photo_count">Photo count</string>
@@ -368,6 +372,11 @@
     <string name="strength_item_format_timed_no_weight">%1$d × %2$ds</string>
     <string name="strength_item_format_timed_weight">%1$d × %2$ds · %3$s kg</string>
     <string name="strength_last_perf">Last %1$s</string>
+    <string name="strength_apply_last_perf_cd">Use last record</string>
+    <string name="strength_decrease">Decrease</string>
+    <string name="strength_increase">Increase</string>
+    <string name="strength_move_up">Move up</string>
+    <string name="strength_move_down">Move down</string>
     <string name="strength_history_title">Exercise History</string>
     <string name="strength_history_empty">No logs for this exercise yet</string>
     <string name="strength_history_sessions">%1$d sessions</string>
@@ -380,6 +389,7 @@
     <string name="records_muscle_legend_less">Less</string>
     <string name="records_muscle_legend_more">More</string>
     <string name="records_muscle_filtered">Filtered: %1$s</string>
+    <string name="records_muscle_filtered_stats">Filtered: %1$s · %2$d d · %3$d sets</string>
     <string name="records_muscle_today">Today</string>
     <string name="records_muscle_yesterday">Yesterday</string>
     <string name="records_muscle_days_ago">%1$dd ago</string>
