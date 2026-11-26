@@ -40,7 +40,6 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
@@ -94,6 +93,7 @@ import com.actiary.glass.LocalGlassProfile
 import com.actiary.glass.GlassHost
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassOverlayPanel
+import com.actiary.glass.GlassSampling
 import com.actiary.glass.GlassTab
 import com.actiary.glass.overlayPresent
 import com.actiary.glass.rememberOverlayVisibility
@@ -111,7 +111,6 @@ import com.actiary.ui.motion.LocalMotionReduced
 import com.actiary.ui.motion.Motion
 import com.actiary.ui.motion.PredictiveBack
 import com.actiary.ui.motion.PushHost
-import com.actiary.ui.motion.PushState
 import com.actiary.ui.motion.backTarget
 import com.actiary.ui.motion.inactiveNavigation
 import com.actiary.ui.motion.rememberPushMotion
@@ -151,7 +150,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-private val BarGap = 6.dp
+private val BarGap = 0.dp
 
 internal enum class Tab { CALENDAR, RECORDS, SETTINGS }
 
@@ -417,11 +416,9 @@ class MainActivity : ComponentActivity() {
 
                 val showBottomBar = tab != Tab.SETTINGS || push.state.top.showsBottomBar()
                 val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                val regularInsets = FloatingInsets(navBar + GlassBottomBarHeight + BarGap)
+                val regularInsets = FloatingInsets((navBar - 3.dp).coerceAtLeast(10.dp) + GlassBottomBarHeight + 8.dp)
                 val childInsets = FloatingInsets(navBar)
                 val modalOpen = hasOverlay()
-                val navigationMoving = tabTransition.currentState != tab || tabTransition.isRunning ||
-                    (!reducedMotion && push.state !is PushState.Idle)
                 val bottomBarProfile = if (editing != null || viewing != null ||
                     resetVisibility.overlayPresent || confirmAppearanceReset || backupModal
                 ) {
@@ -429,7 +426,6 @@ class MainActivity : ComponentActivity() {
                 } else {
                     profile
                 }
-                val baseProfile = if (navigationMoving) bottomBarProfile.copy(degraded = true) else bottomBarProfile
                 val hideBase = if (modalOpen) Modifier.inactiveNavigation() else Modifier
                 val tabs = listOf(
                     GlassTab(Icons.Outlined.CalendarMonth, stringResource(R.string.tab_calendar)),
@@ -447,50 +443,50 @@ class MainActivity : ComponentActivity() {
                     GlassHost(
                         tokens, profile,
                         overlay = {
-                            CompositionLocalProvider(LocalGlassProfile provides baseProfile) {
+                            CompositionLocalProvider(LocalGlassProfile provides bottomBarProfile) {
                                 Box(Modifier.fillMaxSize().then(hideBase)) {
                                     AnimatedVisibility(
                                         visible = showBottomBar,
-                                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
-                                            .padding(start = 16.dp, end = 16.dp, bottom = BarGap),
+                                        modifier = Modifier.align(Alignment.BottomCenter)
+                                            .padding(start = 16.dp, end = 16.dp, bottom = (navBar - 3.dp).coerceAtLeast(10.dp)),
                                         enter = if (reducedMotion) controlEnter else
                                             controlEnter + slideInVertically(barSlide) { it / 6 },
                                         exit = if (reducedMotion) controlExit else
                                             controlExit + slideOutVertically(barSlide) { it / 6 },
                                     ) {
                                         // The bar stays mounted while root pages animate underneath it.
-                                        CompositionLocalProvider(LocalGlassProfile provides bottomBarProfile) {
-                                            GlassBottomBar(
-                                                tabs,
-                                                tab.ordinal,
-                                                {
-                                                    if (!hasOverlay() && (tab != Tab.SETTINGS || push.state.top.showsBottomBar())) {
-                                                        tab = Tab.entries[it]
-                                                    }
-                                                },
-                                                if (showBottomBar) Modifier else Modifier.inactiveNavigation(),
-                                            )
-                                        }
+                                        GlassBottomBar(
+                                            tabs,
+                                            tab.ordinal,
+                                            {
+                                                if (!hasOverlay() && (tab != Tab.SETTINGS || push.state.top.showsBottomBar())) {
+                                                    tab = Tab.entries[it]
+                                                }
+                                            },
+                                            if (showBottomBar) Modifier else Modifier.inactiveNavigation(),
+                                        )
                                     }
                                     AnimatedVisibility(
                                         visible = onHome,
                                         modifier = Modifier.align(Alignment.TopEnd)
-                                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                                            .padding(top = 8.dp, end = 16.dp),
+                                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
                                         enter = controlEnter,
                                         exit = controlExit,
                                     ) {
-                                        GlassIconButton(
-                                            Icons.Outlined.DocumentScanner,
-                                            stringResource(R.string.home_import_screenshot),
-                                            {
-                                                if (tab == Tab.CALENDAR && !hasOverlay()) {
-                                                    screenshotPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                                }
-                                            },
-                                            if (onHome) Modifier else Modifier.inactiveNavigation(),
-                                            enabled = onHome && !modalOpen,
-                                        )
+                                        Box(Modifier.padding(top = 8.dp, end = 16.dp, start = 16.dp, bottom = 16.dp)) {
+                                            GlassIconButton(
+                                                Icons.Outlined.DocumentScanner,
+                                                stringResource(R.string.home_import_screenshot),
+                                                {
+                                                    if (tab == Tab.CALENDAR && !hasOverlay()) {
+                                                        screenshotPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                    }
+                                                },
+                                                if (onHome) Modifier else Modifier.inactiveNavigation(),
+                                                sampling = GlassSampling.Background,
+                                                enabled = onHome && !modalOpen,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -663,7 +659,7 @@ class MainActivity : ComponentActivity() {
                             BackupOverlay(backup)
                         },
                     ) {
-                        CompositionLocalProvider(LocalGlassProfile provides baseProfile) {
+                        CompositionLocalProvider(LocalGlassProfile provides bottomBarProfile) {
                             tabTransition.AnimatedContent(
                                 modifier = Modifier.fillMaxSize().clipToBounds().then(hideBase),
                                 transitionSpec = {

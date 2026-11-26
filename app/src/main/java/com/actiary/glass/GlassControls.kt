@@ -1,5 +1,7 @@
 package com.actiary.glass
 
+import android.view.HapticFeedbackConstants
+import android.view.View
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +38,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -54,10 +57,11 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.alpha
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -78,15 +82,16 @@ import androidx.compose.ui.unit.Constraints
 import kotlin.math.roundToInt
 
 @Composable
-internal fun Modifier.glassSurface(
+fun Modifier.glassSurface(
     shape: CornerBasedShape,
     sampling: GlassSampling,
     exported: GlassLayer? = null,
     backdrop: GlassBackdrop? = null,
+    flat: Boolean = sampling == GlassSampling.Background,
 ): Modifier {
     val layers = LocalGlassLayers.current
     val src = backdrop ?: if (sampling == GlassSampling.Background) layers.background else layers.content
-    return glass(src, shape, LocalGlassProfile.current, LocalThemeTokens.current.dark, exported, flat = sampling == GlassSampling.Background)
+    return glass(src, shape, LocalGlassProfile.current, LocalThemeTokens.current.dark, exported, flat = flat)
 }
 
 @Composable
@@ -153,7 +158,8 @@ private const val BAR_THUMB_SCALE = 1.12f
 private const val PICKER_THUMB_SCALE = 1.08f
 private const val BAR_LABEL_GROW = 0.08f
 private val BAR_PANEL_GROW = 6.dp
-private val THUMB_HEIGHT_LIFT = 20.dp
+private val BAR_THUMB_HEIGHT_LIFT = 20.dp
+private val PICKER_THUMB_HEIGHT_LIFT = 10.dp
 
 /** The lens provides touch feedback while the border shows keyboard focus. */
 @Composable
@@ -202,12 +208,20 @@ private fun rememberThumbState(selected: Int, count: Int, pressedScale: Float, s
 }
 
 /** Pressed lift times velocity deformation; Backdrop compensates for the scale when sampling. */
-private fun GraphicsLayerScope.applyThumbScale(state: PressDragState) {
+private fun GraphicsLayerScope.applyThumbScale(state: PressDragState, heightLift: Dp) {
     val (dx, dy) = deformScale(state.normalizedVelocity)
     scaleX = state.scaleX * dx
-    // Both tracks inset the resting thumb 4 dp on each side. Lift beyond the full track height
-    // even for a taller segmented row, without making long labels widen the lifted capsule.
-    scaleY = (1f + THUMB_HEIGHT_LIFT.toPx() * state.pressProgress / size.height.coerceAtLeast(1f)) * dy
+    // Lift scales with [heightLift] relative to the thumb's own height without widening long labels.
+    scaleY = (1f + heightLift.toPx() * state.pressProgress / size.height.coerceAtLeast(1f)) * dy
+}
+
+private fun thumbRestingColor(surface: Color, accent: Color, profile: GlassProfile, dark: Boolean): Color {
+    val isClear = (profile.surfaceColor ushr 24) < 50
+    val alpha = when {
+        isClear -> if (dark) 0.24f else 0.56f
+        else -> if (dark) 0.32f else 0.72f
+    }
+    return lerp(surface, accent, if (dark) 0.14f else 0.11f).copy(alpha = alpha)
 }
 
 /** The static fill and the morphing glass surface share the same resting color. */
@@ -219,20 +233,47 @@ private fun Modifier.thumbSurface(
     profile: GlassProfile,
     dark: Boolean,
     surface: Color,
-): Modifier = drawBehind {
-    val a = 1f - state.pressProgress
+    heightLift: Dp,
+): Modifier = drawWithCache {
     val r = CornerRadius(size.height / 2f)
-    drawRoundRect(Color.Black, Offset(0f, 1.5.dp.toPx()), size, r, alpha = 0.10f * a)
-    if (!glassOn) drawRoundRect(surface, cornerRadius = r)
+    val rimWidth = 0.75.dp.toPx()
+    val rimColor = Color.White.copy(alpha = (if (dark) 0.24f else 0.78f) * profile.highlightAlpha)
+    onDrawBehind {
+        if (!glassOn) {
+            drawRoundRect(surface, cornerRadius = r)
+            drawRoundRect(
+                color = rimColor,
+                cornerRadius = r,
+                style = Stroke(width = rimWidth),
+            )
+        }
+    }
 }.then(
     if (glassOn) Modifier.glass(
         backdrop, shape, profile, dark,
         press = { state.pressProgress },
-        layerBlock = { applyThumbScale(state) },
+        layerBlock = { applyThumbScale(state, heightLift) },
         thumbRestingColor = surface,
     )
     else Modifier,
 )
+
+private class SegmentTickTracker {
+    var lastIndex: Int = -1
+}
+
+private fun selectWithHaptic(
+    index: Int,
+    selected: Int,
+    tickTracker: SegmentTickTracker,
+    view: View,
+    onSelect: (Int) -> Unit,
+) {
+    if (index != selected && tickTracker.lastIndex != index) {
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+    onSelect(index)
+}
 
 @Composable
 private fun Modifier.thumbGestures(
@@ -242,6 +283,7 @@ private fun Modifier.thumbGestures(
     still: Boolean,
     enhance: Boolean,
     allowDrag: Boolean,
+    tickTracker: SegmentTickTracker,
     hitTest: (Float) -> Int?,
     dragTarget: (Float, Float) -> Float,
 ): Modifier {
@@ -250,7 +292,9 @@ private fun Modifier.thumbGestures(
     val onSelectNow by rememberUpdatedState(onSelect)
     val hitTestNow by rememberUpdatedState(hitTest)
     val dragTargetNow by rememberUpdatedState(dragTarget)
+    val viewNow by rememberUpdatedState(LocalView.current)
     if (!enhance && !allowDrag) return this
+    val count = state.range.endInclusive.toInt() + 1
     var start = 0f
     var target = 0f
     return inspectDragGestures(
@@ -263,6 +307,10 @@ private fun Modifier.thumbGestures(
             if (enhance) {
                 state.press()
                 if (state.targetValue != start) state.updateValue(start)
+                viewNow.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                tickTracker.lastIndex = index
+            } else {
+                tickTracker.lastIndex = selectedNow
             }
             true
         },
@@ -270,19 +318,31 @@ private fun Modifier.thumbGestures(
             val next = dragTargetNow(start, delta)
             target = next
             if (still) scope.launch { state.snapTo(next) } else state.updateValue(next)
+            val index = settleIndex(next, count)
+            if (index != tickTracker.lastIndex) {
+                viewNow.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                tickTracker.lastIndex = index
+            }
         },
         onRelease = { dragged ->
             if (dragged) {
-                val index = settleIndex(target, state.range.endInclusive.toInt() + 1)
+                val index = settleIndex(target, count)
                 scope.launch { if (still) state.snapTo(index.toFloat()) else state.animateToValue(index.toFloat()) }
-                if (index != selectedNow) onSelectNow(index)
+                if (index != selectedNow) {
+                    if (index != tickTracker.lastIndex) {
+                        viewNow.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    }
+                    onSelectNow(index)
+                }
             } else if (enhance) state.release()
+            tickTracker.lastIndex = -1
         },
         onCancel = {
             val selectedValue = selectedNow.toFloat()
             if (still) scope.launch { state.snapTo(selectedValue) }
             else state.updateValue(selectedValue)
             if (enhance) state.release(cancelled = true)
+            tickTracker.lastIndex = -1
         },
     )
 }
@@ -341,13 +401,15 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
     val count = tabs.size
     val shape = RoundedCornerShape(50)
     val state = rememberThumbState(selected, count, BAR_THUMB_SCALE, still, enhance)
+    val tickTracker = remember(state) { SegmentTickTracker() }
+    val view = LocalView.current
     // Flips only at the ends of the press animation, so recomposition is rare; at rest only the panel is a drawBackdrop node.
     val interactive by remember(state) { derivedStateOf { isInteracting(state.pressProgress, state.scaleX, state.scaleY) } }
     val glassOn = enhance && interactive
     val ltrNow by rememberUpdatedState(ltr)
     val tabsBackdrop = rememberLayerBackdrop()
     val tabScale = { 1f + BAR_LABEL_GROW * state.pressProgress }
-    val surface = t.neutrals.surface.asColor()
+    val surface = thumbRestingColor(t.neutrals.surface.asColor(), t.accent.accentAction.asColor(), profile, t.dark)
 
     BoxWithConstraints(modifier.fillMaxWidth().height(GlassBottomBarHeight), contentAlignment = Alignment.CenterStart) {
         val tabW = (maxWidth - 8.dp) / count
@@ -392,7 +454,7 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
                 .graphicsLayer {
                     translationX = thumbOffsetPx(state.value, tabWpxNow, ltrNow)
                 }
-                .thumbSurface(state, glassOn, tabsBackdrop, shape, profile, t.dark, surface)
+                .thumbSurface(state, glassOn, tabsBackdrop, shape, profile, t.dark, surface, BAR_THUMB_HEIGHT_LIFT)
                 .width(tabW).height(56.dp),
         )
 
@@ -402,6 +464,7 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
                 .padding(4.dp)
                 .thumbGestures(
                     state, selected, onSelect, still, enhance, allowDrag = true,
+                    tickTracker = tickTracker,
                     hitTest = { x ->
                         val width = tabWpx * count
                         if (x >= 0f && x < width) {
@@ -425,7 +488,9 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit,
                 Box(
                     Modifier.weight(1f).fillMaxHeight().clip(shape)
                         .glassControlFocus(enhance, shape)
-                        .selectable(on, interactionSource = null, indication = indication, role = Role.Tab) { onSelect(i) },
+                        .selectable(on, interactionSource = null, indication = indication, role = Role.Tab) {
+                            selectWithHaptic(i, selected, tickTracker, view, onSelect)
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     TabLabel(
@@ -487,6 +552,8 @@ fun GlassSegmentedPicker(
     val count = options.size
     val shape = RoundedCornerShape(50)
     val state = rememberThumbState(selected, count, PICKER_THUMB_SCALE, still, enhance)
+    val tickTracker = remember(state) { SegmentTickTracker() }
+    val view = LocalView.current
     val interactive by remember(state) { derivedStateOf { isInteracting(state.pressProgress, state.scaleX, state.scaleY) } }
     val glassOn = enhance && interactive
     val ltrNow by rememberUpdatedState(ltr)
@@ -509,7 +576,7 @@ fun GlassSegmentedPicker(
             .border(0.75.dp, t.neutrals.divider.asColor(), shape),
     ) {
         val viewportPx = constraints.maxWidth
-        val padPx = with(LocalDensity.current) { 4.dp.toPx() }
+        val padPx = with(LocalDensity.current) { 3.dp.toPx() }
         if (allowScroll) LaunchedEffect(selected, ready, viewportPx, fontScale) {
             if (ready) {
                 val start = thumbOffset(selected.toFloat(), widths)
@@ -518,14 +585,14 @@ fun GlassSegmentedPicker(
                 if (still) scroll.scrollTo(target) else scroll.animateScrollTo(target)
             }
         }
-        Box(Modifier.then(if (allowScroll) Modifier.horizontalScroll(scroll) else Modifier).padding(4.dp)) {
+        Box(Modifier.then(if (allowScroll) Modifier.horizontalScroll(scroll) else Modifier).padding(3.dp)) {
             val rowWidth = if (allowScroll) Modifier else Modifier.fillMaxWidth()
             if (glassOn) {
                 Row(Modifier.clearAndSetSemantics {}.alpha(0f).layerBackdrop(copyBackdrop).then(rowWidth)) {
                     options.forEachIndexed { i, label ->
                         Box(
                             Modifier.then(if (allowScroll) Modifier.widthIn(min = 48.dp) else Modifier.weight(1f))
-                                .heightIn(min = 48.dp).padding(horizontal = 16.dp),
+                                .heightIn(min = 36.dp).padding(horizontal = 16.dp),
                             contentAlignment = Alignment.Center,
                         ) { SegmentLabel(label, accent, i == selected) }
                     }
@@ -539,7 +606,8 @@ fun GlassSegmentedPicker(
                     }
                     .thumbSurface(
                         state, glassOn, copyBackdrop, shape, profile, t.dark,
-                        t.neutrals.surface.asColor(),
+                        thumbRestingColor(t.neutrals.surface.asColor(), accent, profile, t.dark),
+                        PICKER_THUMB_HEIGHT_LIFT,
                     )
                     .layout { m, c ->
                         val ok = rowHeight > 0 && widths.all { it > 0f }
@@ -557,6 +625,7 @@ fun GlassSegmentedPicker(
                     .onSizeChanged { rowHeight = it.height }
                     .thumbGestures(
                         state, selected, onSelect, still, enhance, allowDrag = !allowScroll,
+                        tickTracker = tickTracker,
                         hitTest = { x -> if (ready) segmentIndexAt(x, widths, ltr) else null },
                         dragTarget = { start, dx -> dragValue(start, dx, widths[0], count, ltr) },
                     )
@@ -565,11 +634,13 @@ fun GlassSegmentedPicker(
                 options.forEachIndexed { i, label ->
                     val on = i == selected
                     Box(
-                        Modifier.then(if (allowScroll) Modifier.widthIn(min = 48.dp) else Modifier.weight(1f)).heightIn(min = 48.dp)
+                        Modifier.then(if (allowScroll) Modifier.widthIn(min = 48.dp) else Modifier.weight(1f)).heightIn(min = 36.dp)
                             .onSizeChanged { widths[i] = it.width.toFloat() }
                             .clip(shape)
                             .glassControlFocus(enhance, shape)
-                            .selectable(on, interactionSource = null, indication = indication, role = Role.Tab) { onSelect(i) }
+                            .selectable(on, interactionSource = null, indication = indication, role = Role.Tab) {
+                                selectWithHaptic(i, selected, tickTracker, view, onSelect)
+                            }
                             .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {

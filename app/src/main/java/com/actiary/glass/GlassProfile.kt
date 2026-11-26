@@ -28,7 +28,7 @@ fun resolveGlass(level: GlassLevel, tint: GlassTintStrength, tokens: ThemeTokens
     val p = when (level) {
         GlassLevel.SOFT -> Params(16f, 6f, 8f, false, 0.30f, 0.62)
         GlassLevel.BALANCED -> Params(10f, 14f, 20f, false, 0.55f, 0.42)
-        GlassLevel.CLEAR -> Params(4f, 22f, 32f, true, 0.72f, 0.26)
+        GlassLevel.CLEAR -> Params(1.5f, 26f, 40f, true, 0.90f, 0.12)
     }
     val alpha = if (degraded) 0.85 else p.alpha
     val rgb = mix(tokens.neutrals.glassNeutralTint, tokens.accent.glassAccentTint, weight) and 0xFFFFFF

@@ -24,7 +24,8 @@ class GlassProfileTest {
             assertTrue(s.blurDp > b.blurDp && b.blurDp > c.blurDp)
             assertTrue(s.refractionAmountDp < b.refractionAmountDp && b.refractionAmountDp < c.refractionAmountDp)
             assertTrue(c.chromaticAberration && !s.chromaticAberration && !b.chromaticAberration)
-            assertTrue((c.surfaceColor ushr 24) >= (0.26 * 255).roundToInt())
+            assertTrue((c.surfaceColor ushr 24) >= (0.12 * 255).roundToInt())
+            assertTrue((s.surfaceColor ushr 24) > (b.surfaceColor ushr 24) && (b.surfaceColor ushr 24) > (c.surfaceColor ushr 24))
         }
     }
 
