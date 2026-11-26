@@ -13,13 +13,21 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
@@ -55,8 +63,11 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.actiary.R
@@ -241,22 +252,22 @@ fun PhotoRow(
 
 @Composable
 fun PhotoViewer(
-    photo: DraftPhoto?,
+    photos: List<DraftPhoto>,
+    initialIndex: Int?,
     photoStore: PhotoStore,
-    description: String,
-    visibility: MutableTransitionState<Boolean> = rememberOverlayVisibility(photo != null),
+    visibility: MutableTransitionState<Boolean> = rememberOverlayVisibility(initialIndex != null && initialIndex in photos.indices),
     onDismiss: () -> Unit,
 ) {
     OverlayBackHandler(visibility, onDismiss)
-    var lastPhoto by remember { mutableStateOf<Pair<DraftPhoto, String>?>(null) }
-    val current = photo?.let { it to description }
-    SideEffect { if (current != null) lastPhoto = current }
+    val current = initialIndex?.takeIf { it in photos.indices }?.let { photos to it }
+    var last by remember { mutableStateOf<Pair<List<DraftPhoto>, Int>?>(null) }
+    SideEffect { if (current != null) last = current }
     val reduced = rememberMotionReduced()
     val pane = stringResource(R.string.record_photos)
     val close = stringResource(R.string.overlay_close)
     AnimatedVisibility(visibility, enter = EnterTransition.None, exit = ExitTransition.None) {
         Box(
-            Modifier.fillMaxSize().overlayInteraction(photo != null)
+            Modifier.fillMaxSize().overlayInteraction(current != null)
                 .semantics {
                     paneTitle = pane
                     isTraversalGroup = true
@@ -267,12 +278,49 @@ fun PhotoViewer(
                     .animateEnterExit(overlayFadeIn(reduced), overlayFadeOut(reduced))
                     .background(Color.Black),
             )
-            (current ?: lastPhoto)?.let { (shownPhoto, label) ->
-                AsyncImage(
-                    model(shownPhoto, photoStore), label,
-                    Modifier.fillMaxSize().animateEnterExit(overlayEnter(reduced), overlayExit(reduced)),
-                    contentScale = ContentScale.Fit,
-                )
+            (current ?: last)?.let { (shownPhotos, shownInitialIndex) ->
+                if (shownPhotos.size > 1) {
+                    key(shownPhotos, shownInitialIndex) {
+                        val pagerState = rememberPagerState(
+                            initialPage = shownInitialIndex.coerceIn(0, shownPhotos.lastIndex),
+                            pageCount = { shownPhotos.size },
+                        )
+                        Box(
+                            Modifier.fillMaxSize()
+                                .animateEnterExit(overlayEnter(reduced), overlayExit(reduced)),
+                        ) {
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier.fillMaxSize(),
+                            ) { page ->
+                                AsyncImage(
+                                    model(shownPhotos[page], photoStore),
+                                    stringResource(R.string.day_photo, page + 1),
+                                    Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit,
+                                )
+                            }
+                            BasicText(
+                                "${pagerState.currentPage + 1} / ${shownPhotos.size}",
+                                Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
+                                    .padding(bottom = 20.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color.Black.copy(alpha = 0.55f))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = TextStyle(Color.White, 13.sp, FontWeight.Medium),
+                            )
+                        }
+                    }
+                } else if (shownPhotos.size == 1) {
+                    AsyncImage(
+                        model(shownPhotos[0], photoStore),
+                        stringResource(R.string.day_photo, 1),
+                        Modifier.fillMaxSize().animateEnterExit(overlayEnter(reduced), overlayExit(reduced)),
+                        contentScale = ContentScale.Fit,
+                    )
+                }
             }
         }
     }

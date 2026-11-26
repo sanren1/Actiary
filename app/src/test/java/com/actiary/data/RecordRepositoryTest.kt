@@ -46,6 +46,7 @@ private class FakeDao : RecordDao {
     }
     override suspend fun get(epochDay: Long) = rows.value[epochDay]
     override fun observeDay(epochDay: Long) = rows.map { it[epochDay] }
+    override suspend fun countExercisedDays(): Int = rows.value.values.count { it.record.status == DayStatus.EXERCISED }
     override fun observeTypes(): Flow<List<ExerciseTypeEntity>> = observeAllTypes().map { list -> list.filter { !it.archived } }
     override fun observeAllTypes(): Flow<List<ExerciseTypeEntity>> = typeRows.map { list -> list.sortedWith(compareBy({ it.sortOrder }, { it.id })) }
     override suspend fun getActiveTypes() = observeTypes().first()

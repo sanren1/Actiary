@@ -201,8 +201,10 @@ internal fun RecordDetailSheet(
         }
     }
     PhotoViewer(
-        photo?.let { DraftPhoto.Saved(it) }, photoStore,
-        stringResource(R.string.day_photo, (photoIndex ?: 0) + 1), photoVisibility,
+        detail?.photos.orEmpty().map { DraftPhoto.Saved(it) },
+        photoIndex,
+        photoStore,
+        photoVisibility,
     ) {
         viewingPhoto = null
     }

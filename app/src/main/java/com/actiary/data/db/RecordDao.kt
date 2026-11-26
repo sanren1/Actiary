@@ -21,6 +21,9 @@ interface RecordDao {
     @Query("SELECT * FROM daily_record WHERE epochDay = :epochDay")
     fun observeDay(epochDay: Long): Flow<DayWithDetails?>
 
+    @Query("SELECT COUNT(*) FROM daily_record WHERE status = 'EXERCISED'")
+    suspend fun countExercisedDays(): Int
+
     @Query("SELECT * FROM exercise_type WHERE archived = 0 ORDER BY sortOrder, id")
     fun observeTypes(): Flow<List<ExerciseTypeEntity>>
 

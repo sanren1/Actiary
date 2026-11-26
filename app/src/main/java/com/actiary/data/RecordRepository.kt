@@ -42,6 +42,8 @@ class RecordRepository(
 
     fun observeDay(date: LocalDate): Flow<DayWithDetails?> = dao.observeDay(date.toEpochDay())
 
+    suspend fun countExercisedDays(): Int = withContext(io) { dao.countExercisedDays() }
+
     val types: Flow<List<ExerciseTypeEntity>> get() = dao.observeTypes()
 
     val allTypes: Flow<List<ExerciseTypeEntity>> get() = dao.observeAllTypes()

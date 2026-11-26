@@ -162,7 +162,10 @@ internal object TodayWidgetUpdater {
         val exercisedEpochDays = history
             .filter { it.record.status == DayStatus.EXERCISED }
             .mapTo(HashSet()) { it.record.epochDay }
-        val streakDays = computeCurrentStreak(exercisedEpochDays, today)
+        val restEpochDays = history
+            .filter { it.record.status == DayStatus.REST }
+            .mapTo(HashSet()) { it.record.epochDay }
+        val streakDays = computeCurrentStreak(exercisedEpochDays, today, restEpochDays)
         val recentCutoff = today.minusDays(6).toEpochDay()
         val recent = history.filter { it.record.epochDay >= recentCutoff }
         val todayDetail = recent.firstOrNull { it.record.epochDay == today.toEpochDay() }

@@ -223,6 +223,7 @@ internal fun RecordSheet(
     onDismiss: () -> Unit,
     onManagePlans: () -> Unit = {},
     onSaved: (LocalDate) -> Unit = {},
+    onSavedExercisedToday: ((savedDraft: DayDraft) -> Unit)? = null,
     screenshot: WorkoutScreenshot? = null,
 ) {
     val t = LocalThemeTokens.current
@@ -232,6 +233,7 @@ internal fun RecordSheet(
     var draft by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<DayDraft?>(null) }
     var original by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf<DayDraft?>(null) }
     var existing by rememberSaveable { mutableStateOf(false) }
+    var existingExercised by rememberSaveable { mutableStateOf(false) }
     var visible by rememberSaveable { mutableStateOf(true) } // false = sheet sliding out; onDismiss fires once it is gone
     var saving by remember { mutableStateOf(false) } // not saved: the coroutine does not survive recreation
     var failed by rememberSaveable { mutableStateOf(false) }
@@ -296,6 +298,7 @@ internal fun RecordSheet(
             waitingForType = screenshot != null && detectedType == null
             draft = next
             existing = day != null
+            existingExercised = day?.record?.status == DayStatus.EXERCISED
             photoImportFailed = false
             failed = false
             invalidEntryIds = emptySet()
@@ -326,11 +329,11 @@ internal fun RecordSheet(
         lastPerformanceByExercise = currentDate?.let { strengthRepository.latestPerformanceByExercise(it) }.orEmpty()
     }
     val dirty = current != null && original?.let { current.isChangedFrom(it) } == true
-    val photo = viewing?.let { current?.photos?.getOrNull(it) }
-    LaunchedEffect(viewing, photo) { if (viewing != null && photo == null) viewing = null }
+    val viewingPhoto = viewing?.takeIf { it in current?.photos.orEmpty().indices }
+    LaunchedEffect(viewing, viewingPhoto) { if (viewing != null && viewingPhoto == null) viewing = null }
     val saveAsPlanEntry = saveAsPlanEntryId?.let { id -> current?.entries?.firstOrNull { it.id == id } }
     val datePickerVisibility = rememberOverlayVisibility(showDatePicker)
-    val photoVisibility = rememberOverlayVisibility(photo != null)
+    val photoVisibility = rememberOverlayVisibility(viewingPhoto != null)
     val discardVisibility = rememberOverlayVisibility(showDiscard)
     val restVisibility = rememberOverlayVisibility(showRest)
     val clearVisibility = rememberOverlayVisibility(showClear)
@@ -670,8 +673,12 @@ internal fun RecordSheet(
                                     return@let
                                 }
                                 showInvalid = false
+                                val shouldCelebrateToday = !existingExercised &&
+                                    d.status == DayStatus.EXERCISED &&
+                                    d.date == LocalDate.now()
                                 launchOp({ repository.save(d) }) {
                                     onSaved(d.date)
+                                    if (shouldCelebrateToday) onSavedExercisedToday?.invoke(d)
                                     close()
                                 }
                             }
@@ -695,7 +702,7 @@ internal fun RecordSheet(
         onDismiss = { showDatePicker = false },
         visibility = datePickerVisibility,
     )
-    PhotoViewer(photo, photoStore, stringResource(R.string.day_photo, (viewing ?: 0) + 1), photoVisibility) {
+    PhotoViewer(current?.photos.orEmpty(), viewingPhoto, photoStore, photoVisibility) {
         viewing = null
     }
     GlassDialog(

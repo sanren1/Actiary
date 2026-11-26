@@ -80,12 +80,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.actiary.data.appearance.AppLanguagePrefs
 import com.actiary.data.appearance.resolve
+import com.actiary.data.db.DayStatus
+import com.actiary.data.db.StrengthLogItemEntity
 import com.actiary.data.photo.recognizeWorkoutScreenshot
 import com.actiary.data.update.AppUpdater
 import com.actiary.data.update.ReleaseUpdate
 import com.actiary.data.update.UpdatePrefs
+import com.actiary.domain.CheckInCelebrationData
+import com.actiary.domain.CheckInKind
+import com.actiary.domain.DayDraft
 import com.actiary.domain.WorkoutScreenshot
 import com.actiary.domain.WorkoutTrackParser
+import com.actiary.domain.computeCurrentStreak
+import com.actiary.domain.computeWeekExercisedDays
+import com.actiary.domain.resolveCheckInKind
 import com.actiary.glass.GlassBottomBar
 import com.actiary.glass.GlassBottomBarHeight
 import com.actiary.glass.GlassDialog
@@ -103,9 +111,12 @@ import com.actiary.theme.asColor
 import com.actiary.theme.rememberAnimatedThemeTokens
 import com.actiary.theme.resolveTheme
 import com.actiary.ui.calendar.HomeScreen
+import com.actiary.ui.calendar.buildStrengthSummaryText
 import com.actiary.ui.common.FloatingInsets
 import com.actiary.ui.common.LocalFloatingInsets
 import com.actiary.ui.common.CUSTOM_TYPE_ICONS
+import com.actiary.ui.common.exerciseTypeLabel
+import com.actiary.ui.common.labelRes
 import com.actiary.ui.motion.BackTarget
 import com.actiary.ui.motion.LocalMotionReduced
 import com.actiary.ui.motion.Motion
@@ -115,6 +126,7 @@ import com.actiary.ui.motion.backTarget
 import com.actiary.ui.motion.inactiveNavigation
 import com.actiary.ui.motion.rememberPushMotion
 import com.actiary.ui.motion.rememberSystemMotionReduced
+import com.actiary.ui.record.CheckInCelebrationDialog
 import com.actiary.ui.record.DatePickerDialog
 import com.actiary.ui.record.RecordDetailSheet
 import com.actiary.ui.record.RecordSheet
@@ -145,10 +157,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 private val BarGap = 0.dp
 
@@ -332,6 +346,7 @@ class MainActivity : ComponentActivity() {
                 var thirdPartyNoticesOpen by rememberSaveable { mutableStateOf(false) }
                 var availableUpdate by remember { mutableStateOf<ReleaseUpdate?>(null) }
                 var checkingUpdate by remember { mutableStateOf(false) }
+                var checkInCelebration by remember { mutableStateOf<CheckInCelebrationData?>(null) }
                 val appVersion = remember {
                     @Suppress("DEPRECATION")
                     packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
@@ -375,11 +390,13 @@ class MainActivity : ComponentActivity() {
                 val customExerciseVisibility = rememberOverlayVisibility(workoutPlansOverlay.customExerciseOpen)
                 val iconVisibility = rememberOverlayVisibility(pickingTypeIcon)
                 val updateVisibility = rememberOverlayVisibility(availableUpdate != null)
+                val checkInVisibility = rememberOverlayVisibility(checkInCelebration != null)
                 fun hasOverlay() = editing != null || viewing != null ||
                     accentEditorOpen || pendingAccentRemoval != null || accentRemovalVisibility.overlayPresent ||
                     pendingTypeRemoval != null || editingTypeOpen || pickingTypeIcon || scanningUri != null ||
                     workoutPlansOverlay.hasVisibleOverlay(planDeleteVisibility, customExerciseVisibility) ||
                     storageDetailsOpen || thirdPartyNoticesOpen || availableUpdate != null || updateVisibility.overlayPresent ||
+                    checkInCelebration != null || checkInVisibility.overlayPresent ||
                     (screenshot != null && editing == null) || confirmAppearanceReset || backup.state != BackupState.Idle ||
                     scanVisibility.overlayPresent || dateVisibility.overlayPresent || resetVisibility.overlayPresent ||
                     removalVisibility.overlayPresent || iconVisibility.overlayPresent
@@ -547,6 +564,21 @@ class MainActivity : ComponentActivity() {
                                             tab = Tab.SETTINGS
                                         },
                                         onSaved = { selected = it },
+                                        onSavedExercisedToday = { savedDraft ->
+                                            lifecycleScope.launch {
+                                                val today = LocalDate.now()
+                                                if (savedDraft.date != today) return@launch
+                                                if (container.generalPrefs.lastCelebratedEpochDay() == today.toEpochDay()) return@launch
+                                                val data = buildCheckInCelebrationData(
+                                                    container = container,
+                                                    savedDraft = savedDraft,
+                                                    today = today,
+                                                    firstDayOfWeek = firstDayOfWeek,
+                                                )
+                                                container.generalPrefs.setLastCelebratedEpochDay(today.toEpochDay())
+                                                checkInCelebration = data
+                                            }
+                                        },
                                         screenshot = screenshot,
                                     )
                                 }
@@ -657,6 +689,11 @@ class MainActivity : ComponentActivity() {
                                 },
                             )
                             BackupOverlay(backup)
+                            CheckInCelebrationDialog(
+                                data = checkInCelebration,
+                                visibility = checkInVisibility,
+                                onDismiss = { checkInCelebration = null },
+                            )
                         },
                     ) {
                         CompositionLocalProvider(LocalGlassProfile provides bottomBarProfile) {
@@ -826,7 +863,93 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private suspend fun loadTodayStats(
+        container: AppContainer,
+        today: LocalDate,
+        firstDayOfWeek: DayOfWeek,
+        includeToday: Boolean,
+    ): Triple<Int, Int, Int> {
+        val history = container.recordRepository.observeRange(today.minusYears(10), today).first()
+        val exercisedEpochDays = history
+            .filter { it.record.status == DayStatus.EXERCISED }
+            .mapTo(HashSet()) { it.record.epochDay }
+        val restEpochDays = history
+            .filter { it.record.status == DayStatus.REST }
+            .mapTo(HashSet()) { it.record.epochDay }
+        if (includeToday) {
+            exercisedEpochDays.add(today.toEpochDay())
+            restEpochDays.remove(today.toEpochDay())
+        }
+        val streakDays = computeCurrentStreak(exercisedEpochDays, today, restEpochDays)
+        val weekDays = computeWeekExercisedDays(exercisedEpochDays, today, firstDayOfWeek)
+        val totalDays = container.recordRepository.countExercisedDays()
+        return Triple(streakDays, weekDays, totalDays)
+    }
+
+    private suspend fun buildCheckInCelebrationData(
+        container: AppContainer,
+        savedDraft: DayDraft,
+        today: LocalDate,
+        firstDayOfWeek: DayOfWeek,
+    ): CheckInCelebrationData {
+        val (streakDays, weekDays, rawTotalDays) = loadTodayStats(
+            container, today, firstDayOfWeek, includeToday = true,
+        )
+        val totalDays = maxOf(rawTotalDays, 1)
+        val kind = resolveCheckInKind(totalDays, streakDays)
+        val quoteIndex = when (kind) {
+            CheckInKind.Daily -> Random.nextInt(DAILY_QUOTE_COUNT)
+            is CheckInKind.TotalMilestone,
+            is CheckInKind.StreakMilestone,
+            -> Random.nextInt(MILESTONE_QUOTE_COUNT)
+        }
+        val strengthItems = savedDraft.entries.flatMap { it.strengthItems }
+        val workoutSummary = if (strengthItems.isNotEmpty()) {
+            val allExercises = container.strengthRepository.allExercises.first().associateBy { it.id }
+            val logs = strengthItems.mapIndexed { idx, item ->
+                StrengthLogItemEntity(
+                    id = 0,
+                    entryId = 0,
+                    exerciseId = item.exerciseId,
+                    sets = item.sets,
+                    reps = item.reps,
+                    weightKg = item.weightKg,
+                    sortOrder = idx,
+                )
+            }
+            buildStrengthSummaryText(
+                logs = logs,
+                exercises = allExercises,
+                muscleLabel = { getString(it.labelRes()) },
+                countsLabel = { exCount, setCount ->
+                    getString(R.string.strength_summary_counts, exCount, setCount)
+                },
+            )
+        } else if (savedDraft.entries.isNotEmpty()) {
+            val typesById = container.recordRepository.allTypes.first().associateBy { it.id }
+            savedDraft.entries
+                .mapNotNull { entry -> typesById[entry.typeId]?.let { exerciseTypeLabel(it, resources) } }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .take(3)
+                .joinToString(" · ")
+                .ifBlank { null }
+        } else {
+            null
+        }
+        return CheckInCelebrationData(
+            kind = kind,
+            streakDays = streakDays,
+            weekDays = weekDays,
+            totalDays = totalDays,
+            quoteIndex = quoteIndex,
+            workoutSummary = workoutSummary,
+        )
+    }
+
     companion object {
+        private const val DAILY_QUOTE_COUNT = 12
+        private const val MILESTONE_QUOTE_COUNT = 6
         const val EXTRA_OPEN_RECORD_TODAY = "com.actiary.EXTRA_OPEN_RECORD_TODAY"
     }
 }

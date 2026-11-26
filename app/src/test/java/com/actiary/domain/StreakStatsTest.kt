@@ -55,17 +55,61 @@ class StreakStatsTest {
         assertEquals(3, computeCurrentStreak(exercised, today))
     }
 
-    @Test fun streakBrokenByRestDayOrGap() {
+    @Test fun restDaysPreserveStreakWithoutIncrementingAndGapBreaks() {
         val today = LocalDate.of(2026, 4, 15)
-        val daysWithRestBreak = listOf(
+
+        // EX, EX, REST, EX(today) -> streak == 3 (rest bridges without incrementing)
+        val restBridgesToToday = listOf(
             exercisedDay(today),
             restDay(today.minusDays(1)),
             exercisedDay(today.minusDays(2)),
             exercisedDay(today.minusDays(3)),
         )
         assertEquals(
-            HomeStreakSummary(weekExercisedDays = 2, currentStreakDays = 1),
-            computeHomeStreakSummary(daysWithRestBreak, today, DayOfWeek.MONDAY),
+            HomeStreakSummary(weekExercisedDays = 2, currentStreakDays = 3),
+            computeHomeStreakSummary(restBridgesToToday, today, DayOfWeek.MONDAY),
+        )
+
+        // EX, EX, REST(today) -> streak == 2
+        val restTodayPreservesPrior = listOf(
+            restDay(today),
+            exercisedDay(today.minusDays(1)),
+            exercisedDay(today.minusDays(2)),
+        )
+        assertEquals(
+            HomeStreakSummary(weekExercisedDays = 2, currentStreakDays = 2),
+            computeHomeStreakSummary(restTodayPreservesPrior, today, DayOfWeek.MONDAY),
+        )
+
+        // EX, EX, REST(yesterday), unrecorded(today) -> streak == 2
+        val restYesterdayUnrecordedToday = listOf(
+            restDay(today.minusDays(1)),
+            exercisedDay(today.minusDays(2)),
+            exercisedDay(today.minusDays(3)),
+        )
+        assertEquals(
+            HomeStreakSummary(weekExercisedDays = 1, currentStreakDays = 2),
+            computeHomeStreakSummary(restYesterdayUnrecordedToday, today, DayOfWeek.MONDAY),
+        )
+
+        // REST, REST(today) -> streak == 0
+        val onlyRestDays = listOf(
+            restDay(today),
+            restDay(today.minusDays(1)),
+        )
+        assertEquals(
+            HomeStreakSummary(weekExercisedDays = 0, currentStreakDays = 0),
+            computeHomeStreakSummary(onlyRestDays, today, DayOfWeek.MONDAY),
+        )
+
+        // EX, unrecorded, REST(today) -> streak == 0 (unrecorded breaks streak)
+        val unrecordedBreaksBeforeRestToday = listOf(
+            restDay(today),
+            exercisedDay(today.minusDays(2)),
+        )
+        assertEquals(
+            HomeStreakSummary(weekExercisedDays = 1, currentStreakDays = 0),
+            computeHomeStreakSummary(unrecordedBreaksBeforeRestToday, today, DayOfWeek.MONDAY),
         )
 
         val daysWithGap = listOf(

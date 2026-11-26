@@ -27,11 +27,22 @@ fun computeWeekExercisedDays(
 fun computeCurrentStreak(
     exercisedEpochDays: Set<Long>,
     today: LocalDate,
+    restEpochDays: Set<Long> = emptySet(),
 ): Int {
-    var cursor = if (today.toEpochDay() in exercisedEpochDays) today else today.minusDays(1)
+    val todayEpoch = today.toEpochDay()
+    var cursor = if (todayEpoch in exercisedEpochDays || todayEpoch in restEpochDays) {
+        today
+    } else {
+        today.minusDays(1)
+    }
     var streak = 0
-    while (cursor.toEpochDay() in exercisedEpochDays) {
-        streak++
+    while (true) {
+        val epoch = cursor.toEpochDay()
+        when {
+            epoch in exercisedEpochDays -> streak++
+            epoch in restEpochDays -> Unit
+            else -> break
+        }
         cursor = cursor.minusDays(1)
     }
     return streak
@@ -45,8 +56,11 @@ fun computeHomeStreakSummary(
     val exercisedEpochDays = days
         .filter { it.record.status == DayStatus.EXERCISED }
         .mapTo(HashSet()) { it.record.epochDay }
+    val restEpochDays = days
+        .filter { it.record.status == DayStatus.REST }
+        .mapTo(HashSet()) { it.record.epochDay }
     return HomeStreakSummary(
         weekExercisedDays = computeWeekExercisedDays(exercisedEpochDays, today, firstDayOfWeek),
-        currentStreakDays = computeCurrentStreak(exercisedEpochDays, today),
+        currentStreakDays = computeCurrentStreak(exercisedEpochDays, today, restEpochDays),
     )
 }

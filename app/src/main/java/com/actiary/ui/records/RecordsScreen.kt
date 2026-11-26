@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
@@ -766,87 +767,91 @@ private fun MuscleDistributionCard(
 
             val maxSets = muscleStats.ranked.first().totalSets.coerceAtLeast(1)
             val barTrack = t.neutrals.surfaceMuted.asColor()
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                muscleStats.ranked.forEach { stat ->
-                    val isSelected = selectedMuscle == stat.muscle
-                    val fraction = (stat.totalSets / maxSets.toFloat()).coerceIn(0f, 1f)
-                    val rowShape = RoundedCornerShape(10.dp)
-                    val barColor = when {
-                        isSelected -> accent
-                        stat.heatLevel == 3 -> accent.copy(alpha = 0.95f)
-                        stat.heatLevel == 2 -> accent.copy(alpha = 0.72f)
-                        else -> accent.copy(alpha = 0.45f)
-                    }
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(rowShape)
-                            .background(
-                                if (isSelected) t.accent.accentSubtle.asColor()
-                                else t.neutrals.surface.asColor(),
-                            )
-                            .then(
-                                if (isSelected) Modifier.border(1.dp, t.accent.accentStroke.asColor(), rowShape)
-                                else Modifier,
-                            )
-                            .clickable(role = Role.Button) { onToggleMuscle(stat.muscle) }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                muscleStats.ranked.chunked(2).forEach { rowStats ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Row(
-                                Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        rowStats.forEach { stat ->
+                            val isSelected = selectedMuscle == stat.muscle
+                            val fraction = (stat.totalSets / maxSets.toFloat()).coerceIn(0f, 1f)
+                            val tileShape = RoundedCornerShape(10.dp)
+                            val barColor = when {
+                                isSelected -> accent
+                                stat.heatLevel == 3 -> accent.copy(alpha = 0.95f)
+                                stat.heatLevel == 2 -> accent.copy(alpha = 0.72f)
+                                else -> accent.copy(alpha = 0.45f)
+                            }
+                            val daysText = stringResource(R.string.records_muscle_days, stat.days)
+                            val setsText = stringResource(R.string.records_muscle_sets, stat.totalSets)
+                            Column(
+                                Modifier
+                                    .weight(1f)
+                                    .clip(tileShape)
+                                    .background(
+                                        if (isSelected) t.accent.accentSubtle.asColor()
+                                        else t.neutrals.surface.asColor(),
+                                    )
+                                    .then(
+                                        if (isSelected) Modifier.border(1.dp, t.accent.accentStroke.asColor(), tileShape)
+                                        else Modifier,
+                                    )
+                                    .clickable(role = Role.Button) { onToggleMuscle(stat.muscle) }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp),
                             ) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    BasicText(
+                                        stringResource(stat.muscle.labelRes()),
+                                        Modifier.weight(1f),
+                                        style = TextStyle(
+                                            color = if (isSelected) accent else primary,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    val daysAgo = lastTrainedDaysAgo[stat.muscle]
+                                    if (daysAgo != null) {
+                                        BasicText(
+                                            formatDaysAgoLabel(daysAgo),
+                                            style = TextStyle(secondary, 11.sp),
+                                            maxLines = 1,
+                                        )
+                                    }
+                                }
                                 BasicText(
-                                    stringResource(stat.muscle.labelRes()),
-                                    Modifier.weight(1f, fill = false),
-                                    style = TextStyle(
-                                        color = if (isSelected) accent else primary,
-                                        fontSize = 14.sp,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                    ),
+                                    "$daysText · $setsText",
+                                    style = TextStyle(secondary, 12.sp),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
-                                val daysAgo = lastTrainedDaysAgo[stat.muscle]
-                                if (daysAgo != null) {
-                                    BasicText(
-                                        formatDaysAgoLabel(daysAgo),
-                                        style = TextStyle(secondary, 11.sp),
-                                        maxLines = 1,
+                                Canvas(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(barTrack),
+                                ) {
+                                    val barWidth = size.width * fraction
+                                    val x = if (layoutDirection == LayoutDirection.Rtl) size.width - barWidth else 0f
+                                    drawRoundRect(
+                                        barColor,
+                                        Offset(x, 0f),
+                                        Size(barWidth, size.height),
+                                        CornerRadius(size.height / 2f),
                                     )
                                 }
                             }
-                            BasicText(
-                                stringResource(R.string.records_muscle_days, stat.days),
-                                style = TextStyle(secondary, 12.sp),
-                            )
-                            BasicText(
-                                stringResource(R.string.records_muscle_sets, stat.totalSets),
-                                style = TextStyle(primary, 13.sp, FontWeight.SemiBold),
-                            )
                         }
-                        Canvas(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(barTrack),
-                        ) {
-                            val barWidth = size.width * fraction
-                            val x = if (layoutDirection == LayoutDirection.Rtl) size.width - barWidth else 0f
-                            drawRoundRect(
-                                barColor,
-                                Offset(x, 0f),
-                                Size(barWidth, size.height),
-                                CornerRadius(size.height / 2f),
-                            )
+                        if (rowStats.size == 1) {
+                            Spacer(Modifier.weight(1f))
                         }
                     }
                 }
