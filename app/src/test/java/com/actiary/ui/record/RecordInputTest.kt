@@ -1,5 +1,10 @@
 package com.actiary.ui.record
 
+import com.actiary.data.db.WorkoutPlanEntity
+import com.actiary.data.db.WorkoutPlanItemEntity
+import com.actiary.data.db.WorkoutPlanWithItems
+import com.actiary.domain.DraftEntry
+import com.actiary.domain.DraftStrengthItem
 import com.actiary.domain.WorkoutMetric
 import com.actiary.domain.parseWeightKg
 import org.junit.Assert.assertEquals
@@ -182,5 +187,86 @@ class RecordInputTest {
         assertEquals(5, stepStrengthReps(8, -1, isTimed = true))
         assertEquals(5, stepStrengthReps(5, -1, isTimed = true))
         assertEquals(999, stepStrengthReps(997, 1, isTimed = true))
+    }
+
+    @Test fun resolveOverwritePlanTargetHandlesSingleMultiLegacyAndEmpty() {
+        val pushPlan = WorkoutPlanWithItems(
+            plan = WorkoutPlanEntity(id = 1L, builtinKey = "push", name = null, sortOrder = 0),
+            items = listOf(
+                WorkoutPlanItemEntity(id = 11L, planId = 1L, exerciseId = 101L, defaultSets = 4, defaultReps = 10, sortOrder = 0),
+                WorkoutPlanItemEntity(id = 12L, planId = 1L, exerciseId = 102L, defaultSets = 3, defaultReps = 12, sortOrder = 1),
+            ),
+        )
+        val pullPlan = WorkoutPlanWithItems(
+            plan = WorkoutPlanEntity(id = 2L, builtinKey = null, name = "Custom Pull", sortOrder = 1),
+            items = listOf(
+                WorkoutPlanItemEntity(id = 21L, planId = 2L, exerciseId = 201L, defaultSets = 4, defaultReps = 8, sortOrder = 0),
+            ),
+        )
+        val plans = listOf(pushPlan, pullPlan)
+
+        // 1. Single selected plan with modified reps/sets/weight -> returns that plan.
+        val singleModified = DraftEntry(
+            typeId = 8L,
+            planId = 1L,
+            strengthItems = listOf(
+                DraftStrengthItem(exerciseId = 101L, sets = 5, reps = 8, weightKg = 60f, localId = 1L, sourcePlanId = 1L),
+                DraftStrengthItem(exerciseId = 102L, sets = 4, reps = 10, weightKg = 20f, localId = 2L, sourcePlanId = 1L),
+            ),
+        )
+        assertEquals(pushPlan, resolveOverwritePlanTarget(singleModified, plans))
+
+        // 2. Single selected plan with extra added exercise (sourcePlanId == null) -> still returns that plan.
+        val singleWithExtra = singleModified.copy(
+            strengthItems = singleModified.strengthItems + DraftStrengthItem(
+                exerciseId = 999L, sets = 3, reps = 15, weightKg = null, localId = 3L, sourcePlanId = null,
+            ),
+        )
+        assertEquals(pushPlan, resolveOverwritePlanTarget(singleWithExtra, plans))
+
+        // 3. Multiple selected plans merged -> returns null.
+        val mergedPlans = DraftEntry(
+            typeId = 8L,
+            planId = 2L,
+            strengthItems = listOf(
+                DraftStrengthItem(exerciseId = 101L, sets = 4, reps = 10, localId = 1L, sourcePlanId = 1L),
+                DraftStrengthItem(exerciseId = 201L, sets = 4, reps = 8, localId = 2L, sourcePlanId = 2L),
+            ),
+        )
+        assertNull(resolveOverwritePlanTarget(mergedPlans, plans))
+
+        // 4. No selected plan (sourcePlanId == null, planId == null) -> returns null.
+        val freeformOnly = DraftEntry(
+            typeId = 8L,
+            planId = null,
+            strengthItems = listOf(
+                DraftStrengthItem(exerciseId = 101L, sets = 4, reps = 10, localId = 1L, sourcePlanId = null),
+            ),
+        )
+        assertNull(resolveOverwritePlanTarget(freeformOnly, plans))
+
+        // 5. Empty strengthItems -> returns null.
+        val emptyEntry = DraftEntry(typeId = 8L, planId = 1L, strengthItems = emptyList())
+        assertNull(resolveOverwritePlanTarget(emptyEntry, plans))
+
+        // 6. Legacy planId set with sourcePlanId == null items matching the plan -> returns that plan.
+        val legacyEntry = DraftEntry(
+            typeId = 8L,
+            planId = 2L,
+            strengthItems = listOf(
+                DraftStrengthItem(exerciseId = 201L, sets = 5, reps = 5, weightKg = 80f, localId = 1L, sourcePlanId = null),
+            ),
+        )
+        assertEquals(pullPlan, resolveOverwritePlanTarget(legacyEntry, plans))
+
+        // 7. Deleted/missing plan -> returns null.
+        val deletedPlanEntry = DraftEntry(
+            typeId = 8L,
+            planId = 99L,
+            strengthItems = listOf(
+                DraftStrengthItem(exerciseId = 101L, sets = 4, reps = 10, localId = 1L, sourcePlanId = 99L),
+            ),
+        )
+        assertNull(resolveOverwritePlanTarget(deletedPlanEntry, plans))
     }
 }

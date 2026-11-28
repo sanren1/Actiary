@@ -98,6 +98,7 @@ import com.actiary.ui.common.exerciseTypeIcon
 import com.actiary.ui.common.exerciseTypeLabel
 import com.actiary.ui.common.isLength
 import com.actiary.ui.common.labelId
+import com.actiary.ui.common.workoutPlanLabel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -823,9 +824,35 @@ internal fun RecordSheet(
         onDismiss = { showClear = false },
         visibility = clearVisibility,
     )
+    val saveAsPlanOverwriteTarget = saveAsPlanEntry?.let { resolveOverwritePlanTarget(it, plans) }
     SaveAsPlanDialog(
         visible = saveAsPlanEntry != null && saveAsPlanEntry.strengthItems.isNotEmpty(),
         visibility = savePlanVisibility,
+        existingPlanName = saveAsPlanOverwriteTarget?.let { workoutPlanLabel(it.plan, context.resources) },
+        onOverwrite = saveAsPlanOverwriteTarget?.let { target ->
+            {
+                val entry = saveAsPlanEntry
+                val items = entry.strengthItems.map { item ->
+                    PlanItemInput(
+                        exerciseId = item.exerciseId,
+                        defaultSets = item.sets,
+                        defaultReps = item.reps,
+                        defaultWeightKg = item.weightKg,
+                    )
+                }
+                if (items.isNotEmpty()) {
+                    strengthRepository.updatePlan(target.plan.id, target.plan.name, items)
+                    update { draftState ->
+                        draftState.withEntry(
+                            entry.copy(
+                                planId = target.plan.id,
+                                strengthItems = entry.strengthItems.map { it.copy(sourcePlanId = target.plan.id) },
+                            ),
+                        )
+                    }
+                }
+            }
+        },
         onSave = { planName ->
             val items = saveAsPlanEntry?.strengthItems.orEmpty().map { item ->
                 PlanItemInput(

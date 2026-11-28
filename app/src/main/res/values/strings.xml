@@ -360,6 +360,9 @@
     <string name="strength_plan_edit">编辑计划</string>
     <string name="strength_plan_name_hint">计划名称</string>
     <string name="strength_plan_save_current">存为计划</string>
+    <string name="strength_overwrite_plan_message">当前使用「%1$s」，要覆盖原计划还是另存为新计划？</string>
+    <string name="strength_overwrite_plan_action">覆盖原计划</string>
+    <string name="strength_save_as_new_plan_action">另存为新计划</string>
     <string name="strength_clear_all">清空</string>
     <string name="strength_plan_empty">暂无训练计划</string>
     <string name="strength_plan_delete_confirm">删除计划「%1$s」？</string>

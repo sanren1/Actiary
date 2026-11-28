@@ -363,6 +363,9 @@
     <string name="strength_plan_edit">Edit Plan</string>
     <string name="strength_plan_name_hint">Plan name</string>
     <string name="strength_plan_save_current">Save as Plan</string>
+    <string name="strength_overwrite_plan_message">Based on "%1$s". Overwrite it or save as a new plan?</string>
+    <string name="strength_overwrite_plan_action">Overwrite plan</string>
+    <string name="strength_save_as_new_plan_action">Save as new plan</string>
     <string name="strength_clear_all">Clear</string>
     <string name="strength_plan_empty">No workout plans</string>
     <string name="strength_plan_delete_confirm">Delete plan "%1$s"?</string>

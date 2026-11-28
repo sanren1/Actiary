@@ -125,22 +125,7 @@ internal fun FreeformStrengthSection(
     val isChinese = isChineseLocale()
     val orderedPlans = remember(plans) { plans.sortedBy { it.plan.sortOrder } }
     val selectedPlanIds = remember(entry.planId, entry.strengthItems, orderedPlans) {
-        buildSet {
-            entry.strengthItems.forEach { item ->
-                item.sourcePlanId?.let(::add)
-            }
-            val legacyPlanId = entry.planId
-            if (legacyPlanId != null && entry.strengthItems.any { it.sourcePlanId == null }) {
-                val planExerciseIds = orderedPlans
-                    .firstOrNull { it.plan.id == legacyPlanId }
-                    ?.items
-                    ?.mapTo(HashSet()) { it.exerciseId }
-                    .orEmpty()
-                if (entry.strengthItems.any { it.sourcePlanId == null && it.exerciseId in planExerciseIds }) {
-                    add(legacyPlanId)
-                }
-            }
-        }
+        selectedPlanIdsForEntry(entry, orderedPlans)
     }
     val recommendedPlanId = remember(orderedPlans, latestPlanId) {
         recommendNextPlanId(orderedPlans.map { it.plan.id }, latestPlanId)
@@ -1048,6 +1033,8 @@ internal fun CompactStrengthField(
 internal fun SaveAsPlanDialog(
     visible: Boolean,
     visibility: MutableTransitionState<Boolean> = rememberOverlayVisibility(visible),
+    existingPlanName: String? = null,
+    onOverwrite: (suspend () -> Unit)? = null,
     onSave: suspend (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1064,15 +1051,29 @@ internal fun SaveAsPlanDialog(
     var name by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
+    var savingAsNew by remember { mutableStateOf(false) }
+    var latchedPlanName by remember { mutableStateOf(existingPlanName) }
+
+    if (visible) {
+        latchedPlanName = existingPlanName
+    }
 
     LaunchedEffect(visible) {
         if (visible) {
             name = ""
             saving = false
             failed = false
+            savingAsNew = false
+        }
+    }
+    LaunchedEffect(visible, visibility.isIdle) {
+        if (!visible && visibility.isIdle) {
+            savingAsNew = false
+            failed = false
         }
     }
 
+    val choicePlanName = latchedPlanName?.takeIf { !savingAsNew && (onOverwrite != null || !visible) }
     val canSave = !saving && name.trim().isNotEmpty()
     GlassOverlayPanel(
         visible = visible,
@@ -1092,67 +1093,28 @@ internal fun SaveAsPlanDialog(
                 Modifier.semantics { heading() },
                 style = TextStyle(n.textPrimary.asColor(), 17.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
             )
-            val inputShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 44.dp)
-                    .clip(inputShape)
-                    .background(n.surfaceMuted.asColor())
-                    .then(if (isP5) Modifier.border(2.dp, p5Stroke, inputShape) else Modifier)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                if (name.isEmpty()) {
-                    BasicText(hint, style = TextStyle(n.textSecondary.asColor(), 15.sp))
-                }
-                BasicTextField(
-                    value = name,
-                    onValueChange = {
-                        name = it
-                        failed = false
-                    },
-                    enabled = !saving,
-                    singleLine = true,
-                    textStyle = TextStyle(n.textPrimary.asColor(), 15.sp),
-                    cursorBrush = SolidColor(a.accentAction.asColor()),
-                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = hint },
-                )
-            }
-            if (failed) {
+            if (choicePlanName != null) {
                 BasicText(
-                    stringResource(R.string.record_save_failed),
-                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    style = TextStyle(a.accentStroke.asColor(), 13.sp),
+                    stringResource(R.string.strength_overwrite_plan_message, choicePlanName),
+                    style = TextStyle(n.textPrimary.asColor(), 14.sp, lineHeight = 20.sp),
                 )
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    onClick = {
-                        if (!saving) {
-                            focus.clearFocus()
-                            onDismiss()
-                        }
-                    },
-                    enabled = !saving,
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
-                ) {
-                    Text(stringResource(R.string.record_cancel), fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal)
+                if (failed) {
+                    BasicText(
+                        stringResource(R.string.record_save_failed),
+                        Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        style = TextStyle(a.accentStroke.asColor(), 13.sp),
+                    )
                 }
-                val performSave = {
-                    if (canSave) {
+                val btnShape = RoundedCornerShape(12.dp)
+                val performOverwrite = {
+                    val overwriteAction = onOverwrite
+                    if (!saving && overwriteAction != null) {
                         focus.clearFocus()
                         saving = true
                         failed = false
-                        val trimmed = name.trim()
                         scope.launch {
                             try {
-                                onSave(trimmed)
+                                overwriteAction()
                                 onDismiss()
                             } catch (e: CancellationException) {
                                 throw e
@@ -1164,37 +1126,205 @@ internal fun SaveAsPlanDialog(
                         }
                     }
                 }
-                if (isP5) {
-                    Box(
-                        Modifier
-                            .heightIn(min = 48.dp)
-                            .alpha(if (canSave) 1f else 0.45f)
-                            .p5Surface(
-                                variant = P5ShapeVariant.BADGE,
-                                fillColor = p5.brandFill.asColor(),
-                                strokeColor = p5Stroke,
-                                shadowColor = p5.strokeDark.asColor(),
-                                strokeWidth = 1.5.dp,
-                                shadowOffset = DpOffset(2.dp, 2.dp),
-                            )
-                            .clickable(enabled = canSave, role = Role.Button, onClick = performSave)
-                            .padding(horizontal = 18.dp, vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            stringResource(R.string.record_save),
-                            color = p5.onBrandFill.asColor(),
-                            fontWeight = FontWeight.Black,
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 46.dp)
+                        .alpha(if (!saving) 1f else 0.45f)
+                        .then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = p5.brandFill.asColor(),
+                                    strokeColor = p5Stroke,
+                                    shadowColor = p5.strokeDark.asColor(),
+                                    strokeWidth = 1.5.dp,
+                                    shadowOffset = DpOffset(2.dp, 2.dp),
+                                )
+                            } else {
+                                Modifier
+                                    .clip(btnShape)
+                                    .background(a.accentAction.asColor())
+                            },
                         )
-                    }
-                } else {
+                        .clickable(enabled = !saving && onOverwrite != null, role = Role.Button, onClick = performOverwrite)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    BasicText(
+                        stringResource(R.string.strength_overwrite_plan_action),
+                        style = TextStyle(
+                            color = if (isP5) p5.onBrandFill.asColor() else a.onAccentAction.asColor(),
+                            fontSize = 15.sp,
+                            fontWeight = if (isP5) FontWeight.Black else FontWeight.SemiBold,
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 46.dp)
+                        .alpha(if (!saving) 1f else 0.45f)
+                        .then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = n.surface.asColor(),
+                                    strokeColor = p5Stroke,
+                                    shadowColor = Color.Transparent,
+                                    strokeWidth = 1.5.dp,
+                                    shadowOffset = DpOffset.Zero,
+                                )
+                            } else {
+                                Modifier
+                                    .clip(btnShape)
+                                    .background(n.surfaceMuted.asColor())
+                            },
+                        )
+                        .clickable(enabled = !saving, role = Role.Button) {
+                            failed = false
+                            savingAsNew = true
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    BasicText(
+                        stringResource(R.string.strength_save_as_new_plan_action),
+                        style = TextStyle(
+                            color = n.textPrimary.asColor(),
+                            fontSize = 15.sp,
+                            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     TextButton(
-                        onClick = performSave,
-                        enabled = canSave,
+                        onClick = {
+                            if (!saving) {
+                                focus.clearFocus()
+                                onDismiss()
+                            }
+                        },
+                        enabled = !saving,
                         modifier = Modifier.heightIn(min = 48.dp),
-                        colors = ButtonDefaults.textButtonColors(contentColor = a.accentAction.asColor()),
+                        colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
                     ) {
-                        Text(stringResource(R.string.record_save))
+                        Text(stringResource(R.string.record_cancel), fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            } else {
+                val inputShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 44.dp)
+                        .clip(inputShape)
+                        .background(n.surfaceMuted.asColor())
+                        .then(if (isP5) Modifier.border(2.dp, p5Stroke, inputShape) else Modifier)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (name.isEmpty()) {
+                        BasicText(hint, style = TextStyle(n.textSecondary.asColor(), 15.sp))
+                    }
+                    BasicTextField(
+                        value = name,
+                        onValueChange = {
+                            name = it
+                            failed = false
+                        },
+                        enabled = !saving,
+                        singleLine = true,
+                        textStyle = TextStyle(n.textPrimary.asColor(), 15.sp),
+                        cursorBrush = SolidColor(a.accentAction.asColor()),
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = hint },
+                    )
+                }
+                if (failed) {
+                    BasicText(
+                        stringResource(R.string.record_save_failed),
+                        Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        style = TextStyle(a.accentStroke.asColor(), 13.sp),
+                    )
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = {
+                            if (!saving) {
+                                focus.clearFocus()
+                                onDismiss()
+                            }
+                        },
+                        enabled = !saving,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
+                    ) {
+                        Text(stringResource(R.string.record_cancel), fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal)
+                    }
+                    val performSave = {
+                        if (canSave) {
+                            focus.clearFocus()
+                            saving = true
+                            failed = false
+                            val trimmed = name.trim()
+                            scope.launch {
+                                try {
+                                    onSave(trimmed)
+                                    onDismiss()
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (_: Exception) {
+                                    failed = true
+                                } finally {
+                                    saving = false
+                                }
+                            }
+                        }
+                    }
+                    if (isP5) {
+                        Box(
+                            Modifier
+                                .heightIn(min = 48.dp)
+                                .alpha(if (canSave) 1f else 0.45f)
+                                .p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = p5.brandFill.asColor(),
+                                    strokeColor = p5Stroke,
+                                    shadowColor = p5.strokeDark.asColor(),
+                                    strokeWidth = 1.5.dp,
+                                    shadowOffset = DpOffset(2.dp, 2.dp),
+                                )
+                                .clickable(enabled = canSave, role = Role.Button, onClick = performSave)
+                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                stringResource(R.string.record_save),
+                                color = p5.onBrandFill.asColor(),
+                                fontWeight = FontWeight.Black,
+                            )
+                        }
+                    } else {
+                        TextButton(
+                            onClick = performSave,
+                            enabled = canSave,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = a.accentAction.asColor()),
+                        ) {
+                            Text(stringResource(R.string.record_save))
+                        }
                     }
                 }
             }

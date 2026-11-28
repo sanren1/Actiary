@@ -1,5 +1,7 @@
 package com.actiary.ui.record
 
+import com.actiary.data.db.WorkoutPlanWithItems
+import com.actiary.domain.DraftEntry
 import com.actiary.domain.WorkoutMetric
 import com.actiary.ui.common.isLength
 import java.math.BigDecimal
@@ -147,4 +149,33 @@ internal fun stepStrengthReps(current: Int, deltaSteps: Int, isTimed: Boolean): 
     val step = if (isTimed) 5 else 1
     val min = if (isTimed) 5 else 1
     return (current + deltaSteps * step).coerceIn(min, MAX_STRENGTH_REPS)
+}
+
+internal fun selectedPlanIdsForEntry(
+    entry: DraftEntry,
+    plans: List<WorkoutPlanWithItems>,
+): Set<Long> = buildSet {
+    entry.strengthItems.forEach { item ->
+        item.sourcePlanId?.let(::add)
+    }
+    val legacyPlanId = entry.planId
+    if (legacyPlanId != null && entry.strengthItems.any { it.sourcePlanId == null }) {
+        val planExerciseIds = plans
+            .firstOrNull { it.plan.id == legacyPlanId }
+            ?.items
+            ?.mapTo(HashSet()) { it.exerciseId }
+            .orEmpty()
+        if (entry.strengthItems.any { it.sourcePlanId == null && it.exerciseId in planExerciseIds }) {
+            add(legacyPlanId)
+        }
+    }
+}
+
+internal fun resolveOverwritePlanTarget(
+    entry: DraftEntry,
+    plans: List<WorkoutPlanWithItems>,
+): WorkoutPlanWithItems? {
+    if (entry.strengthItems.isEmpty()) return null
+    val singlePlanId = selectedPlanIdsForEntry(entry, plans).singleOrNull() ?: return null
+    return plans.firstOrNull { it.plan.id == singlePlanId }
 }
