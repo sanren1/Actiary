@@ -94,12 +94,15 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.actiary.R
 import com.actiary.data.StrengthRepository
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.StrengthExerciseEntity
 import com.actiary.data.db.WorkoutPlanWithItems
 import com.actiary.domain.BodyRegion
 import com.actiary.domain.musclesFromMask
 import com.actiary.glass.GlassSegmentedPicker
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseDisplayName
 import com.actiary.ui.common.formatStrengthItemMetrics
@@ -385,9 +388,21 @@ private fun WorkoutPlanRow(
     val beginDrag by rememberUpdatedState(onDragStart)
     val moveDrag by rememberUpdatedState(onDrag)
     val endDrag by rememberUpdatedState(onDragEnd)
-    val shape = RoundedCornerShape(12.dp)
-    val deleteBg = if (t.dark) Color(0xFF4D1F1D) else Color(0xFFFDE8E6)
-    val deleteTint = if (t.dark) Color(0xFFFFB4AB) else Color(0xFFB3261E)
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val shape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+    val rowBg = if (isP5) {
+        if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor()
+    } else {
+        n.surface.asColor()
+    }
+    val rowBorder = if (isP5) {
+        Modifier.border(2.dp, if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor(), shape)
+    } else {
+        Modifier
+    }
+    val deleteBg = if (isP5) Color(0xFFD91E26) else if (t.dark) Color(0xFF4D1F1D) else Color(0xFFFDE8E6)
+    val deleteTint = if (isP5) Color.White else if (t.dark) Color(0xFFFFB4AB) else Color(0xFFB3261E)
     val revealProgress = if (reduced) {
         if (reveal > 0f) 1f else 0f
     } else {
@@ -418,12 +433,16 @@ private fun WorkoutPlanRow(
         ) {
             PlanRowAction(
                 Icons.Outlined.Edit, editLabel,
-                t.accent.accentSubtle.asColor(), t.accent.accentStroke.asColor(), t.accent.accentAction.asColor(),
+                if (isP5) p5.brandFill.asColor() else t.accent.accentSubtle.asColor(),
+                if (isP5) (if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()) else t.accent.accentStroke.asColor(),
+                if (isP5) p5.onBrandFill.asColor() else t.accent.accentAction.asColor(),
                 revealProgress, open, onEdit,
             )
             PlanRowAction(
                 Icons.Outlined.DeleteOutline, deleteLabel,
-                deleteBg, deleteTint.copy(alpha = 0.45f), deleteTint,
+                deleteBg,
+                if (isP5) (if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()) else deleteTint.copy(alpha = 0.45f),
+                deleteTint,
                 revealProgress, open, onDelete,
             )
         }
@@ -433,7 +452,8 @@ private fun WorkoutPlanRow(
                 .fillMaxWidth()
                 .heightIn(min = 60.dp)
                 .padding(end = with(density) { reveal.toDp() })
-                .background(n.surface.asColor(), shape)
+                .background(rowBg, shape)
+                .then(rowBorder)
                 .clickable(enabled = canGesture, role = Role.Button, onClick = onEdit)
                 .draggable(
                     rememberDraggableState { delta -> swipeDistance = (swipeDistance + delta * direction).coerceIn(0f, width) },
@@ -456,7 +476,7 @@ private fun WorkoutPlanRow(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 BasicText(
                     label,
-                    style = TextStyle(n.textPrimary.asColor(), 16.sp, FontWeight.Medium),
+                    style = TextStyle(n.textPrimary.asColor(), 16.sp, if (isP5) FontWeight.Black else FontWeight.Medium),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -508,7 +528,8 @@ private fun PlanRowAction(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val actionShape = RoundedCornerShape(12.dp)
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val actionShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
     val scale = 0.72f + 0.28f * revealProgress
     Box(
         Modifier
@@ -520,7 +541,7 @@ private fun PlanRowAction(
             }
             .clip(actionShape)
             .background(background, actionShape)
-            .border(1.dp, border, actionShape)
+            .border(if (isP5) 2.dp else 1.dp, border, actionShape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -563,13 +584,27 @@ private fun ExercisesTabContent(
 
     SettingsRow(stringResource(R.string.strength_custom_exercise_new), Icons.Outlined.Add, onClick = onRequestNewExercise)
 
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
     val searchPlaceholder = stringResource(R.string.strength_picker_search)
+    val searchShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+    val searchBg = if (isP5) {
+        if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor()
+    } else {
+        n.surfaceMuted.asColor()
+    }
+    val searchBorder = if (isP5) {
+        Modifier.border(2.dp, if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor(), searchShape)
+    } else {
+        Modifier
+    }
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 44.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(n.surfaceMuted.asColor())
+            .clip(searchShape)
+            .background(searchBg, searchShape)
+            .then(searchBorder)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -597,7 +632,7 @@ private fun ExercisesTabContent(
             Box(
                 Modifier
                     .size(28.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(14.dp))
                     .clickable(role = Role.Button) { query = "" },
                 contentAlignment = Alignment.Center,
             ) {
@@ -644,7 +679,7 @@ private fun ExercisesTabContent(
         Row(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(10.dp))
                 .clickable(role = Role.Button) { hiddenExpanded = !hiddenExpanded }
                 .padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -653,7 +688,7 @@ private fun ExercisesTabContent(
             BasicText(
                 stringResource(R.string.strength_exercise_hidden_section),
                 Modifier.semantics { heading() },
-                style = TextStyle(n.textSecondary.asColor(), 14.sp, FontWeight.SemiBold),
+                style = TextStyle(n.textSecondary.asColor(), 14.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
             )
             Icon(
                 imageVector = if (hiddenExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
@@ -665,19 +700,35 @@ private fun ExercisesTabContent(
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 hiddenBuiltins.forEach { hidden ->
                     key("hidden_${hidden.id}") {
+                        val hiddenShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+                        val hiddenBg = if (isP5) {
+                            if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor()
+                        } else {
+                            n.surface.asColor().copy(alpha = 0.72f)
+                        }
+                        val hiddenBorder = if (isP5) {
+                            Modifier.border(
+                                1.5.dp,
+                                if (t.dark) p5.strokeLight.asColor().copy(alpha = 0.45f) else p5.strokeDark.asColor(),
+                                hiddenShape,
+                            )
+                        } else {
+                            Modifier
+                        }
                         Row(
                             Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 52.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(n.surface.asColor().copy(alpha = 0.72f))
+                                .clip(hiddenShape)
+                                .background(hiddenBg, hiddenShape)
+                                .then(hiddenBorder)
                                 .padding(start = 12.dp, end = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             BasicText(
                                 exerciseDisplayName(hidden, isChinese),
                                 Modifier.weight(1f).padding(end = 8.dp),
-                                style = TextStyle(n.textSecondary.asColor(), 15.sp),
+                                style = TextStyle(n.textSecondary.asColor(), 15.sp, if (isP5) FontWeight.Bold else FontWeight.Normal),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -691,6 +742,7 @@ private fun ExercisesTabContent(
                                     Modifier.padding(start = 6.dp),
                                     maxLines = 1,
                                     softWrap = false,
+                                    fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
                                 )
                             }
                         }
@@ -710,7 +762,10 @@ private fun ExerciseLibraryRow(
     onDeleteCustom: () -> Unit,
     onHideBuiltin: () -> Unit,
 ) {
-    val n = LocalThemeTokens.current.neutrals
+    val t = LocalThemeTokens.current
+    val n = t.neutrals
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
     val name = exerciseDisplayName(exercise, isChinese)
     val muscles = musclesFromMask(exercise.primaryMuscleMask)
         .map { stringResource(it.labelRes()) }
@@ -723,13 +778,26 @@ private fun ExerciseLibraryRow(
     )
     val subtitle = if (muscles.isNotEmpty()) "$muscles · $defaultSpec" else defaultSpec
     val isCustom = exercise.builtinKey == null
+    val rowShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+    val rowBg = if (isP5) {
+        if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor()
+    } else {
+        n.surface.asColor()
+    }
+    val rowBorder = if (isP5) {
+        Modifier.border(2.dp, if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor(), rowShape)
+    } else {
+        Modifier
+    }
+    val actionShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(10.dp)
 
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(n.surface.asColor())
+            .clip(rowShape)
+            .background(rowBg, rowShape)
+            .then(rowBorder)
             .clickable(role = Role.Button, onClick = if (isCustom) onEdit else onHistory)
             .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -738,7 +806,7 @@ private fun ExerciseLibraryRow(
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             BasicText(
                 name,
-                style = TextStyle(n.textPrimary.asColor(), 15.sp, FontWeight.Medium),
+                style = TextStyle(n.textPrimary.asColor(), 15.sp, if (isP5) FontWeight.Bold else FontWeight.Medium),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -753,7 +821,7 @@ private fun ExerciseLibraryRow(
         Box(
             Modifier
                 .size(38.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(actionShape)
                 .clickable(role = Role.Button, onClick = onHistory),
             contentAlignment = Alignment.Center,
         ) {
@@ -769,7 +837,7 @@ private fun ExerciseLibraryRow(
             Box(
                 Modifier
                     .size(38.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(actionShape)
                     .clickable(role = Role.Button, onClick = onEdit),
                 contentAlignment = Alignment.Center,
             ) {
@@ -783,7 +851,7 @@ private fun ExerciseLibraryRow(
             Box(
                 Modifier
                     .size(38.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(actionShape)
                     .clickable(role = Role.Button, onClick = onDeleteCustom),
                 contentAlignment = Alignment.Center,
             ) {
@@ -800,7 +868,11 @@ private fun ExerciseLibraryRow(
                 colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
             ) {
                 Icon(Icons.Outlined.VisibilityOff, null, Modifier.size(16.dp))
-                Text(stringResource(R.string.strength_exercise_hide), Modifier.padding(start = 4.dp))
+                Text(
+                    stringResource(R.string.strength_exercise_hide),
+                    Modifier.padding(start = 4.dp),
+                    fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
+                )
             }
         }
     }

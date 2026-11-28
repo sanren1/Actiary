@@ -14,19 +14,27 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.P5RansomTitle
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 
 @Composable
 internal fun RootTitle(title: String, modifier: Modifier = Modifier) {
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
     Box(
         Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp).then(modifier),
         contentAlignment = Alignment.CenterStart,
     ) {
-        BasicText(
-            title,
-            Modifier.semantics { heading() },
-            style = TextStyle(LocalThemeTokens.current.neutrals.textPrimary.asColor(), 28.sp, FontWeight.Bold),
-        )
+        if (isP5) {
+            P5RansomTitle(title, Modifier.semantics { heading() })
+        } else {
+            BasicText(
+                title,
+                Modifier.semantics { heading() },
+                style = TextStyle(LocalThemeTokens.current.neutrals.textPrimary.asColor(), 28.sp, FontWeight.Bold),
+            )
+        }
     }
 }

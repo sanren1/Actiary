@@ -31,12 +31,17 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.actiary.R
+import com.actiary.data.appearance.UiStyle
 import com.actiary.domain.MuscleActivation
 import com.actiary.domain.MuscleGroup
+import com.actiary.p5.P5Tokens
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.ThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.ui.motion.Motion
@@ -385,6 +390,10 @@ private fun computeFigureRect(canvasWidth: Float, canvasHeight: Float): FigureRe
     return FigureRect(left = left, top = top, width = figureWidth, height = figureHeight)
 }
 
+private val P5MuscleUnworked = Color(0xFF25272C)
+private val P5MuscleLight = Color(0xFF7A141A)
+private val P5BodySilhouetteFill = Color(0xFF1A1B1F)
+
 @Composable
 fun AnatomyBodyMap(
     style: BodyMapStyle,
@@ -393,8 +402,9 @@ fun AnatomyBodyMap(
     onMuscleClick: ((MuscleGroup) -> Unit)? = null,
 ) {
     val tokens = LocalThemeTokens.current
+    val p5 = if (LocalUiStyle.current == UiStyle.PERSONA_5) LocalP5Tokens.current else null
     val reduced = rememberMotionReduced()
-    val musclePaints = rememberAnimatedMusclePaints(style = style, tokens = tokens, reduced = reduced)
+    val musclePaints = rememberAnimatedMusclePaints(style = style, tokens = tokens, p5 = p5, reduced = reduced)
     val selectedMuscle = (style as? BodyMapStyle.Heatmap)?.selected
     BoxWithConstraints(modifier = modifier) {
         val hasBoundedHeight = constraints.hasBoundedHeight
@@ -409,6 +419,7 @@ fun AnatomyBodyMap(
                 musclePaints = musclePaints,
                 selectedMuscle = selectedMuscle,
                 tokens = tokens,
+                p5 = p5,
                 hasBoundedHeight = hasBoundedHeight,
                 onMuscleClick = onMuscleClick,
                 modifier = if (hasBoundedHeight) Modifier.weight(1f).fillMaxHeight() else Modifier.weight(1f),
@@ -419,6 +430,7 @@ fun AnatomyBodyMap(
                 musclePaints = musclePaints,
                 selectedMuscle = selectedMuscle,
                 tokens = tokens,
+                p5 = p5,
                 hasBoundedHeight = hasBoundedHeight,
                 onMuscleClick = onMuscleClick,
                 modifier = if (hasBoundedHeight) Modifier.weight(1f).fillMaxHeight() else Modifier.weight(1f),
@@ -431,11 +443,12 @@ fun AnatomyBodyMap(
 private fun rememberAnimatedMusclePaints(
     style: BodyMapStyle,
     tokens: ThemeTokens,
+    p5: P5Tokens?,
     reduced: Boolean,
 ): Map<MuscleGroup, MusclePaint> {
     val spec = if (reduced) snap() else tween<Color>(Motion.FADE_IN_MS)
     return MuscleGroup.entries.associateWith { muscle ->
-        val target = resolveMusclePaint(muscle, style, tokens)
+        val target = resolveMusclePaint(muscle, style, tokens, p5)
         val fill by animateColorAsState(
             targetValue = target.fill,
             animationSpec = spec,
@@ -457,6 +470,7 @@ private fun AnatomyFigureColumn(
     musclePaints: Map<MuscleGroup, MusclePaint>,
     selectedMuscle: MuscleGroup?,
     tokens: ThemeTokens,
+    p5: P5Tokens?,
     hasBoundedHeight: Boolean,
     onMuscleClick: ((MuscleGroup) -> Unit)?,
     modifier: Modifier = Modifier,
@@ -499,6 +513,7 @@ private fun AnatomyFigureColumn(
                 musclePaints = musclePaints,
                 selectedMuscle = selectedMuscle,
                 tokens = tokens,
+                p5 = p5,
                 rect = rect,
             )
         }
@@ -508,6 +523,7 @@ private fun AnatomyFigureColumn(
             Text(
                 text = label,
                 fontSize = 11.sp,
+                fontWeight = if (p5 != null) FontWeight.Bold else FontWeight.Normal,
                 color = tokens.neutrals.textSecondary.asColor(),
             )
         }
@@ -525,7 +541,62 @@ private fun resolveMusclePaint(
     muscle: MuscleGroup,
     style: BodyMapStyle,
     tokens: ThemeTokens,
+    p5: P5Tokens?,
 ): MusclePaint {
+    if (p5 != null) {
+        val isLight = !tokens.dark
+        val strokeLight = p5.strokeLight.asColor()
+        val strokeDark = p5.strokeDark.asColor()
+        val baseOutline = if (isLight) strokeDark else strokeLight
+        val unworkedFill = if (isLight) Color(0xFFD8D6CE) else P5MuscleUnworked
+        val brand = p5.brandFill.asColor()
+        val secondaryFill = if (isLight) brand.copy(alpha = 0.42f) else P5MuscleLight
+        val highlight = p5.highlightBadge.asColor()
+        return when (style) {
+            is BodyMapStyle.Highlight -> {
+                when (style.activations[muscle] ?: MuscleActivation.NONE) {
+                    MuscleActivation.PRIMARY -> MusclePaint(
+                        fill = brand,
+                        stroke = baseOutline,
+                        strokeWidthDp = 1.4f,
+                        hasSheen = false,
+                    )
+                    MuscleActivation.SECONDARY -> MusclePaint(
+                        fill = secondaryFill,
+                        stroke = baseOutline.copy(alpha = if (isLight) 0.85f else 0.78f),
+                        strokeWidthDp = 1.1f,
+                        hasSheen = false,
+                    )
+                    MuscleActivation.NONE -> MusclePaint(
+                        fill = unworkedFill,
+                        stroke = baseOutline.copy(alpha = if (isLight) 0.70f else 0.42f),
+                        strokeWidthDp = 0.85f,
+                        hasSheen = false,
+                    )
+                }
+            }
+            is BodyMapStyle.Heatmap -> {
+                val level = (style.levels[muscle] ?: 0).coerceIn(0, 3)
+                val isSelected = style.selected == muscle
+                val fill = when (level) {
+                    1 -> secondaryFill
+                    2 -> brand
+                    3 -> highlight
+                    else -> unworkedFill
+                }
+                val baseStroke = when (level) {
+                    1 -> baseOutline.copy(alpha = if (isLight) 0.85f else 0.75f)
+                    2 -> baseOutline
+                    3 -> strokeDark
+                    else -> baseOutline.copy(alpha = if (isLight) 0.70f else 0.42f)
+                }
+                val stroke = if (isSelected) baseOutline else baseStroke
+                val strokeWidth = if (isSelected) 2.2f else if (level > 0) 1.35f else 0.9f
+                MusclePaint(fill = fill, stroke = stroke, strokeWidthDp = strokeWidth, hasSheen = false)
+            }
+        }
+    }
+
     val accent = tokens.accent.accentAction.asColor()
     val neutralText = tokens.neutrals.textSecondary.asColor()
     val neutralFill = neutralText.copy(alpha = if (tokens.dark) 0.12f else 0.085f)
@@ -582,18 +653,40 @@ private fun DrawScope.drawAnatomicalFigure(
     musclePaints: Map<MuscleGroup, MusclePaint>,
     selectedMuscle: MuscleGroup?,
     tokens: ThemeTokens,
+    p5: P5Tokens?,
     rect: FigureRect,
 ) {
     val neutralText = tokens.neutrals.textSecondary.asColor()
-    val bodyFill = neutralText.copy(alpha = if (tokens.dark) 0.09f else 0.065f)
-    val bodyOutline = neutralText.copy(alpha = if (tokens.dark) 0.44f else 0.38f)
-    val detailLine = neutralText.copy(alpha = if (tokens.dark) 0.24f else 0.20f)
+    val isLightP5 = p5 != null && !tokens.dark
+    val bodyFill = if (p5 != null) {
+        if (isLightP5) Color(0xFFEAE8E1) else P5BodySilhouetteFill
+    } else {
+        neutralText.copy(alpha = if (tokens.dark) 0.09f else 0.065f)
+    }
+    val bodyOutline = if (p5 != null) {
+        if (isLightP5) p5.strokeDark.asColor() else p5.strokeLight.asColor().copy(alpha = 0.85f)
+    } else {
+        neutralText.copy(alpha = if (tokens.dark) 0.44f else 0.38f)
+    }
+    val detailLine = if (p5 != null) {
+        if (isLightP5) p5.strokeDark.asColor().copy(alpha = 0.38f) else p5.strokeLight.asColor().copy(alpha = 0.38f)
+    } else {
+        neutralText.copy(alpha = if (tokens.dark) 0.24f else 0.20f)
+    }
     val scaleFactor = (rect.height / 180.dp.toPx()).coerceIn(0.75f, 1.35f)
-    val outlineStroke = Stroke(
-        width = 1.15.dp.toPx() * scaleFactor,
-        cap = StrokeCap.Round,
-        join = StrokeJoin.Round,
-    )
+    val outlineStroke = if (p5 != null) {
+        Stroke(
+            width = 1.4.dp.toPx() * scaleFactor,
+            cap = StrokeCap.Square,
+            join = StrokeJoin.Miter,
+        )
+    } else {
+        Stroke(
+            width = 1.15.dp.toPx() * scaleFactor,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round,
+        )
+    }
 
     // 1. Head & full-body anatomical silhouette
     val headPath = buildHeadPath(rect)
@@ -607,7 +700,7 @@ private fun DrawScope.drawAnatomicalFigure(
     for (polygon in polygons) {
         if (polygon.muscle == selectedMuscle) continue
         musclePaints[polygon.muscle]?.let { paint ->
-            drawMusclePolygon(polygon, paint, tokens, rect, scaleFactor)
+            drawMusclePolygon(polygon, paint, tokens, p5 != null, rect, scaleFactor)
         }
     }
     // Draw selected muscle last so its highlight stroke sits cleanly on top
@@ -616,7 +709,7 @@ private fun DrawScope.drawAnatomicalFigure(
         if (paint != null) {
             for (polygon in polygons) {
                 if (polygon.muscle == selectedMuscle) {
-                    drawMusclePolygon(polygon, paint, tokens, rect, scaleFactor)
+                    drawMusclePolygon(polygon, paint, tokens, p5 != null, rect, scaleFactor)
                 }
             }
         }
@@ -630,6 +723,7 @@ private fun DrawScope.drawMusclePolygon(
     polygon: MusclePolygon,
     paint: MusclePaint,
     tokens: ThemeTokens,
+    sharpStroke: Boolean,
     rect: FigureRect,
     scaleFactor: Float,
 ) {
@@ -665,8 +759,8 @@ private fun DrawScope.drawMusclePolygon(
         color = paint.stroke,
         style = Stroke(
             width = paint.strokeWidthDp.dp.toPx() * scaleFactor,
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round,
+            cap = if (sharpStroke) StrokeCap.Square else StrokeCap.Round,
+            join = if (sharpStroke) StrokeJoin.Miter else StrokeJoin.Round,
         ),
     )
 }

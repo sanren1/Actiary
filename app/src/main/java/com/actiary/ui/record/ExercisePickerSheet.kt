@@ -44,7 +44,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -56,9 +58,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.actiary.R
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.StrengthExerciseEntity
 import com.actiary.domain.BodyRegion
 import com.actiary.domain.MuscleGroup
@@ -69,7 +73,11 @@ import com.actiary.glass.GlassOverlayPanel
 import com.actiary.glass.GlassSheet
 import com.actiary.glass.overlayPresent
 import com.actiary.glass.rememberOverlayVisibility
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Surface
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseDisplayName
 import com.actiary.ui.common.isChineseLocale
@@ -98,6 +106,10 @@ fun ExercisePickerSheet(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val p5Shadow = if (t.dark) p5.shadowColor.asColor() else p5.strokeDark.asColor()
     val focus = LocalFocusManager.current
     val isChinese = isChineseLocale()
     val title = stringResource(R.string.strength_picker_title)
@@ -159,7 +171,7 @@ fun ExercisePickerSheet(
                 BasicText(
                     title,
                     Modifier.weight(1f).semantics { heading() },
-                    style = TextStyle(n.textPrimary.asColor(), 20.sp, FontWeight.SemiBold),
+                    style = TextStyle(n.textPrimary.asColor(), 20.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
                 )
                 GlassIconButton(
                     icon = Icons.Outlined.Close,
@@ -171,13 +183,14 @@ fun ExercisePickerSheet(
 
             // Search input (solid surfaceMuted)
             val searchPlaceholder = stringResource(R.string.strength_picker_search)
-            val fieldShape = RoundedCornerShape(12.dp)
+            val fieldShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
             Row(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 44.dp)
                     .clip(fieldShape)
                     .background(n.surfaceMuted.asColor())
+                    .then(if (isP5) Modifier.border(2.dp, p5Stroke, fieldShape) else Modifier)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -205,7 +218,7 @@ fun ExercisePickerSheet(
                     Box(
                         Modifier
                             .size(28.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(14.dp))
                             .clickable(role = Role.Button) { query = "" },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -245,9 +258,23 @@ fun ExercisePickerSheet(
                 val clearLabel = stringResource(R.string.strength_picker_clear_muscle)
                 Row(
                     Modifier
-                        .clip(chipShape)
-                        .background(a.accentSubtle.asColor())
-                        .border(1.dp, a.accentStroke.asColor(), chipShape)
+                        .then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = p5.brandFill.asColor(),
+                                    strokeColor = p5Stroke,
+                                    shadowColor = p5.strokeDark.asColor(),
+                                    strokeWidth = 1.5.dp,
+                                    shadowOffset = DpOffset(2.dp, 2.dp),
+                                )
+                            } else {
+                                Modifier
+                                    .clip(chipShape)
+                                    .background(a.accentSubtle.asColor())
+                                    .border(1.dp, a.accentStroke.asColor(), chipShape)
+                            },
+                        )
                         .clickable(role = Role.Button, onClickLabel = clearLabel) { activeMuscleFilter = null }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -255,13 +282,17 @@ fun ExercisePickerSheet(
                 ) {
                     BasicText(
                         stringResource(muscle.labelRes()),
-                        style = TextStyle(a.accentAction.asColor(), 13.sp, FontWeight.Medium),
+                        style = TextStyle(
+                            color = if (isP5) p5.onBrandFill.asColor() else a.accentAction.asColor(),
+                            fontSize = 13.sp,
+                            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
+                        ),
                     )
                     Icon(
                         Icons.Outlined.Close,
                         clearLabel,
                         Modifier.size(16.dp),
-                        tint = a.accentAction.asColor(),
+                        tint = if (isP5) p5.onBrandFill.asColor() else a.accentAction.asColor(),
                     )
                 }
             }
@@ -279,15 +310,40 @@ fun ExercisePickerSheet(
                     val isSelected = exercise.id in selectedIds
                     val primaryMuscles = musclesFromMask(exercise.primaryMuscleMask)
                     val muscleText = primaryMuscles.map { stringResource(it.labelRes()) }.joinToString(" · ")
-                    val rowShape = RoundedCornerShape(12.dp)
+                    val rowShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(rowShape)
-                            .background(if (isSelected) a.accentSubtle.asColor() else n.surface.asColor())
                             .then(
-                                if (isSelected) Modifier.border(1.dp, a.accentStroke.asColor(), rowShape)
-                                else Modifier
+                                if (isP5) {
+                                    if (isSelected) {
+                                        Modifier.p5Surface(
+                                            variant = P5ShapeVariant.CARD,
+                                            fillColor = p5.brandFill.asColor(),
+                                            strokeColor = p5Stroke,
+                                            shadowColor = p5.strokeDark.asColor(),
+                                            strokeWidth = 2.dp,
+                                            shadowOffset = DpOffset(2.dp, 2.dp),
+                                        )
+                                    } else {
+                                        Modifier
+                                            .clip(rowShape)
+                                            .background(n.surface.asColor())
+                                            .border(
+                                                1.5.dp,
+                                                p5Stroke.copy(alpha = if (t.dark) 0.55f else 0.85f),
+                                                rowShape,
+                                            )
+                                    }
+                                } else {
+                                    Modifier
+                                        .clip(rowShape)
+                                        .background(if (isSelected) a.accentSubtle.asColor() else n.surface.asColor())
+                                        .then(
+                                            if (isSelected) Modifier.border(1.dp, a.accentStroke.asColor(), rowShape)
+                                            else Modifier
+                                        )
+                                },
                             )
                             .clickable(role = Role.Checkbox) {
                                 selectedIds = if (isSelected) selectedIds - exercise.id else selectedIds + exercise.id
@@ -299,14 +355,25 @@ fun ExercisePickerSheet(
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             BasicText(
                                 exerciseDisplayName(exercise, isChinese),
-                                style = TextStyle(n.textPrimary.asColor(), 15.sp, FontWeight.Medium),
+                                style = TextStyle(
+                                    color = if (isP5 && isSelected) p5.onBrandFill.asColor() else n.textPrimary.asColor(),
+                                    fontSize = 15.sp,
+                                    fontWeight = if (isP5 && isSelected) FontWeight.Bold else FontWeight.Medium,
+                                ),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                             if (muscleText.isNotEmpty()) {
                                 BasicText(
                                     muscleText,
-                                    style = TextStyle(n.textSecondary.asColor(), 12.sp),
+                                    style = TextStyle(
+                                        color = if (isP5 && isSelected) {
+                                            p5.onBrandFill.asColor().copy(alpha = 0.85f)
+                                        } else {
+                                            n.textSecondary.asColor()
+                                        },
+                                        fontSize = 12.sp,
+                                    ),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -316,7 +383,11 @@ fun ExercisePickerSheet(
                             imageVector = if (isSelected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
                             contentDescription = null,
                             modifier = Modifier.size(22.dp),
-                            tint = if (isSelected) a.accentAction.asColor() else n.textSecondary.asColor(),
+                            tint = when {
+                                isP5 && isSelected -> p5.onBrandFill.asColor()
+                                isSelected -> a.accentAction.asColor()
+                                else -> n.textSecondary.asColor()
+                            },
                         )
                     }
                 }
@@ -332,8 +403,22 @@ fun ExercisePickerSheet(
                 Row(
                     Modifier
                         .heightIn(min = 48.dp)
-                        .clip(btnShape)
-                        .background(n.surfaceMuted.asColor())
+                        .then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = n.surface.asColor(),
+                                    strokeColor = p5Stroke,
+                                    shadowColor = p5Shadow,
+                                    strokeWidth = 2.dp,
+                                    shadowOffset = DpOffset(2.dp, 2.dp),
+                                )
+                            } else {
+                                Modifier
+                                    .clip(btnShape)
+                                    .background(n.surfaceMuted.asColor())
+                            },
+                        )
                         .clickable(role = Role.Button) {
                             focus.clearFocus()
                             showCustomDialog = true
@@ -345,7 +430,11 @@ fun ExercisePickerSheet(
                     Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = n.textPrimary.asColor())
                     BasicText(
                         stringResource(R.string.strength_custom_exercise_new),
-                        style = TextStyle(n.textPrimary.asColor(), 14.sp, FontWeight.Medium),
+                        style = TextStyle(
+                            color = n.textPrimary.asColor(),
+                            fontSize = 14.sp,
+                            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
+                        ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -356,8 +445,22 @@ fun ExercisePickerSheet(
                     Modifier
                         .weight(1f)
                         .heightIn(min = 48.dp)
-                        .clip(btnShape)
-                        .background(if (canConfirm) a.accentAction.asColor() else n.surfaceMuted.asColor())
+                        .then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.PILL,
+                                    fillColor = if (canConfirm) p5.brandFill.asColor() else n.surfaceMuted.asColor(),
+                                    strokeColor = if (canConfirm) p5Stroke else p5Stroke.copy(alpha = 0.45f),
+                                    shadowColor = if (canConfirm) p5.strokeDark.asColor() else Color.Transparent,
+                                    strokeWidth = if (canConfirm) 2.dp else 1.5.dp,
+                                    shadowOffset = if (canConfirm) DpOffset(3.dp, 3.dp) else DpOffset.Zero,
+                                )
+                            } else {
+                                Modifier
+                                    .clip(btnShape)
+                                    .background(if (canConfirm) a.accentAction.asColor() else n.surfaceMuted.asColor())
+                            },
+                        )
                         .clickable(enabled = canConfirm, role = Role.Button) {
                             focus.clearFocus()
                             val chosen = exercises.filter { it.id in selectedIds }
@@ -370,9 +473,13 @@ fun ExercisePickerSheet(
                     BasicText(
                         stringResource(R.string.strength_picker_confirm, selectedIds.size),
                         style = TextStyle(
-                            color = if (canConfirm) a.onAccentAction.asColor() else n.textSecondary.asColor(),
+                            color = when {
+                                isP5 && canConfirm -> p5.onBrandFill.asColor()
+                                canConfirm -> a.onAccentAction.asColor()
+                                else -> n.textSecondary.asColor()
+                            },
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = if (isP5 && canConfirm) FontWeight.Black else FontWeight.Medium,
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -417,6 +524,9 @@ internal fun CustomExerciseDialog(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val scope = rememberCoroutineScope()
     val isChinese = isChineseLocale()
     val focus = LocalFocusManager.current
@@ -481,14 +591,14 @@ internal fun CustomExerciseDialog(
             BasicText(
                 title,
                 Modifier.semantics { heading() },
-                style = TextStyle(n.textPrimary.asColor(), 18.sp, FontWeight.SemiBold),
+                style = TextStyle(n.textPrimary.asColor(), 18.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
             )
 
             // Exercise name
             val nameLabel = stringResource(R.string.strength_custom_exercise_name)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 BasicText(nameLabel, style = TextStyle(n.textSecondary.asColor(), 13.sp))
-                val fieldShape = RoundedCornerShape(12.dp)
+                val fieldShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
                 BasicTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -501,6 +611,7 @@ internal fun CustomExerciseDialog(
                         .heightIn(min = 44.dp)
                         .clip(fieldShape)
                         .background(n.surfaceMuted.asColor())
+                        .then(if (isP5) Modifier.border(2.dp, p5Stroke, fieldShape) else Modifier)
                         .semantics { contentDescription = nameLabel }
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                 )
@@ -633,7 +744,7 @@ internal fun CustomExerciseDialog(
             // Action row
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(
@@ -647,11 +758,10 @@ internal fun CustomExerciseDialog(
                     modifier = Modifier.heightIn(min = 48.dp),
                     colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
                 ) {
-                    Text(stringResource(R.string.record_cancel))
+                    Text(stringResource(R.string.record_cancel), fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal)
                 }
-                TextButton(
-                    onClick = {
-                        if (saving || !canSave) return@TextButton
+                val performSave = {
+                    if (!saving && canSave) {
                         focus.clearFocus()
                         saving = true
                         val sets = (setsText.toIntOrNull() ?: 4).coerceIn(1, 99)
@@ -671,12 +781,40 @@ internal fun CustomExerciseDialog(
                                 saving = false
                             }
                         }
-                    },
-                    enabled = canSave,
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    colors = ButtonDefaults.textButtonColors(contentColor = a.accentAction.asColor()),
-                ) {
-                    Text(stringResource(R.string.record_save))
+                    }
+                }
+                if (isP5) {
+                    Box(
+                        Modifier
+                            .heightIn(min = 48.dp)
+                            .alpha(if (canSave) 1f else 0.45f)
+                            .p5Surface(
+                                variant = P5ShapeVariant.BADGE,
+                                fillColor = p5.brandFill.asColor(),
+                                strokeColor = p5Stroke,
+                                shadowColor = p5.strokeDark.asColor(),
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = DpOffset(2.dp, 2.dp),
+                            )
+                            .clickable(enabled = canSave, role = Role.Button, onClick = performSave)
+                            .padding(horizontal = 18.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            stringResource(R.string.record_save),
+                            color = p5.onBrandFill.asColor(),
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
+                } else {
+                    TextButton(
+                        onClick = performSave,
+                        enabled = canSave,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = a.accentAction.asColor()),
+                    ) {
+                        Text(stringResource(R.string.record_save))
+                    }
                 }
             }
         }
@@ -692,14 +830,31 @@ internal fun PickerFilterChip(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val shape = RoundedCornerShape(50)
     Box(
         Modifier
-            .clip(shape)
-            .background(if (selected) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
             .then(
-                if (selected) Modifier.border(1.dp, a.accentStroke.asColor(), shape)
-                else Modifier
+                if (isP5) {
+                    Modifier.p5Surface(
+                        variant = P5ShapeVariant.BADGE,
+                        fillColor = if (selected) p5.brandFill.asColor() else n.surface.asColor(),
+                        strokeColor = if (selected) p5Stroke else p5Stroke.copy(alpha = if (t.dark) 0.55f else 0.85f),
+                        shadowColor = if (selected) p5.strokeDark.asColor() else Color.Transparent,
+                        strokeWidth = if (selected) 2.dp else 1.5.dp,
+                        shadowOffset = if (selected) DpOffset(2.dp, 2.dp) else DpOffset.Zero,
+                    )
+                } else {
+                    Modifier
+                        .clip(shape)
+                        .background(if (selected) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
+                        .then(
+                            if (selected) Modifier.border(1.dp, a.accentStroke.asColor(), shape)
+                            else Modifier
+                        )
+                },
             )
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp),
@@ -708,9 +863,19 @@ internal fun PickerFilterChip(
         BasicText(
             label,
             style = TextStyle(
-                color = if (selected) a.accentAction.asColor() else n.textSecondary.asColor(),
+                color = when {
+                    isP5 && selected -> p5.onBrandFill.asColor()
+                    isP5 -> n.textPrimary.asColor()
+                    selected -> a.accentAction.asColor()
+                    else -> n.textSecondary.asColor()
+                },
                 fontSize = 13.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = when {
+                    isP5 && selected -> FontWeight.Bold
+                    isP5 -> FontWeight.Medium
+                    selected -> FontWeight.SemiBold
+                    else -> FontWeight.Normal
+                },
             ),
             maxLines = 1,
         )
@@ -727,12 +892,26 @@ private fun CompactNumberField(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
-    val fieldShape = RoundedCornerShape(10.dp)
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val fieldShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(10.dp)
     Row(
         modifier
             .heightIn(min = 42.dp)
             .clip(fieldShape)
             .background(n.surfaceMuted.asColor())
+            .then(
+                if (isP5) {
+                    Modifier.border(
+                        1.5.dp,
+                        p5Stroke.copy(alpha = if (t.dark) 0.6f else 0.85f),
+                        fieldShape,
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),

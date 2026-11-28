@@ -1,11 +1,72 @@
 package com.actiary.widget
 
+import com.actiary.data.appearance.AppearanceSettings
+import com.actiary.data.appearance.P5Palette
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.DayWithDetails
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.domain.DayState
 import com.actiary.domain.toDayState
+import com.actiary.p5.resolveP5Tokens
+import com.actiary.theme.ThemeTokens
+import com.actiary.theme.mix
 import java.time.LocalDate
+
+internal data class WidgetVisualStyle(
+    val isPersona5: Boolean,
+    val backgroundColor: Int,
+    val accentFill: Int,
+    val onAccentFill: Int,
+    val textPrimary: Int,
+    val textSecondary: Int,
+    val strokeColor: Int,
+    val highlightColor: Int,
+    val isLightSurface: Boolean = false,
+)
+
+internal fun resolveWidgetVisualStyle(
+    settings: AppearanceSettings,
+    tokens: ThemeTokens,
+): WidgetVisualStyle {
+    if (settings.uiStyle != UiStyle.PERSONA_5) {
+        return WidgetVisualStyle(
+            isPersona5 = false,
+            backgroundColor = tokens.neutrals.surface,
+            accentFill = tokens.accent.accentAction,
+            onAccentFill = tokens.accent.onAccentAction,
+            textPrimary = tokens.neutrals.textPrimary,
+            textSecondary = tokens.neutrals.textSecondary,
+            strokeColor = tokens.neutrals.divider,
+            highlightColor = tokens.accent.accentAction,
+        )
+    }
+    val p5 = resolveP5Tokens(settings)
+    if (settings.p5Palette == P5Palette.CALLING_CARD) {
+        return WidgetVisualStyle(
+            isPersona5 = true,
+            backgroundColor = p5.canvas,
+            accentFill = p5.brandFill,
+            onAccentFill = p5.onBrandFill,
+            textPrimary = p5.onLightCard,
+            textSecondary = p5.onLightCardMuted,
+            strokeColor = p5.strokeDark,
+            highlightColor = p5.brandFill,
+            isLightSurface = true,
+        )
+    }
+    return WidgetVisualStyle(
+        isPersona5 = true,
+        backgroundColor = p5.darkCard,
+        accentFill = p5.brandFill,
+        onAccentFill = p5.onBrandFill,
+        textPrimary = p5.strokeLight,
+        textSecondary = mix(p5.strokeLight, p5.darkCard, 0.30),
+        strokeColor = p5.strokeLight,
+        highlightColor = p5.highlightBadge,
+        isLightSurface = false,
+    )
+}
 
 internal enum class WidgetRestAction {
     MARK_REST,

@@ -33,6 +33,13 @@ internal val thirdPartyProjects = listOf(
         APACHE_SECTION,
     ),
     ThirdPartyProject(
+        "Persona-IM",
+        R.string.notice_persona_im_use,
+        R.string.notice_apache,
+        "https://github.com/chris-horner/Persona-IM",
+        APACHE_SECTION,
+    ),
+    ThirdPartyProject(
         "Google ML Kit Text Recognition v2",
         R.string.notice_ml_kit_use,
         R.string.notice_ml_kit_terms,

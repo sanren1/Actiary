@@ -10,10 +10,16 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.actiary.data.appearance.AppearanceSettings
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.P5Tokens
+import com.actiary.p5.resolveP5Tokens
 
 private const val THEME_TRANSITION_MS = 320
 
 val LocalThemeTokens = compositionLocalOf<ThemeTokens> { error("no theme") }
+val LocalUiStyle = compositionLocalOf { UiStyle.LIQUID_GLASS }
+val LocalP5Tokens = compositionLocalOf { resolveP5Tokens(AppearanceSettings()) }
 
 fun Int.asColor(): Color = Color(this)
 
@@ -62,6 +68,16 @@ fun rememberAnimatedThemeTokens(target: ThemeTokens, reducedMotion: Boolean): Th
 }
 
 @Composable
-fun AppTheme(tokens: ThemeTokens, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalThemeTokens provides tokens, content = content)
+fun AppTheme(
+    tokens: ThemeTokens,
+    uiStyle: UiStyle = UiStyle.LIQUID_GLASS,
+    p5Tokens: P5Tokens = resolveP5Tokens(AppearanceSettings()),
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(
+        LocalThemeTokens provides tokens,
+        LocalUiStyle provides uiStyle,
+        LocalP5Tokens provides p5Tokens,
+        content = content,
+    )
 }

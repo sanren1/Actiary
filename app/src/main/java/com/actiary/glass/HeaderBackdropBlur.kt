@@ -37,7 +37,7 @@ internal fun Modifier.headerBackdropBlur(headerHeight: Dp, scrollOffset: () -> I
     val headerPx = with(density) { headerHeight.toPx() }
     val extensionPx = with(density) { 34.dp.toPx() }
     val insetPx = WindowInsets.statusBars.getTop(density).toFloat().coerceAtMost(headerPx)
-    val blur = if (Build.VERSION.SDK_INT >= 33 && !LocalGlassProfile.current.degraded) {
+    val blur = if (Build.VERSION.SDK_INT >= 33 && !rememberGlassDegraded()) {
         val radiusPx = with(density) { 10.dp.toPx() }.coerceAtMost(MAX_BLUR_RADIUS_PX.toFloat())
         rememberHeaderBlurEffect(radiusPx, insetPx, headerPx + extensionPx)
     } else {

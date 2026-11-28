@@ -79,6 +79,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.actiary.data.appearance.AppLanguagePrefs
+import com.actiary.data.appearance.UiStyle
+import com.actiary.data.appearance.applyAppIcon
+import com.actiary.data.appearance.isP5IconEnabled
 import com.actiary.data.appearance.resolve
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.StrengthLogItemEntity
@@ -106,6 +109,7 @@ import com.actiary.glass.GlassTab
 import com.actiary.glass.overlayPresent
 import com.actiary.glass.rememberOverlayVisibility
 import com.actiary.glass.resolveGlass
+import com.actiary.p5.resolveP5Tokens
 import com.actiary.theme.AppTheme
 import com.actiary.theme.asColor
 import com.actiary.theme.rememberAnimatedThemeTokens
@@ -228,7 +232,8 @@ class MainActivity : ComponentActivity() {
             LocalConfiguration.current
             val dynamicSeed = ContextCompat.getColor(LocalContext.current, android.R.color.system_accent1_500)
             val targetTokens = resolveTheme(settings, isSystemInDarkTheme(), dynamicSeed)
-            val reducedMotion = rememberSystemMotionReduced()
+            val p5Tokens = resolveP5Tokens(settings)
+            val reducedMotion = rememberSystemMotionReduced() || settings.reduceInAppMotion
             val tokens = rememberAnimatedThemeTokens(targetTokens, reducedMotion)
             val profile = resolveGlass(settings.glassLevel, settings.glassTintStrength, tokens, reducedMotion)
             LaunchedEffect(targetTokens.neutrals.background) {
@@ -240,7 +245,7 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(bars, bars)
                 onDispose {}
             }
-            AppTheme(tokens) {
+            AppTheme(tokens, settings.uiStyle, p5Tokens) {
                 var selected by rememberSaveable { mutableStateOf(LocalDate.now()) }
                 var editing by rememberSaveable { mutableStateOf<Long?>(null) }
                 var viewing by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -331,6 +336,10 @@ class MainActivity : ComponentActivity() {
                 }
                 var settingsPage by rememberSaveable { mutableStateOf(SettingsPage.HOME) }
                 var confirmAppearanceReset by rememberSaveable { mutableStateOf(false) }
+                var p5IconEnabled by remember { mutableStateOf(isP5IconEnabled(this@MainActivity)) }
+                var pendingIconSwitchToP5 by rememberSaveable { mutableStateOf<Boolean?>(null) }
+                var heldIconSwitchToP5 by remember { mutableStateOf(false) }
+                if (pendingIconSwitchToP5 != null) heldIconSwitchToP5 = pendingIconSwitchToP5 == true
                 var accentEditorOpen by rememberSaveable { mutableStateOf(false) }
                 var editingAccent by rememberSaveable { mutableStateOf<String?>(null) }
                 var pendingAccentRemoval by rememberSaveable { mutableStateOf<String?>(null) }
@@ -384,6 +393,7 @@ class MainActivity : ComponentActivity() {
                 val scanVisibility = rememberOverlayVisibility(scanningUri != null)
                 val dateVisibility = rememberOverlayVisibility(choosingWorkoutDate)
                 val resetVisibility = rememberOverlayVisibility(confirmAppearanceReset)
+                val iconSwitchVisibility = rememberOverlayVisibility(pendingIconSwitchToP5 != null)
                 val accentRemovalVisibility = rememberOverlayVisibility(pendingAccentRemoval != null)
                 val removalVisibility = rememberOverlayVisibility(pendingTypeRemoval != null)
                 val planDeleteVisibility = rememberOverlayVisibility(workoutPlansOverlay.pendingPlanDelete != null)
@@ -397,6 +407,7 @@ class MainActivity : ComponentActivity() {
                     workoutPlansOverlay.hasVisibleOverlay(planDeleteVisibility, customExerciseVisibility) ||
                     storageDetailsOpen || thirdPartyNoticesOpen || availableUpdate != null || updateVisibility.overlayPresent ||
                     checkInCelebration != null || checkInVisibility.overlayPresent ||
+                    pendingIconSwitchToP5 != null || iconSwitchVisibility.overlayPresent ||
                     (screenshot != null && editing == null) || confirmAppearanceReset || backup.state != BackupState.Idle ||
                     scanVisibility.overlayPresent || dateVisibility.overlayPresent || resetVisibility.overlayPresent ||
                     removalVisibility.overlayPresent || iconVisibility.overlayPresent
@@ -459,6 +470,8 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalMotionReduced provides reducedMotion) {
                     GlassHost(
                         tokens, profile,
+                        uiStyle = settings.uiStyle,
+                        p5Tokens = p5Tokens,
                         overlay = {
                             CompositionLocalProvider(LocalGlassProfile provides bottomBarProfile) {
                                 Box(Modifier.fillMaxSize().then(hideBase)) {
@@ -623,6 +636,25 @@ class MainActivity : ComponentActivity() {
                                 visibility = resetVisibility,
                             )
                             GlassDialog(
+                                visible = pendingIconSwitchToP5 != null,
+                                text = stringResource(
+                                    if (heldIconSwitchToP5) R.string.app_icon_switch_to_p5_message
+                                    else R.string.app_icon_switch_to_glass_message,
+                                ),
+                                confirm = stringResource(R.string.app_icon_switch_confirm),
+                                dismiss = stringResource(R.string.app_icon_switch_keep),
+                                onConfirm = {
+                                    val targetP5 = pendingIconSwitchToP5
+                                    pendingIconSwitchToP5 = null
+                                    if (targetP5 != null) {
+                                        applyAppIcon(this@MainActivity, targetP5)
+                                        p5IconEnabled = targetP5
+                                    }
+                                },
+                                onDismiss = { pendingIconSwitchToP5 = null },
+                                visibility = iconSwitchVisibility,
+                            )
+                            GlassDialog(
                                 visible = pendingTypeRemoval != null,
                                 text = stringResource(R.string.custom_type_delete_confirm),
                                 confirm = stringResource(R.string.custom_type_delete),
@@ -783,6 +815,23 @@ class MainActivity : ComponentActivity() {
                                                                 }
                                                             },
                                                             onChartPalette = { lifecycleScope.launch { repository.setChartPalette(it) } },
+                                                            onUiStyle = { targetStyle ->
+                                                                lifecycleScope.launch { repository.setUiStyle(targetStyle) }
+                                                                val wantP5Icon = targetStyle == UiStyle.PERSONA_5
+                                                                if (isP5IconEnabled(this@MainActivity) != wantP5Icon) {
+                                                                    pendingIconSwitchToP5 = wantP5Icon
+                                                                }
+                                                            },
+                                                            onP5Palette = { lifecycleScope.launch { repository.setP5Palette(it) } },
+                                                            onP5RansomTitle = { lifecycleScope.launch { repository.setP5RansomTitle(it) } },
+                                                            onP5MotionLevel = { lifecycleScope.launch { repository.setP5MotionLevel(it) } },
+                                                            onReduceInAppMotion = { lifecycleScope.launch { repository.setReduceInAppMotion(it) } },
+                                                            isP5IconEnabled = p5IconEnabled,
+                                                            onSelectAppIcon = { wantP5 ->
+                                                                if (wantP5 != p5IconEnabled) {
+                                                                    pendingIconSwitchToP5 = wantP5
+                                                                }
+                                                            },
                                                             typesContent = { onBack ->
                                                                 CustomTypesScreen(
                                                                     repository = container.recordRepository,
@@ -843,6 +892,30 @@ class MainActivity : ComponentActivity() {
                                                             onOpenNotices = { if (!hasOverlay()) thirdPartyNoticesOpen = true },
                                                             checkingUpdate = checkingUpdate,
                                                             onCheckUpdate = { if (!hasOverlay()) triggerManualUpdateCheck() },
+                                                            onPreviewCheckIn = {
+                                                                if (!hasOverlay()) {
+                                                                    checkInCelebration = CheckInCelebrationData(
+                                                                        kind = CheckInKind.Daily,
+                                                                        streakDays = 5,
+                                                                        weekDays = 3,
+                                                                        totalDays = 18,
+                                                                        quoteIndex = 0,
+                                                                        workoutSummary = null,
+                                                                    )
+                                                                }
+                                                            },
+                                                            onPreviewMilestone = {
+                                                                if (!hasOverlay()) {
+                                                                    checkInCelebration = CheckInCelebrationData(
+                                                                        kind = CheckInKind.StreakMilestone(7),
+                                                                        streakDays = 7,
+                                                                        weekDays = 5,
+                                                                        totalDays = 30,
+                                                                        quoteIndex = 0,
+                                                                        workoutSummary = null,
+                                                                    )
+                                                                }
+                                                            },
                                                         )
                                                     }
                                                 }

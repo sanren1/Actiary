@@ -12,6 +12,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
@@ -204,6 +205,7 @@ internal object TodayWidgetUpdater {
             Configuration.UI_MODE_NIGHT_YES
         val dynamicSeed = ContextCompat.getColor(appContext, android.R.color.system_accent1_500)
         val tokens = resolveTheme(settings, systemDark, dynamicSeed)
+        val visualStyle = resolveWidgetVisualStyle(settings, tokens)
 
         val snapshot = buildWidgetSnapshot(
             today = today,
@@ -215,9 +217,25 @@ internal object TodayWidgetUpdater {
         ) { type ->
             exerciseTypeLabel(type, localized.resources)
         }
-        val strip = buildStripViews(appContext, localized, snapshot, tokens)
-        val compact = buildRemoteViews(appContext, localized, R.layout.widget_today_compact, snapshot, tokens, compact = true)
-        val medium = buildRemoteViews(appContext, localized, R.layout.widget_today_medium, snapshot, tokens, compact = false)
+        val strip = buildStripViews(appContext, localized, snapshot, tokens, visualStyle)
+        val compact = buildRemoteViews(
+            appContext,
+            localized,
+            R.layout.widget_today_compact,
+            snapshot,
+            tokens,
+            visualStyle,
+            compact = true,
+        )
+        val medium = buildRemoteViews(
+            appContext,
+            localized,
+            R.layout.widget_today_medium,
+            snapshot,
+            tokens,
+            visualStyle,
+            compact = false,
+        )
         val responsive = RemoteViews(
             mapOf(
                 SizeF(110f, 40f) to strip,
@@ -235,52 +253,88 @@ internal object TodayWidgetUpdater {
         localized: Context,
         snapshot: WidgetSnapshot,
         tokens: ThemeTokens,
+        visualStyle: WidgetVisualStyle,
     ): RemoteViews {
         val views = RemoteViews(appContext.packageName, R.layout.widget_today_strip)
         val n = tokens.neutrals
         val a = tokens.accent
+        val isP5 = visualStyle.isPersona5
         val locale = localized.resources.configuration.locales[0]
         val dateText = snapshot.today.format(
             DateTimeFormatter.ofPattern(localized.getString(R.string.widget_today_date_short_pattern), locale),
         )
-        views.setImageViewBitmap(R.id.widget_bg_image, createFrostedBackdrop(260, 110, tokens))
+        views.setImageViewBitmap(
+            R.id.widget_bg_image,
+            if (isP5) createP5WidgetBackdrop(260, 110, visualStyle) else createFrostedBackdrop(260, 110, tokens),
+        )
 
         views.setTextViewText(
             R.id.widget_strip_info,
             localized.getString(R.string.widget_strip_meta, dateText, snapshot.recentExercisedDays),
         )
-        views.setTextColor(R.id.widget_strip_info, n.textPrimary)
+        views.setTextColor(R.id.widget_strip_info, if (isP5) visualStyle.textPrimary else n.textPrimary)
 
-        when (snapshot.todayState) {
-            DayState.EXERCISED -> {
-                views.setImageViewResource(R.id.widget_dot_today, R.drawable.widget_dot_solid)
-                views.setInt(R.id.widget_dot_today, "setColorFilter", a.accentAction)
-            }
-            DayState.REST -> {
-                views.setImageViewResource(R.id.widget_dot_today, R.drawable.widget_dot_solid)
-                views.setInt(R.id.widget_dot_today, "setColorFilter", withAlpha(n.textSecondary, 0xCC))
-            }
-            DayState.UNRECORDED -> {
-                views.setImageViewResource(R.id.widget_dot_today, R.drawable.widget_dot_ring_today)
-                views.setInt(R.id.widget_dot_today, "setColorFilter", a.accentAction)
+        if (isP5) {
+            views.setImageViewBitmap(
+                R.id.widget_dot_today,
+                createP5WeekDotBitmap(snapshot.todayState, isToday = true, style = visualStyle),
+            )
+            views.setInt(R.id.widget_dot_today, "setColorFilter", 0)
+        } else {
+            when (snapshot.todayState) {
+                DayState.EXERCISED -> {
+                    views.setImageViewResource(R.id.widget_dot_today, R.drawable.widget_dot_solid)
+                    views.setInt(R.id.widget_dot_today, "setColorFilter", a.accentAction)
+                }
+                DayState.REST -> {
+                    views.setImageViewResource(R.id.widget_dot_today, R.drawable.widget_dot_solid)
+                    views.setInt(R.id.widget_dot_today, "setColorFilter", withAlpha(n.textSecondary, 0xCC))
+                }
+                DayState.UNRECORDED -> {
+                    views.setImageViewResource(R.id.widget_dot_today, R.drawable.widget_dot_ring_today)
+                    views.setInt(R.id.widget_dot_today, "setColorFilter", a.accentAction)
+                }
             }
         }
 
         views.setTextViewText(R.id.widget_btn_record, localized.getString(R.string.widget_action_record_short))
-        views.setColorStateList(R.id.widget_btn_record, "setBackgroundTintList", ColorStateList.valueOf(a.accentAction))
-        views.setTextColor(R.id.widget_btn_record, a.onAccentAction)
+        views.setColorStateList(
+            R.id.widget_btn_record,
+            "setBackgroundTintList",
+            ColorStateList.valueOf(if (isP5) visualStyle.accentFill else a.accentAction),
+        )
+        views.setTextColor(R.id.widget_btn_record, if (isP5) visualStyle.onAccentFill else a.onAccentAction)
 
         val isRest = snapshot.todayState == DayState.REST
         views.setTextViewText(
             R.id.widget_btn_rest,
             localized.getString(if (isRest) R.string.widget_action_rest_active else R.string.widget_action_rest_short),
         )
-        views.setColorStateList(
-            R.id.widget_btn_rest,
-            "setBackgroundTintList",
-            ColorStateList.valueOf(if (isRest) a.accentSubtle else n.surfaceMuted),
-        )
-        views.setTextColor(R.id.widget_btn_rest, if (isRest) a.accentAction else n.textPrimary)
+        if (isP5) {
+            val restBg = when {
+                isRest -> P5_INK_BLACK
+                visualStyle.isLightSurface -> P5_PAPER_MUTED
+                else -> P5_SURFACE_MUTED
+            }
+            val restFg = when {
+                isRest && visualStyle.isLightSurface -> P5_PAPER_WHITE
+                isRest -> a.accentAction
+                else -> visualStyle.textPrimary
+            }
+            views.setColorStateList(
+                R.id.widget_btn_rest,
+                "setBackgroundTintList",
+                ColorStateList.valueOf(restBg),
+            )
+            views.setTextColor(R.id.widget_btn_rest, restFg)
+        } else {
+            views.setColorStateList(
+                R.id.widget_btn_rest,
+                "setBackgroundTintList",
+                ColorStateList.valueOf(if (isRest) a.accentSubtle else n.surfaceMuted),
+            )
+            views.setTextColor(R.id.widget_btn_rest, if (isRest) a.accentAction else n.textPrimary)
+        }
 
         bindWidgetClicks(appContext, views)
         return views
@@ -292,24 +346,27 @@ internal object TodayWidgetUpdater {
         layoutId: Int,
         snapshot: WidgetSnapshot,
         tokens: ThemeTokens,
+        visualStyle: WidgetVisualStyle,
         compact: Boolean,
     ): RemoteViews {
         val views = RemoteViews(appContext.packageName, layoutId)
         val n = tokens.neutrals
         val a = tokens.accent
+        val isP5 = visualStyle.isPersona5
         val locale = localized.resources.configuration.locales[0]
         val datePattern = localized.getString(
             if (compact) R.string.widget_today_date_short_pattern else R.string.widget_today_date_pattern,
         )
         val dateText = snapshot.today.format(DateTimeFormatter.ofPattern(datePattern, locale))
 
+        val bgWidth = if (compact) 220 else 360
         views.setImageViewBitmap(
             R.id.widget_bg_image,
-            createFrostedBackdrop(if (compact) 220 else 360, 200, tokens),
+            if (isP5) createP5WidgetBackdrop(bgWidth, 200, visualStyle) else createFrostedBackdrop(bgWidth, 200, tokens),
         )
 
         views.setTextViewText(R.id.widget_date, dateText)
-        views.setTextColor(R.id.widget_date, n.textPrimary)
+        views.setTextColor(R.id.widget_date, if (isP5) visualStyle.textPrimary else n.textPrimary)
 
         val weekText = localized.getString(R.string.widget_week_streak, snapshot.recentExercisedDays)
         val streakText = if (snapshot.streakDays > 0) {
@@ -325,24 +382,51 @@ internal object TodayWidgetUpdater {
                 if (snapshot.streakDays > 0) 13f else 15f,
             )
         }
-        views.setTextColor(R.id.widget_streak, if (compact) n.textPrimary else n.textSecondary)
+        views.setTextColor(
+            R.id.widget_streak,
+            if (isP5) {
+                if (compact) a.accentAction else visualStyle.textSecondary
+            } else {
+                if (compact) n.textPrimary else n.textSecondary
+            },
+        )
 
-        val (badgeText, badgeBg, badgeFg) = when (snapshot.todayState) {
-            DayState.EXERCISED -> Triple(
-                localized.getString(R.string.day_checked_in),
-                a.accentSubtle,
-                a.accentAction,
-            )
-            DayState.REST -> Triple(
-                localized.getString(R.string.day_rest),
-                n.surfaceMuted,
-                n.textPrimary,
-            )
-            DayState.UNRECORDED -> Triple(
-                localized.getString(R.string.day_unrecorded),
-                n.surfaceMuted,
-                n.textSecondary,
-            )
+        val (badgeText, badgeBg, badgeFg) = if (isP5) {
+            when (snapshot.todayState) {
+                DayState.EXERCISED -> Triple(
+                    localized.getString(R.string.day_checked_in),
+                    visualStyle.accentFill,
+                    visualStyle.onAccentFill,
+                )
+                DayState.REST -> Triple(
+                    localized.getString(R.string.day_rest),
+                    if (visualStyle.isLightSurface) P5_PAPER_MUTED else P5_SURFACE_MUTED,
+                    visualStyle.textPrimary,
+                )
+                DayState.UNRECORDED -> Triple(
+                    localized.getString(R.string.day_unrecorded),
+                    if (visualStyle.isLightSurface) P5_PAPER_MUTED else P5_INK_BLACK,
+                    visualStyle.textSecondary,
+                )
+            }
+        } else {
+            when (snapshot.todayState) {
+                DayState.EXERCISED -> Triple(
+                    localized.getString(R.string.day_checked_in),
+                    a.accentSubtle,
+                    a.accentAction,
+                )
+                DayState.REST -> Triple(
+                    localized.getString(R.string.day_rest),
+                    n.surfaceMuted,
+                    n.textPrimary,
+                )
+                DayState.UNRECORDED -> Triple(
+                    localized.getString(R.string.day_unrecorded),
+                    n.surfaceMuted,
+                    n.textSecondary,
+                )
+            }
         }
         views.setTextViewText(R.id.widget_status_badge, badgeText)
         views.setColorStateList(R.id.widget_status_badge, "setBackgroundTintList", ColorStateList.valueOf(badgeBg))
@@ -358,10 +442,18 @@ internal object TodayWidgetUpdater {
         views.setTextViewText(R.id.widget_summary, summary)
         views.setTextColor(
             R.id.widget_summary,
-            when {
-                snapshot.todayState == DayState.EXERCISED -> n.textPrimary
-                snapshot.todayState == DayState.UNRECORDED && snapshot.recommendedPlanLabel != null -> a.accentAction
-                else -> n.textSecondary
+            if (isP5) {
+                when {
+                    snapshot.todayState == DayState.EXERCISED -> visualStyle.textPrimary
+                    snapshot.todayState == DayState.UNRECORDED && snapshot.recommendedPlanLabel != null -> a.accentAction
+                    else -> visualStyle.textSecondary
+                }
+            } else {
+                when {
+                    snapshot.todayState == DayState.EXERCISED -> n.textPrimary
+                    snapshot.todayState == DayState.UNRECORDED && snapshot.recommendedPlanLabel != null -> a.accentAction
+                    else -> n.textSecondary
+                }
             },
         )
 
@@ -369,50 +461,65 @@ internal object TodayWidgetUpdater {
         val mutedRingColor = withAlpha(n.textSecondary, if (tokens.dark) 0x66 else 0x55)
         snapshot.weekDots.forEachIndexed { index, dot ->
             val id = dotIds[index]
-            when (dot.state) {
-                DayState.EXERCISED -> {
-                    views.setImageViewResource(id, R.drawable.widget_dot_solid)
-                    views.setInt(id, "setColorFilter", a.accentAction)
+            if (isP5) {
+                views.setImageViewBitmap(id, createP5WeekDotBitmap(dot.state, dot.isToday, visualStyle))
+                views.setInt(id, "setColorFilter", 0)
+                if (dot.isToday) {
+                    views.setViewVisibility(R.id.widget_dot_6_ring, View.GONE)
                 }
-                DayState.REST -> {
-                    views.setImageViewResource(id, R.drawable.widget_dot_solid)
-                    views.setInt(id, "setColorFilter", withAlpha(n.textSecondary, 0x99))
-                }
-                DayState.UNRECORDED -> {
-                    views.setImageViewResource(
-                        id,
-                        if (dot.isToday) R.drawable.widget_dot_ring_today else R.drawable.widget_dot_ring,
-                    )
-                    views.setInt(id, "setColorFilter", if (dot.isToday) a.accentAction else mutedRingColor)
-                }
-            }
-            if (dot.isToday) {
+            } else {
                 when (dot.state) {
                     DayState.EXERCISED -> {
-                        views.setViewVisibility(R.id.widget_dot_6_ring, View.VISIBLE)
-                        views.setInt(
-                            R.id.widget_dot_6_ring,
-                            "setColorFilter",
-                            withAlpha(a.accentAction, if (tokens.dark) 0x85 else 0x66),
-                        )
+                        views.setImageViewResource(id, R.drawable.widget_dot_solid)
+                        views.setInt(id, "setColorFilter", a.accentAction)
                     }
                     DayState.REST -> {
-                        views.setViewVisibility(R.id.widget_dot_6_ring, View.VISIBLE)
-                        views.setInt(
-                            R.id.widget_dot_6_ring,
-                            "setColorFilter",
-                            withAlpha(n.textSecondary, 0x66),
-                        )
+                        views.setImageViewResource(id, R.drawable.widget_dot_solid)
+                        views.setInt(id, "setColorFilter", withAlpha(n.textSecondary, 0x99))
                     }
                     DayState.UNRECORDED -> {
-                        views.setViewVisibility(R.id.widget_dot_6_ring, View.GONE)
+                        views.setImageViewResource(
+                            id,
+                            if (dot.isToday) R.drawable.widget_dot_ring_today else R.drawable.widget_dot_ring,
+                        )
+                        views.setInt(id, "setColorFilter", if (dot.isToday) a.accentAction else mutedRingColor)
+                    }
+                }
+                if (dot.isToday) {
+                    when (dot.state) {
+                        DayState.EXERCISED -> {
+                            views.setViewVisibility(R.id.widget_dot_6_ring, View.VISIBLE)
+                            views.setInt(
+                                R.id.widget_dot_6_ring,
+                                "setColorFilter",
+                                withAlpha(a.accentAction, if (tokens.dark) 0x85 else 0x66),
+                            )
+                        }
+                        DayState.REST -> {
+                            views.setViewVisibility(R.id.widget_dot_6_ring, View.VISIBLE)
+                            views.setInt(
+                                R.id.widget_dot_6_ring,
+                                "setColorFilter",
+                                withAlpha(n.textSecondary, 0x66),
+                            )
+                        }
+                        DayState.UNRECORDED -> {
+                            views.setViewVisibility(R.id.widget_dot_6_ring, View.GONE)
+                        }
                     }
                 }
             }
             if (!compact) {
                 val labelId = dayLabelIds[index]
                 views.setTextViewText(labelId, dot.date.format(dayFmt))
-                views.setTextColor(labelId, if (dot.isToday) n.textPrimary else n.textSecondary)
+                views.setTextColor(
+                    labelId,
+                    if (isP5) {
+                        if (dot.isToday) a.accentAction else visualStyle.textSecondary
+                    } else {
+                        if (dot.isToday) n.textPrimary else n.textSecondary
+                    },
+                )
             }
         }
 
@@ -420,8 +527,12 @@ internal object TodayWidgetUpdater {
             if (compact) R.string.widget_action_record_short else R.string.widget_action_record,
         )
         views.setTextViewText(R.id.widget_btn_record, recordLabel)
-        views.setColorStateList(R.id.widget_btn_record, "setBackgroundTintList", ColorStateList.valueOf(a.accentAction))
-        views.setTextColor(R.id.widget_btn_record, a.onAccentAction)
+        views.setColorStateList(
+            R.id.widget_btn_record,
+            "setBackgroundTintList",
+            ColorStateList.valueOf(if (isP5) visualStyle.accentFill else a.accentAction),
+        )
+        views.setTextColor(R.id.widget_btn_record, if (isP5) visualStyle.onAccentFill else a.onAccentAction)
 
         val isRest = snapshot.todayState == DayState.REST
         val restLabel = localized.getString(
@@ -432,12 +543,31 @@ internal object TodayWidgetUpdater {
             },
         )
         views.setTextViewText(R.id.widget_btn_rest, restLabel)
-        views.setColorStateList(
-            R.id.widget_btn_rest,
-            "setBackgroundTintList",
-            ColorStateList.valueOf(if (isRest) a.accentSubtle else n.surfaceMuted),
-        )
-        views.setTextColor(R.id.widget_btn_rest, if (isRest) a.accentAction else n.textPrimary)
+        if (isP5) {
+            val restBg = when {
+                isRest -> P5_INK_BLACK
+                visualStyle.isLightSurface -> P5_PAPER_MUTED
+                else -> P5_SURFACE_MUTED
+            }
+            val restFg = when {
+                isRest && visualStyle.isLightSurface -> P5_PAPER_WHITE
+                isRest -> a.accentAction
+                else -> visualStyle.textPrimary
+            }
+            views.setColorStateList(
+                R.id.widget_btn_rest,
+                "setBackgroundTintList",
+                ColorStateList.valueOf(restBg),
+            )
+            views.setTextColor(R.id.widget_btn_rest, restFg)
+        } else {
+            views.setColorStateList(
+                R.id.widget_btn_rest,
+                "setBackgroundTintList",
+                ColorStateList.valueOf(if (isRest) a.accentSubtle else n.surfaceMuted),
+            )
+            views.setTextColor(R.id.widget_btn_rest, if (isRest) a.accentAction else n.textPrimary)
+        }
 
         bindWidgetClicks(appContext, views)
         return views
@@ -578,9 +708,254 @@ internal object TodayWidgetUpdater {
         return bitmap
     }
 
+    private fun createP5WidgetBackdrop(width: Int, height: Int, style: WidgetVisualStyle): Bitmap {
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val shortSide = minOf(w, h)
+        val isStrip = h < 140f
+
+        // 0. Full-bleed outer base matching the theme polarity so launcher rounded corners never show seams.
+        canvas.drawColor(if (style.isLightSurface) style.backgroundColor else P5_INK_BLACK)
+
+        // Safe inner geometry: all 4 corners are chamfered inside Android 12+ / OriginOS 16-24dp clip radii.
+        val insetX = (shortSide * 0.045f).coerceIn(4.5f, 8f)
+        val insetY = (shortSide * 0.045f).coerceIn(4.5f, 8f)
+        val shadowDx = (shortSide * 0.032f).coerceIn(3.5f, 6f)
+        val shadowDy = (shortSide * 0.032f).coerceIn(3.5f, 6f)
+        val chamferPrimary = (shortSide * 0.165f).coerceIn(17f, 28f)
+        val chamferSecondary = (shortSide * 0.135f).coerceIn(14f, 23f)
+
+        val left = insetX
+        val top = insetY
+        val right = w - insetX - shadowDx
+        val bottom = h - insetY - shadowDy
+
+        fun buildSafeChamferedCardPath(dx: Float, dy: Float): Path = Path().apply {
+            moveTo(left + chamferPrimary + dx, top + dy)
+            lineTo(right - chamferSecondary + dx, top + dy)
+            lineTo(right + dx, top + chamferSecondary + dy)
+            lineTo(right + dx, bottom - chamferPrimary + dy)
+            lineTo(right - chamferPrimary + dx, bottom + dy)
+            lineTo(left + chamferSecondary + dx, bottom + dy)
+            lineTo(left + dx, bottom - chamferSecondary + dy)
+            lineTo(left + dx, top + chamferPrimary + dy)
+            close()
+        }
+
+        // 1. Bottom-right hard-offset comic shadow polygon (strictly inside rounded-corner safe area).
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.style = Paint.Style.FILL
+            color = if (style.isLightSurface) P5_INK_BLACK else style.accentFill
+        }
+        canvas.drawPath(buildSafeChamferedCardPath(shadowDx, shadowDy), shadowPaint)
+
+        // 2. Main safe-zone chamfered card polygon.
+        val cardPath = buildSafeChamferedCardPath(0f, 0f)
+        val cardFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.style = Paint.Style.FILL
+            color = style.backgroundColor
+        }
+        canvas.drawPath(cardPath, cardFillPaint)
+
+        // 3. Internal P5 diagonal graphic accents clipped to the card polygon, keeping text zones clean.
+        canvas.save()
+        canvas.clipPath(cardPath)
+
+        // Subtle low-alpha diagonal comic band across the lower-right interior (preserves > 95% text contrast).
+        val bandAlpha = when {
+            style.isLightSurface && isStrip -> 0x0C
+            style.isLightSurface -> 0x10
+            isStrip -> 0x12
+            else -> 0x18
+        }
+        val washPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.style = Paint.Style.FILL
+            color = withAlpha(style.accentFill, bandAlpha)
+        }
+        val diagonalWash = Path().apply {
+            moveTo(w * 0.62f, h)
+            lineTo(w * 0.86f, 0f)
+            lineTo(w, 0f)
+            lineTo(w * 0.80f, h)
+            close()
+        }
+        canvas.drawPath(diagonalWash, washPaint)
+
+        // Crisp accent corner slashes tucked exclusively into the chamfer margins (outside text/button padding).
+        val accentSlashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.style = Paint.Style.FILL
+            color = style.accentFill
+        }
+        val slashThickness = if (isStrip) 5.5f else 8.5f
+        val topLeftSlash = Path().apply {
+            moveTo(left + chamferPrimary, top)
+            lineTo(left + chamferPrimary + slashThickness, top)
+            lineTo(left, top + chamferPrimary + slashThickness)
+            lineTo(left, top + chamferPrimary)
+            close()
+        }
+        canvas.drawPath(topLeftSlash, accentSlashPaint)
+
+        val bottomRightSlash = Path().apply {
+            moveTo(right, bottom - chamferPrimary - slashThickness)
+            lineTo(right, bottom - chamferPrimary)
+            lineTo(right - chamferPrimary, bottom)
+            lineTo(right - chamferPrimary - slashThickness, bottom)
+            close()
+        }
+        canvas.drawPath(bottomRightSlash, accentSlashPaint)
+
+        // Fine high-contrast speed-line parallel to the top-left chamfer.
+        val highlightLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.style = Paint.Style.STROKE
+            strokeWidth = 1.8f
+            color = style.highlightColor
+        }
+        val lineOffset = slashThickness + 3f
+        canvas.drawLine(
+            left + chamferPrimary + lineOffset,
+            top,
+            left,
+            top + chamferPrimary + lineOffset,
+            highlightLinePaint,
+        )
+        canvas.restore()
+
+        // 4. Crisp comic border around the safe-zone polygon.
+        if (style.isLightSurface) {
+            val inkFrame = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.style = Paint.Style.STROKE
+                strokeWidth = 3.2f
+                strokeJoin = Paint.Join.MITER
+                color = style.strokeColor
+            }
+            canvas.drawPath(cardPath, inkFrame)
+        } else {
+            val outerInkStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.style = Paint.Style.STROKE
+                strokeWidth = 4.2f
+                strokeJoin = Paint.Join.MITER
+                color = P5_INK_BLACK
+            }
+            canvas.drawPath(cardPath, outerInkStroke)
+
+            val innerLightStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.style = Paint.Style.STROKE
+                strokeWidth = 2.2f
+                strokeJoin = Paint.Join.MITER
+                color = style.strokeColor
+            }
+            canvas.drawPath(cardPath, innerLightStroke)
+        }
+
+        return bitmap
+    }
+
+    private fun createP5WeekDotBitmap(
+        state: DayState,
+        isToday: Boolean,
+        style: WidgetVisualStyle,
+    ): Bitmap {
+        val size = 48
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val cx = size / 2f
+        val cy = size / 2f
+
+        fun obliqueDiamond(rx: Float, ry: Float, skewX: Float): Path = Path().apply {
+            moveTo(cx + skewX, cy - ry)
+            lineTo(cx + rx, cy - skewX * 0.35f)
+            lineTo(cx - skewX, cy + ry)
+            lineTo(cx - rx, cy + skewX * 0.35f)
+            close()
+        }
+
+        // Today emphasis: outer high-contrast highlight diamond frame.
+        if (isToday) {
+            val todayFrame = obliqueDiamond(rx = 20.5f, ry = 20.5f, skewX = 3.2f)
+            val todayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.style = Paint.Style.STROKE
+                strokeWidth = 3.2f
+                strokeJoin = Paint.Join.MITER
+                color = style.highlightColor
+            }
+            canvas.drawPath(todayFrame, todayPaint)
+        }
+
+        val innerR = if (isToday) 13.5f else 16.5f
+        val innerSkew = if (isToday) 2.2f else 2.8f
+        val diamond = obliqueDiamond(rx = innerR, ry = innerR, skewX = innerSkew)
+
+        when (state) {
+            DayState.EXERCISED -> {
+                val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    this.style = Paint.Style.FILL
+                    color = style.accentFill
+                }
+                val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    this.style = Paint.Style.STROKE
+                    strokeWidth = 2.6f
+                    strokeJoin = Paint.Join.MITER
+                    color = style.strokeColor
+                }
+                canvas.drawPath(diamond, fill)
+                canvas.drawPath(diamond, stroke)
+            }
+            DayState.REST -> {
+                val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    this.style = Paint.Style.FILL
+                    color = if (style.isLightSurface) P5_PAPER_REST_FILL else P5_REST_FILL
+                }
+                canvas.drawPath(diamond, fill)
+                canvas.save()
+                canvas.clipPath(diamond)
+                val hatchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    this.style = Paint.Style.STROKE
+                    strokeWidth = 2.2f
+                    color = withAlpha(style.strokeColor, if (style.isLightSurface) 0xCC else 0xB3)
+                }
+                var offset = -size.toFloat()
+                while (offset <= size.toFloat()) {
+                    canvas.drawLine(offset, size.toFloat(), offset + size.toFloat(), 0f, hatchPaint)
+                    offset += 7.5f
+                }
+                canvas.restore()
+                val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    this.style = Paint.Style.STROKE
+                    strokeWidth = 2.2f
+                    strokeJoin = Paint.Join.MITER
+                    color = withAlpha(style.strokeColor, if (style.isLightSurface) 0xE6 else 0xCC)
+                }
+                canvas.drawPath(diamond, stroke)
+            }
+            DayState.UNRECORDED -> {
+                val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    this.style = Paint.Style.STROKE
+                    strokeWidth = 2.4f
+                    strokeJoin = Paint.Join.MITER
+                    color = if (isToday) {
+                        style.strokeColor
+                    } else {
+                        withAlpha(style.strokeColor, if (style.isLightSurface) 0xCC else 0xA8)
+                    }
+                }
+                canvas.drawPath(diamond, stroke)
+            }
+        }
+        return bitmap
+    }
+
     private fun withAlpha(argb: Int, alpha: Int): Int =
         (argb and 0x00FFFFFF) or ((alpha and 0xFF) shl 24)
 
+    private const val P5_INK_BLACK = 0xFF0D0D0D.toInt()
+    private const val P5_SURFACE_MUTED = 0xFF22242C.toInt()
+    private const val P5_REST_FILL = 0xFF2D303A.toInt()
+    private const val P5_PAPER_WHITE = 0xFFF7F6F2.toInt()
+    private const val P5_PAPER_MUTED = 0xFFE6E4DC.toInt()
+    private const val P5_PAPER_REST_FILL = 0xFFE5E2DA.toInt()
     private const val REQ_OPEN_APP = 1001
     private const val REQ_OPEN_RECORD = 1002
     private const val REQ_TOGGLE_REST = 1003

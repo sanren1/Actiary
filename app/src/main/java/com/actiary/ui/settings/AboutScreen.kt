@@ -6,8 +6,10 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -54,14 +57,21 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.net.toUri
 import com.actiary.R
+import com.actiary.data.appearance.UiStyle
 import com.actiary.glass.GlassPanel
 import com.actiary.glass.GlassSheet
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Surface
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 
 @Composable
@@ -72,19 +82,32 @@ internal fun AboutScreen(
     onCheckUpdate: () -> Unit,
 ) {
     val context = LocalContext.current
-    val n = LocalThemeTokens.current.neutrals
+    val t = LocalThemeTokens.current
+    val n = t.neutrals
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
     val version = remember(context) {
         @Suppress("DEPRECATION")
         context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
     }
-    val iconBitmap = remember(context) {
-        context.packageManager.getApplicationIcon(context.applicationInfo)
-            .toBitmap(128, 128)
-            .asImageBitmap()
+    val iconRes = if (isP5) R.mipmap.ic_launcher_p5 else R.mipmap.ic_launcher
+    val iconBitmap = remember(context, iconRes) {
+        ContextCompat.getDrawable(context, iconRes)
+            ?.toBitmap(128, 128)
+            ?.asImageBitmap()
+            ?: context.packageManager.getApplicationIcon(context.applicationInfo)
+                .toBitmap(128, 128)
+                .asImageBitmap()
     }
 
     SettingsPageLayout(stringResource(R.string.settings_about), onBack) {
-        GlassPanel(Modifier.fillMaxWidth()) {
+        val heroContent: @Composable () -> Unit = {
+            val iconShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(16.dp)
+            val iconBorder = if (isP5) {
+                Modifier.border(2.dp, if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor(), iconShape)
+            } else {
+                Modifier
+            }
             Column(
                 Modifier.fillMaxWidth().padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -93,11 +116,11 @@ internal fun AboutScreen(
                 Image(
                     bitmap = iconBitmap,
                     contentDescription = null,
-                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)),
+                    modifier = Modifier.size(64.dp).clip(iconShape).then(iconBorder),
                 )
                 BasicText(
                     stringResource(R.string.app_name),
-                    style = TextStyle(n.textPrimary.asColor(), 22.sp, FontWeight.Bold),
+                    style = TextStyle(n.textPrimary.asColor(), 22.sp, if (isP5) FontWeight.Black else FontWeight.Bold),
                 )
                 BasicText(
                     stringResource(R.string.settings_about_version, version),
@@ -109,32 +132,68 @@ internal fun AboutScreen(
                 )
             }
         }
+        if (isP5) {
+            val heroFill = if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor()
+            val heroStroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .p5Surface(
+                        variant = P5ShapeVariant.CARD,
+                        fillColor = heroFill,
+                        strokeColor = heroStroke,
+                        shadowColor = p5.shadowColor.asColor(),
+                        strokeWidth = 2.dp,
+                        shadowOffset = DpOffset(4.dp, 4.dp),
+                    ),
+            ) { heroContent() }
+        } else {
+            GlassPanel(Modifier.fillMaxWidth()) { heroContent() }
+        }
         SettingsGroup { rowShape ->
+            val infoRowBg = if (isP5) n.surfaceMuted.asColor() else n.surface.asColor()
+            val infoRowBorder = if (isP5) {
+                Modifier.border(
+                    1.5.dp,
+                    if (t.dark) p5.strokeLight.asColor().copy(alpha = 0.35f) else p5.strokeDark.asColor(),
+                    rowShape,
+                )
+            } else {
+                Modifier
+            }
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     .clip(rowShape)
-                    .background(n.surface.asColor(), rowShape)
+                    .background(infoRowBg, rowShape)
+                    .then(infoRowBorder)
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(Icons.Outlined.Devices, null, tint = n.textPrimary.asColor())
                 Column(Modifier.weight(1f)) {
-                    BasicText(stringResource(R.string.about_compatibility), style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                    BasicText(
+                        stringResource(R.string.about_compatibility),
+                        style = TextStyle(n.textPrimary.asColor(), 16.sp, if (isP5) FontWeight.Bold else FontWeight.Normal),
+                    )
                     BasicText(stringResource(R.string.about_compatibility_value), style = TextStyle(n.textSecondary.asColor(), 14.sp))
                 }
             }
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     .clip(rowShape)
-                    .background(n.surface.asColor(), rowShape)
+                    .background(infoRowBg, rowShape)
+                    .then(infoRowBorder)
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(Icons.Outlined.VerifiedUser, null, tint = n.textPrimary.asColor())
                 Column(Modifier.weight(1f)) {
-                    BasicText(stringResource(R.string.about_privacy), style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                    BasicText(
+                        stringResource(R.string.about_privacy),
+                        style = TextStyle(n.textPrimary.asColor(), 16.sp, if (isP5) FontWeight.Bold else FontWeight.Normal),
+                    )
                     BasicText(stringResource(R.string.about_privacy_value), style = TextStyle(n.textSecondary.asColor(), 14.sp))
                 }
             }
@@ -172,6 +231,9 @@ internal fun AboutScreen(
 internal fun ThirdPartyNoticesSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val n = LocalThemeTokens.current.neutrals
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val sheetPrimary = n.textPrimary.asColor()
+    val sheetSecondary = n.textSecondary.asColor()
     val title = stringResource(R.string.settings_licenses)
     val notices = remember(context) {
         context.resources.openRawResource(R.raw.third_party_notices).bufferedReader().use {
@@ -196,12 +258,12 @@ internal fun ThirdPartyNoticesSheet(onDismiss: () -> Unit) {
                 BasicText(
                     title,
                     Modifier.weight(1f).semantics { heading() },
-                    style = TextStyle(n.textPrimary.asColor(), 20.sp, FontWeight.SemiBold),
+                    style = TextStyle(sheetPrimary, 20.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
                 )
                 TextButton(
                     onClick = { close() },
-                    colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
-                ) { Text(stringResource(R.string.overlay_close)) }
+                    colors = ButtonDefaults.textButtonColors(contentColor = sheetSecondary),
+                ) { Text(stringResource(R.string.overlay_close), fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal) }
             }
             for (project in thirdPartyProjects) {
                 val expanded = expandedProject == project.name
@@ -220,10 +282,23 @@ private fun ThirdPartyProjectRow(
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
-    val n = LocalThemeTokens.current.neutrals
+    val t = LocalThemeTokens.current
+    val n = t.neutrals
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val rowShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+    val rowBg = if (isP5) {
+        if (t.dark) Color(0xFF1B1B20) else n.surfaceMuted.asColor()
+    } else {
+        n.surface.asColor()
+    }
+    val rowBorder = if (isP5) Modifier.border(1.5.dp, p5Stroke.copy(alpha = if (t.dark) 0.65f else 0.85f), rowShape) else Modifier
+    val primaryColor = n.textPrimary.asColor()
+    val secondaryColor = n.textSecondary.asColor()
     val expansionState = stringResource(if (expanded) R.string.notice_expanded else R.string.notice_collapsed)
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(n.surface.asColor()),
+        Modifier.fillMaxWidth().clip(rowShape).background(rowBg, rowShape).then(rowBorder),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
@@ -231,7 +306,7 @@ private fun ThirdPartyProjectRow(
                 .semantics { stateDescription = expansionState }
                 .clickable(
                     interactionSource = null,
-                    indication = ripple(color = n.textPrimary.asColor()),
+                    indication = ripple(color = primaryColor),
                     role = Role.Button,
                     onClick = onToggle,
                 )
@@ -240,14 +315,14 @@ private fun ThirdPartyProjectRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                BasicText(project.name, style = TextStyle(n.textPrimary.asColor(), 16.sp, FontWeight.SemiBold))
-                BasicText(stringResource(project.use), style = TextStyle(n.textSecondary.asColor(), 14.sp))
-                BasicText(stringResource(project.license), style = TextStyle(n.textSecondary.asColor(), 14.sp))
+                BasicText(project.name, style = TextStyle(primaryColor, 16.sp, if (isP5) FontWeight.Bold else FontWeight.SemiBold))
+                BasicText(stringResource(project.use), style = TextStyle(secondaryColor, 14.sp))
+                BasicText(stringResource(project.license), style = TextStyle(secondaryColor, 14.sp))
             }
             Icon(
                 if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                 contentDescription = null,
-                tint = n.textSecondary.asColor(),
+                tint = secondaryColor,
             )
         }
         BrowserLink(project.url.removePrefix("https://"), project.url)
@@ -263,7 +338,7 @@ private fun ThirdPartyProjectRow(
                 listOfNotNull(attribution, license).joinToString("\n\n")
             }
             SelectionContainer(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
-                BasicText(details, style = TextStyle(color = n.textPrimary.asColor(), fontSize = 14.sp, lineHeight = 21.sp))
+                BasicText(details, style = TextStyle(color = primaryColor, fontSize = 14.sp, lineHeight = 21.sp))
             }
             for (link in project.termsLinks) {
                 BrowserLink(stringResource(link.label), link.url)
@@ -292,7 +367,9 @@ private fun openExternalUrl(context: android.content.Context, url: String) {
 @Composable
 private fun BrowserLink(label: String, url: String) {
     val context = LocalContext.current
-    val textColor = LocalThemeTokens.current.neutrals.textPrimary.asColor()
+    val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val textColor = if (isP5) t.accent.accentAction.asColor() else t.neutrals.textPrimary.asColor()
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp)
             .clickable(

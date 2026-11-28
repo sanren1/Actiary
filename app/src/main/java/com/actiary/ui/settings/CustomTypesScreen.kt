@@ -65,6 +65,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -105,6 +106,7 @@ import androidx.lifecycle.viewModelScope
 import com.actiary.ActiaryApp
 import com.actiary.R
 import com.actiary.data.RecordRepository
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.ActiaryDatabase
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.domain.WorkoutMetric
@@ -116,7 +118,9 @@ import com.actiary.glass.overlayInteraction
 import com.actiary.glass.rememberOverlayVisibility
 import com.actiary.glass.GlassToggle
 import com.actiary.ui.motion.rememberMotionReduced
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.common.CUSTOM_TYPE_ICONS
 import com.actiary.ui.common.exerciseTypeIcon
@@ -303,20 +307,39 @@ fun CustomTypesScreen(
             }
         }
         if (hiddenBuiltins.isNotEmpty()) {
-            val n = LocalThemeTokens.current.neutrals
-            val accent = LocalThemeTokens.current.accent.accentAction.asColor()
+            val t = LocalThemeTokens.current
+            val n = t.neutrals
+            val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+            val p5 = LocalP5Tokens.current
+            val accent = t.accent.accentAction.asColor()
             BasicText(
                 stringResource(R.string.custom_type_hidden_section),
                 Modifier.padding(top = 8.dp, start = 4.dp).semantics { heading() },
-                style = TextStyle(n.textSecondary.asColor(), 14.sp, FontWeight.SemiBold),
+                style = TextStyle(n.textSecondary.asColor(), 14.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
             )
             hiddenBuiltins.forEach { hidden ->
                 key("hidden_${hidden.id}") {
                     val label = exerciseTypeLabel(hidden)
+                    val hiddenShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+                    val hiddenBg = if (isP5) {
+                        if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor()
+                    } else {
+                        n.surface.asColor().copy(alpha = 0.72f)
+                    }
+                    val hiddenBorder = if (isP5) {
+                        Modifier.border(
+                            1.5.dp,
+                            if (t.dark) p5.strokeLight.asColor().copy(alpha = 0.45f) else p5.strokeDark.asColor(),
+                            hiddenShape,
+                        )
+                    } else {
+                        Modifier
+                    }
                     Row(
                         Modifier.fillMaxWidth().heightIn(min = 52.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(n.surface.asColor().copy(alpha = 0.72f))
+                            .clip(hiddenShape)
+                            .background(hiddenBg, hiddenShape)
+                            .then(hiddenBorder)
                             .padding(start = 12.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -324,7 +347,7 @@ fun CustomTypesScreen(
                         BasicText(
                             label,
                             Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
-                            style = TextStyle(n.textSecondary.asColor(), 15.sp),
+                            style = TextStyle(n.textSecondary.asColor(), 15.sp, if (isP5) FontWeight.Bold else FontWeight.Normal),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -336,6 +359,7 @@ fun CustomTypesScreen(
                             Text(
                                 stringResource(R.string.custom_type_restore),
                                 Modifier.padding(start = 6.dp),
+                                fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
                             )
                         }
                     }
@@ -406,9 +430,21 @@ private fun WorkoutTypeRow(
     val beginDrag by rememberUpdatedState(onDragStart)
     val moveDrag by rememberUpdatedState(onDrag)
     val endDrag by rememberUpdatedState(onDragEnd)
-    val shape = RoundedCornerShape(12.dp)
-    val deleteBg = if (t.dark) androidx.compose.ui.graphics.Color(0xFF4D1F1D) else androidx.compose.ui.graphics.Color(0xFFFDE8E6)
-    val deleteTint = if (t.dark) androidx.compose.ui.graphics.Color(0xFFFFB4AB) else androidx.compose.ui.graphics.Color(0xFFB3261E)
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val shape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+    val rowBg = if (isP5) {
+        if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor()
+    } else {
+        n.surface.asColor()
+    }
+    val rowBorder = if (isP5) {
+        Modifier.border(2.dp, if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor(), shape)
+    } else {
+        Modifier
+    }
+    val deleteBg = if (isP5) Color(0xFFD91E26) else if (t.dark) Color(0xFF4D1F1D) else Color(0xFFFDE8E6)
+    val deleteTint = if (isP5) Color.White else if (t.dark) Color(0xFFFFB4AB) else Color(0xFFB3261E)
     val revealProgress = if (reduced) {
         if (reveal > 0f) 1f else 0f
     } else {
@@ -434,19 +470,25 @@ private fun WorkoutTypeRow(
         ) {
             TypeAction(
                 Icons.Outlined.Edit, edit,
-                t.accent.accentSubtle.asColor(), t.accent.accentStroke.asColor(), t.accent.accentAction.asColor(),
+                if (isP5) p5.brandFill.asColor() else t.accent.accentSubtle.asColor(),
+                if (isP5) (if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()) else t.accent.accentStroke.asColor(),
+                if (isP5) p5.onBrandFill.asColor() else t.accent.accentAction.asColor(),
                 revealProgress, open, onEdit,
             )
             if (onRemove != null) {
                 TypeAction(
                     Icons.Outlined.DeleteOutline, remove,
-                    deleteBg, deleteTint.copy(alpha = 0.45f), deleteTint,
+                    deleteBg,
+                    if (isP5) (if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()) else deleteTint.copy(alpha = 0.45f),
+                    deleteTint,
                     revealProgress, open, onRemove,
                 )
             } else if (onHide != null) {
                 TypeAction(
                     Icons.Outlined.VisibilityOff, hide,
-                    n.surfaceMuted.asColor(), n.divider.asColor(), n.textSecondary.asColor(),
+                    if (isP5) p5.darkCard.asColor() else n.surfaceMuted.asColor(),
+                    if (isP5) (if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()) else n.divider.asColor(),
+                    if (isP5) p5.strokeLight.asColor() else n.textSecondary.asColor(),
                     revealProgress, open, onHide,
                 )
             }
@@ -454,7 +496,8 @@ private fun WorkoutTypeRow(
         Row(
             Modifier.fillMaxWidth().heightIn(min = 56.dp)
                 .padding(end = with(density) { reveal.toDp() })
-                .background(n.surface.asColor(), shape)
+                .background(rowBg, shape)
+                .then(rowBorder)
                 .draggable(
                     rememberDraggableState { delta -> swipeDistance = (swipeDistance + delta * direction).coerceIn(0f, width) },
                     Orientation.Horizontal, enabled = canGesture,
@@ -477,7 +520,7 @@ private fun WorkoutTypeRow(
             BasicText(
                 label,
                 Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
-                style = TextStyle(n.textPrimary.asColor(), 16.sp),
+                style = TextStyle(n.textPrimary.asColor(), 16.sp, if (isP5) FontWeight.Bold else FontWeight.Normal),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -513,7 +556,8 @@ private fun TypeAction(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val actionShape = RoundedCornerShape(12.dp)
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val actionShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
     val scale = 0.72f + 0.28f * revealProgress
     Box(
         Modifier.size(width = 48.dp, height = 52.dp)
@@ -524,7 +568,7 @@ private fun TypeAction(
             }
             .clip(actionShape)
             .background(background, actionShape)
-            .border(1.dp, border, actionShape)
+            .border(if (isP5) 2.dp else 1.dp, border, actionShape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -610,6 +654,12 @@ internal fun AddTypeSheet(
             visible = false
         }
     }
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val sheetPrimary = n.textPrimary.asColor()
+    val sheetSecondary = n.textSecondary.asColor()
+    val sheetAccent = t.accent.accentAction.asColor()
     GlassSheet(visible, ::close, onDismiss, title, covered = covered) {
         Column(
             Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState())
@@ -619,32 +669,35 @@ internal fun AddTypeSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BasicText(
                     title, Modifier.weight(1f).semantics { heading() },
-                    style = TextStyle(n.textPrimary.asColor(), 20.sp, FontWeight.SemiBold),
+                    style = TextStyle(sheetPrimary, 20.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
                 )
                 TextButton(
                     onClick = { close() },
                     enabled = !saving,
-                    colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
-                ) { Text(stringResource(R.string.record_cancel)) }
+                    colors = ButtonDefaults.textButtonColors(contentColor = sheetSecondary),
+                ) { Text(stringResource(R.string.record_cancel), fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal) }
             }
 
             val nameLabel = stringResource(R.string.custom_type_name)
-            BasicText(nameLabel, style = TextStyle(n.textSecondary.asColor(), 14.sp))
-            val fieldShape = RoundedCornerShape(12.dp)
+            BasicText(nameLabel, style = TextStyle(sheetSecondary, 14.sp, if (isP5) FontWeight.Bold else FontWeight.Normal))
+            val fieldShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+            val fieldBg = if (isP5 && t.dark) Color(0xFF1F1F24) else n.surfaceMuted.asColor()
+            val fieldBorder = when {
+                visibleNameError != null -> Modifier.border(2.dp, if (isP5) p5.brandFill.asColor() else t.accent.accentStroke.asColor(), fieldShape)
+                isP5 -> Modifier.border(2.dp, p5Stroke, fieldShape)
+                else -> Modifier
+            }
             BasicTextField(
                 value = name,
                 onValueChange = { name = it },
                 enabled = !saving,
                 singleLine = true,
-                textStyle = TextStyle(n.textPrimary.asColor(), 16.sp),
-                cursorBrush = SolidColor(t.accent.accentAction.asColor()),
+                textStyle = TextStyle(sheetPrimary, 16.sp),
+                cursorBrush = SolidColor(sheetAccent),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     .clip(fieldShape)
-                    .background(n.surfaceMuted.asColor())
-                    .then(
-                        if (visibleNameError != null) Modifier.border(2.dp, t.accent.accentStroke.asColor(), fieldShape)
-                        else Modifier
-                    )
+                    .background(fieldBg, fieldShape)
+                    .then(fieldBorder)
                     .semantics {
                         contentDescription = nameLabel
                         if (visibleNameError != null) error(visibleNameError)
@@ -655,7 +708,7 @@ internal fun AddTypeSheet(
                 BasicText(
                     visibleNameError,
                     Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    style = TextStyle(t.accent.accentAction.asColor(), 13.sp),
+                    style = TextStyle(sheetAccent, 13.sp),
                 )
             }
 
@@ -668,18 +721,20 @@ internal fun AddTypeSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                BasicText(stringResource(R.string.custom_type_icon), style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                BasicText(stringResource(R.string.custom_type_icon), style = TextStyle(sheetPrimary, 16.sp, if (isP5) FontWeight.Bold else FontWeight.Normal))
+                val iconBoxShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+                val iconBoxBorder = if (isP5) Modifier.border(2.dp, p5Stroke, iconBoxShape) else Modifier
                 Box(
-                    Modifier.size(48.dp).background(n.surfaceMuted.asColor(), RoundedCornerShape(12.dp)),
+                    Modifier.size(48.dp).background(fieldBg, iconBoxShape).then(iconBoxBorder),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (selectedIcon != null) {
-                        Icon(selectedIcon.vector, stringResource(selectedIcon.label), tint = n.textPrimary.asColor())
+                        Icon(selectedIcon.vector, stringResource(selectedIcon.label), tint = sheetPrimary)
                     } else if (editingType != null) {
                         Icon(
                             exerciseTypeIcon(editingType.copy(iconKey = null)),
                             stringResource(R.string.custom_type_default_icon),
-                            tint = n.textPrimary.asColor(),
+                            tint = sheetPrimary,
                         )
                     }
                 }
@@ -689,7 +744,7 @@ internal fun AddTypeSheet(
                 BasicText(
                     stringResource(R.string.workout_metric_options),
                     Modifier.semantics { heading() },
-                    style = TextStyle(n.textSecondary.asColor(), 14.sp),
+                    style = TextStyle(sheetSecondary, 14.sp, if (isP5) FontWeight.Bold else FontWeight.Normal),
                 )
                 val distanceLabel = stringResource(R.string.custom_type_has_distance)
                 GlassToggle(
@@ -698,7 +753,7 @@ internal fun AddTypeSheet(
                     modifier = Modifier.fillMaxWidth().overlayInteraction(!saving),
                     label = distanceLabel,
                 ) {
-                    BasicText(distanceLabel, style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                    BasicText(distanceLabel, style = TextStyle(sheetPrimary, 16.sp))
                 }
                 val offeredMetrics = availableWorkoutMetrics(editingType?.builtinKey)
                 val shownMetrics = WorkoutMetric.entries.filter { it in offeredMetrics || (metricMask and it.bit) != 0 }
@@ -714,7 +769,7 @@ internal fun AddTypeSheet(
                         modifier = Modifier.fillMaxWidth().overlayInteraction(!saving),
                         label = label,
                     ) {
-                        BasicText(label, style = TextStyle(n.textPrimary.asColor(), 16.sp))
+                        BasicText(label, style = TextStyle(sheetPrimary, 16.sp))
                     }
                 }
             }
@@ -722,13 +777,34 @@ internal fun AddTypeSheet(
                 BasicText(
                     stringResource(R.string.record_save_failed),
                     Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    style = TextStyle(n.textPrimary.asColor(), 14.sp),
+                    style = TextStyle(sheetPrimary, 14.sp),
                 )
+            }
+            val saveBtnShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+            val saveBtnBg = if (isP5) {
+                if (canSave) p5.brandFill.asColor() else if (t.dark) Color(0xFF26262C) else n.surfaceMuted.asColor()
+            } else {
+                if (canSave) t.accent.accentAction.asColor() else n.surfaceMuted.asColor()
+            }
+            val saveBtnBorder = if (isP5) {
+                Modifier.border(
+                    2.dp,
+                    if (canSave) p5Stroke else p5Stroke.copy(alpha = 0.35f),
+                    saveBtnShape,
+                )
+            } else {
+                Modifier
+            }
+            val saveBtnText = if (isP5) {
+                if (canSave) p5.onBrandFill.asColor() else n.textSecondary.asColor()
+            } else {
+                if (canSave) t.accent.onAccentAction.asColor() else n.textSecondary.asColor()
             }
             Box(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (canSave) t.accent.accentAction.asColor() else n.surfaceMuted.asColor())
+                    .clip(saveBtnShape)
+                    .background(saveBtnBg, saveBtnShape)
+                    .then(saveBtnBorder)
                     .clickable(enabled = canSave, role = Role.Button) {
                         focus.clearFocus()
                         val savedMetricMask = if (metricMask == initialMetricMask) editingType?.extraMetricMask else metricMask
@@ -739,7 +815,7 @@ internal fun AddTypeSheet(
             ) {
                 BasicText(
                     stringResource(R.string.record_save),
-                    style = TextStyle(if (canSave) t.accent.onAccentAction.asColor() else n.textSecondary.asColor(), 16.sp),
+                    style = TextStyle(saveBtnText, 16.sp, if (isP5) FontWeight.Black else FontWeight.Normal),
                 )
             }
         }
@@ -758,10 +834,18 @@ fun CustomTypeIconPicker(
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val titleColor = n.textPrimary.asColor()
+    val cancelColor = n.textSecondary.asColor()
     val title = stringResource(R.string.custom_type_choose_icon)
     GlassOverlayPanel(visible, onDismiss, PaddingValues(16.dp), title, visibility) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, modifier = Modifier.semantics { heading() }, color = n.textPrimary.asColor(), fontWeight = FontWeight.Medium)
+            Text(
+                title,
+                modifier = Modifier.semantics { heading() },
+                color = titleColor,
+                fontWeight = if (isP5) FontWeight.Black else FontWeight.Medium,
+            )
             FlowRow(
                 Modifier.selectableGroup(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -781,8 +865,8 @@ fun CustomTypeIconPicker(
             TextButton(
                 onDismiss,
                 Modifier.align(Alignment.End).heightIn(min = 48.dp),
-                colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
-            ) { Text(stringResource(R.string.record_cancel)) }
+                colors = ButtonDefaults.textButtonColors(contentColor = cancelColor),
+            ) { Text(stringResource(R.string.record_cancel), fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal) }
         }
     }
 }
@@ -792,16 +876,34 @@ private fun TypeIconChoice(icon: ImageVector, label: String, selected: Boolean, 
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
-    val shape = RoundedCornerShape(12.dp)
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val shape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+    val bg = if (isP5) {
+        if (selected) p5.brandFill.asColor() else if (t.dark) Color(0xFF1F1F24) else n.surfaceMuted.asColor()
+    } else {
+        if (selected) a.accentSubtle.asColor() else n.surfaceMuted.asColor()
+    }
+    val borderColor = if (isP5) {
+        if (selected) p5Stroke else p5Stroke.copy(alpha = if (t.dark) 0.45f else 0.75f)
+    } else {
+        if (selected) a.accentAction.asColor() else n.divider.asColor()
+    }
+    val tint = if (isP5) {
+        if (selected) p5.onBrandFill.asColor() else n.textPrimary.asColor()
+    } else {
+        n.textPrimary.asColor()
+    }
     Box(
         Modifier.size(48.dp)
             .clip(shape)
-            .background(if (selected) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
-            .border(if (selected) 2.dp else 1.dp, if (selected) a.accentAction.asColor() else n.divider.asColor(), shape)
+            .background(bg, shape)
+            .border(if (selected) 2.dp else if (isP5) 1.5.dp else 1.dp, borderColor, shape)
             .semantics { contentDescription = label }
             .selectable(selected, role = Role.RadioButton, onClick = onSelect),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = n.textPrimary.asColor())
+        Icon(icon, null, tint = tint)
     }
 }

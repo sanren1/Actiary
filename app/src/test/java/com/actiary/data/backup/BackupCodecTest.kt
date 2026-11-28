@@ -1,10 +1,17 @@
 package com.actiary.data.backup
 
+import com.actiary.data.appearance.AppearanceRepository
+import com.actiary.data.appearance.P5MotionLevel
+import com.actiary.data.appearance.P5Palette
+import com.actiary.data.appearance.UiStyle
+import com.actiary.data.appearance.inMemoryPreferencesStore
 import com.actiary.data.db.DayStatus
 import com.actiary.domain.ALL_MUSCLE_MASK
 import com.actiary.domain.MuscleGroup
 import com.actiary.domain.WorkoutMetrics
 import com.actiary.domain.muscleMaskOf
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -33,6 +40,55 @@ class BackupCodecTest {
         )
         assertEquals(false, JSONObject(data.toJson()).getJSONObject("appearance").get("ambient_background"))
         assertEquals(data, parseBackup(data.toJson()))
+    }
+
+    @Test fun roundTripsP5AppearanceFields() {
+        val data = BackupData(
+            BACKUP_FORMAT, "0.14.0", 1_700_000_000_000L,
+            mapOf(
+                "ui_style" to "PERSONA_5",
+                "p5_palette" to "CALLING_CARD",
+                "p5_motion_level" to "COMPACT",
+                "p5_ransom_title" to "false",
+                "reduce_in_app_motion" to "true",
+            ),
+            listOf(BackupType(40, null, "攀岩", 0, false, false, null)),
+            listOf(BackupRecord(20, DayStatus.EXERCISED, "训练", 123)),
+            listOf(BackupEntry(50, 20, 40, 30, null, null, null, 0)),
+            listOf(BackupPhoto(20, "photo.jpg", 0, 123)),
+        )
+        val encoded = data.toJson()
+        val appearanceJson = JSONObject(encoded).getJSONObject("appearance")
+        assertEquals("PERSONA_5", appearanceJson.getString("ui_style"))
+        assertEquals("CALLING_CARD", appearanceJson.getString("p5_palette"))
+        assertEquals("COMPACT", appearanceJson.getString("p5_motion_level"))
+        assertEquals(false, appearanceJson.get("p5_ransom_title"))
+        assertEquals(true, appearanceJson.get("reduce_in_app_motion"))
+        assertEquals(data, parseBackup(encoded))
+    }
+
+    @Test fun legacyBackupWithoutP5FieldsParsesCleanly() = runBlocking {
+        val repo = AppearanceRepository(inMemoryPreferencesStore())
+        repo.setUiStyle(UiStyle.PERSONA_5)
+        repo.setP5Palette(P5Palette.CALLING_CARD)
+        repo.setP5RansomTitle(false)
+        repo.setP5MotionLevel(P5MotionLevel.COMPACT)
+        repo.setReduceInAppMotion(true)
+
+        val parsed = parseBackup(json)
+        assertFalse("ui_style" in parsed.appearance)
+        assertFalse("p5_palette" in parsed.appearance)
+        assertFalse("p5_motion_level" in parsed.appearance)
+        assertFalse("p5_ransom_title" in parsed.appearance)
+        assertFalse("reduce_in_app_motion" in parsed.appearance)
+
+        repo.importAppearance(parsed.appearance, replace = true)
+        val imported = repo.settings.first()
+        assertEquals(UiStyle.LIQUID_GLASS, imported.uiStyle)
+        assertEquals(P5Palette.PHANTOM_RED, imported.p5Palette)
+        assertEquals(true, imported.p5RansomTitle)
+        assertEquals(P5MotionLevel.STANDARD, imported.p5MotionLevel)
+        assertEquals(false, imported.reduceInAppMotion)
     }
 
     @Test fun missingOptionalFieldsBecomeNull() {

@@ -33,6 +33,11 @@ internal val AMBIENT_BACKGROUND = booleanPreferencesKey("ambient_background")
 internal val AMOLED_BLACK = booleanPreferencesKey("amoled_black")
 private val RECENT_COLORS = stringPreferencesKey("recent_colors")
 private val ACCENT_COLORS = stringPreferencesKey("accent_colors")
+private val UI_STYLE = stringPreferencesKey("ui_style")
+private val P5_PALETTE = stringPreferencesKey("p5_palette")
+private val P5_MOTION_LEVEL = stringPreferencesKey("p5_motion_level")
+internal val P5_RANSOM_TITLE = booleanPreferencesKey("p5_ransom_title")
+internal val REDUCE_IN_APP_MOTION = booleanPreferencesKey("reduce_in_app_motion")
 
 internal val builtInAccentColors = AccentPreset.entries.mapNotNull { preset ->
     preset.seed()?.let { it.toHex() to preset }
@@ -46,6 +51,9 @@ private val appearanceValidators = mapOf<Preferences.Key<String>, (String) -> Bo
     GLASS_TINT_STRENGTH to { value -> GlassTintStrength.entries.any { it.name == value } },
     CHART_PALETTE to { value -> ChartPalette.entries.any { it.name == value } },
     ACCENT_COLORS to { value -> value.isEmpty() || value.split(',').all { normalizeHex(it) != null } },
+    UI_STYLE to { value -> UiStyle.entries.any { it.name == value } },
+    P5_PALETTE to { value -> P5Palette.entries.any { it.name == value } },
+    P5_MOTION_LEVEL to { value -> P5MotionLevel.entries.any { it.name == value } },
 )
 internal val backupAppearanceStringKeys = appearanceValidators.keys
 
@@ -63,6 +71,11 @@ fun Preferences.toAppearanceSettings(): AppearanceSettings {
         chartPalette = enumOr(CHART_PALETTE, d.chartPalette),
         ambientBackground = this[AMBIENT_BACKGROUND] ?: d.ambientBackground,
         amoledBlack = this[AMOLED_BLACK] ?: d.amoledBlack,
+        uiStyle = enumOr(UI_STYLE, d.uiStyle),
+        p5Palette = enumOr(P5_PALETTE, d.p5Palette),
+        p5RansomTitle = this[P5_RANSOM_TITLE] ?: d.p5RansomTitle,
+        p5MotionLevel = enumOr(P5_MOTION_LEVEL, d.p5MotionLevel),
+        reduceInAppMotion = this[REDUCE_IN_APP_MOTION] ?: d.reduceInAppMotion,
     )
 }
 
@@ -123,6 +136,11 @@ class AppearanceRepository(
     suspend fun setChartPalette(p: ChartPalette) { editAndNotify { it[CHART_PALETTE] = p.name } }
     suspend fun setAmbientBackground(enabled: Boolean) { editAndNotify { it[AMBIENT_BACKGROUND] = enabled } }
     suspend fun setAmoledBlack(enabled: Boolean) { editAndNotify { it[AMOLED_BLACK] = enabled } }
+    suspend fun setUiStyle(style: UiStyle) { editAndNotify { it[UI_STYLE] = style.name } }
+    suspend fun setP5Palette(palette: P5Palette) { editAndNotify { it[P5_PALETTE] = palette.name } }
+    suspend fun setP5RansomTitle(enabled: Boolean) { editAndNotify { it[P5_RANSOM_TITLE] = enabled } }
+    suspend fun setP5MotionLevel(level: P5MotionLevel) { editAndNotify { it[P5_MOTION_LEVEL] = level.name } }
+    suspend fun setReduceInAppMotion(enabled: Boolean) { editAndNotify { it[REDUCE_IN_APP_MOTION] = enabled } }
     suspend fun selectDynamicAccent() { editAndNotify { it[ACCENT_PRESET] = AccentPreset.DYNAMIC.name } }
 
     suspend fun setCustomAccent(hex: String) {
@@ -183,7 +201,29 @@ class AppearanceRepository(
         }
     }
 
-    suspend fun resetAppearance() = restoreAppearance(emptyMap(), clearRecent = true)
+    suspend fun resetAppearance() {
+        editAndNotify { preferences ->
+            when (preferences.enumOr(UI_STYLE, AppearanceSettings().uiStyle)) {
+                UiStyle.PERSONA_5 -> {
+                    preferences.remove(P5_PALETTE)
+                    preferences.remove(P5_RANSOM_TITLE)
+                    preferences.remove(P5_MOTION_LEVEL)
+                }
+                UiStyle.LIQUID_GLASS -> {
+                    preferences.remove(THEME_MODE)
+                    preferences.remove(ACCENT_PRESET)
+                    preferences.remove(CUSTOM_ACCENT_HEX)
+                    preferences.remove(GLASS_LEVEL)
+                    preferences.remove(GLASS_TINT_STRENGTH)
+                    preferences.remove(CHART_PALETTE)
+                    preferences.remove(AMBIENT_BACKGROUND)
+                    preferences.remove(AMOLED_BLACK)
+                    preferences.remove(RECENT_COLORS)
+                    preferences.remove(ACCENT_COLORS)
+                }
+            }
+        }
+    }
 
     suspend fun exportAppearance(): Map<String, String> {
         val preferences = store.data.first()
@@ -191,6 +231,8 @@ class AppearanceRepository(
             for (key in backupAppearanceStringKeys) preferences[key]?.let { put(key.name, it) }
             preferences[AMBIENT_BACKGROUND]?.let { put(AMBIENT_BACKGROUND.name, it.toString()) }
             preferences[AMOLED_BLACK]?.let { put(AMOLED_BLACK.name, it.toString()) }
+            preferences[P5_RANSOM_TITLE]?.let { put(P5_RANSOM_TITLE.name, it.toString()) }
+            preferences[REDUCE_IN_APP_MOTION]?.let { put(REDUCE_IN_APP_MOTION.name, it.toString()) }
         }
     }
 
@@ -205,6 +247,12 @@ class AppearanceRepository(
             }
             values[AMOLED_BLACK.name]?.toBooleanStrictOrNull()?.let {
                 put(AMOLED_BLACK.name, it.toString())
+            }
+            values[P5_RANSOM_TITLE.name]?.toBooleanStrictOrNull()?.let {
+                put(P5_RANSOM_TITLE.name, it.toString())
+            }
+            values[REDUCE_IN_APP_MOTION.name]?.toBooleanStrictOrNull()?.let {
+                put(REDUCE_IN_APP_MOTION.name, it.toString())
             }
         }
         restoreAppearance(validated)
@@ -223,6 +271,12 @@ class AppearanceRepository(
             val amoled = values[AMOLED_BLACK.name]
             if (amoled == null) preferences.remove(AMOLED_BLACK)
             else preferences[AMOLED_BLACK] = amoled.toBooleanStrict()
+            val p5RansomTitle = values[P5_RANSOM_TITLE.name]
+            if (p5RansomTitle == null) preferences.remove(P5_RANSOM_TITLE)
+            else preferences[P5_RANSOM_TITLE] = p5RansomTitle.toBooleanStrict()
+            val reduceInAppMotion = values[REDUCE_IN_APP_MOTION.name]
+            if (reduceInAppMotion == null) preferences.remove(REDUCE_IN_APP_MOTION)
+            else preferences[REDUCE_IN_APP_MOTION] = reduceInAppMotion.toBooleanStrict()
             if (clearRecent) preferences.remove(RECENT_COLORS)
         }
     }

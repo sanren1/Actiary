@@ -7,6 +7,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -43,10 +46,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import com.actiary.R
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.update.AppUpdater
 import com.actiary.data.update.ReleaseUpdate
 import com.actiary.glass.GlassOverlayPanel
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -62,6 +68,12 @@ internal fun UpdateDialog(
     val scope = rememberCoroutineScope()
     val t = LocalThemeTokens.current
     val n = t.neutrals
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val primaryText = n.textPrimary.asColor()
+    val secondaryText = n.textSecondary.asColor()
+    val accentText = t.accent.accentAction.asColor()
     var held by remember { mutableStateOf<ReleaseUpdate?>(null) }
     if (update != null) held = update
     val shown = update ?: held
@@ -82,7 +94,7 @@ internal fun UpdateDialog(
                 BasicText(
                     title,
                     Modifier.semantics { heading() },
-                    style = TextStyle(n.textPrimary.asColor(), 19.sp, FontWeight.SemiBold),
+                    style = TextStyle(primaryText, 19.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
                 )
                 val notesText = shown.notes.ifBlank { stringResource(R.string.update_default_notes) }
                 Column(
@@ -90,7 +102,7 @@ internal fun UpdateDialog(
                 ) {
                     BasicText(
                         notesText,
-                        style = TextStyle(n.textSecondary.asColor(), 14.sp, lineHeight = 20.sp),
+                        style = TextStyle(secondaryText, 14.sp, lineHeight = 20.sp),
                     )
                 }
                 if (downloading) {
@@ -101,19 +113,22 @@ internal fun UpdateDialog(
                         } else {
                             stringResource(R.string.update_downloading)
                         }
-                        BasicText(label, style = TextStyle(n.textPrimary.asColor(), 13.sp, FontWeight.Medium))
+                        BasicText(label, style = TextStyle(primaryText, 13.sp, if (isP5) FontWeight.Bold else FontWeight.Medium))
+                        val progressClip = if (isP5) RectangleShape else RoundedCornerShape(4.dp)
+                        val progressColor = if (isP5) p5.brandFill.asColor() else t.accent.accentAction.asColor()
+                        val trackColor = if (isP5 && t.dark) Color(0xFF2B2B32) else n.surfaceMuted.asColor()
                         if (p != null) {
                             LinearProgressIndicator(
                                 progress = { p },
-                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
-                                color = t.accent.accentAction.asColor(),
-                                trackColor = n.surfaceMuted.asColor(),
+                                modifier = Modifier.fillMaxWidth().clip(progressClip),
+                                color = progressColor,
+                                trackColor = trackColor,
                             )
                         } else {
                             LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
-                                color = t.accent.accentAction.asColor(),
-                                trackColor = n.surfaceMuted.asColor(),
+                                modifier = Modifier.fillMaxWidth().clip(progressClip),
+                                color = progressColor,
+                                trackColor = trackColor,
                             )
                         }
                     }
@@ -121,13 +136,38 @@ internal fun UpdateDialog(
                 if (downloadError) {
                     BasicText(
                         stringResource(R.string.update_download_failed),
-                        style = TextStyle(t.accent.accentAction.asColor(), 13.sp),
+                        style = TextStyle(accentText, 13.sp),
                     )
+                }
+                val btnShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+                val btnBg = if (isP5) {
+                    if (downloading) {
+                        if (t.dark) Color(0xFF26262C) else n.surfaceMuted.asColor()
+                    } else {
+                        p5.brandFill.asColor()
+                    }
+                } else {
+                    if (downloading) n.surfaceMuted.asColor() else t.accent.accentAction.asColor()
+                }
+                val btnBorder = if (isP5) {
+                    Modifier.border(
+                        2.dp,
+                        if (downloading) p5Stroke.copy(alpha = 0.35f) else p5Stroke,
+                        btnShape,
+                    )
+                } else {
+                    Modifier
+                }
+                val btnTextColor = if (isP5) {
+                    if (downloading) n.textSecondary.asColor() else p5.onBrandFill.asColor()
+                } else {
+                    if (downloading) n.textSecondary.asColor() else t.accent.onAccentAction.asColor()
                 }
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = 46.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (downloading) n.surfaceMuted.asColor() else t.accent.accentAction.asColor())
+                        .clip(btnShape)
+                        .background(btnBg, btnShape)
+                        .then(btnBorder)
                         .clickable(enabled = !downloading, role = Role.Button) {
                             val apkUrl = shown.apkUrl
                             if (apkUrl == null) {
@@ -159,9 +199,9 @@ internal fun UpdateDialog(
                     BasicText(
                         stringResource(if (downloadError) R.string.update_retry else R.string.update_action_now),
                         style = TextStyle(
-                            if (downloading) n.textSecondary.asColor() else t.accent.onAccentAction.asColor(),
+                            btnTextColor,
                             15.sp,
-                            FontWeight.SemiBold,
+                            if (isP5) FontWeight.Black else FontWeight.SemiBold,
                         ),
                     )
                 }
@@ -174,13 +214,21 @@ internal fun UpdateDialog(
                         onClick = { onIgnore(shown.version) },
                         enabled = !downloading,
                     ) {
-                        Text(stringResource(R.string.update_action_ignore), color = n.textSecondary.asColor())
+                        Text(
+                            stringResource(R.string.update_action_ignore),
+                            color = secondaryText,
+                            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
+                        )
                     }
                     TextButton(
                         onClick = onDismiss,
                         enabled = !downloading,
                     ) {
-                        Text(stringResource(R.string.record_cancel), color = n.textPrimary.asColor())
+                        Text(
+                            stringResource(R.string.record_cancel),
+                            color = primaryText,
+                            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
+                        )
                     }
                 }
             }

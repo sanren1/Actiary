@@ -101,7 +101,13 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.actiary.R
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.P5AnchoredMenu
+import com.actiary.p5.P5Dialog
+import com.actiary.p5.P5OverlayPanel
+import com.actiary.p5.P5Sheet
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.motion.Motion
 import com.actiary.ui.motion.PredictiveBack
@@ -189,6 +195,10 @@ internal fun positionGlassMenu(
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun GlassAnchoredMenu(state: GlassAnchoredMenuState, visibility: MutableTransitionState<Boolean>) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5AnchoredMenu(state, visibility)
+        return
+    }
     val request = state.request
     var retained by remember { mutableStateOf<GlassAnchoredMenuState.Request?>(null) }
     SideEffect {
@@ -332,6 +342,10 @@ fun GlassDialog(
     onDismiss: () -> Unit,
     visibility: MutableTransitionState<Boolean> = rememberOverlayVisibility(visible),
 ) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5Dialog(visible, text, confirm, dismiss, onConfirm, onDismiss, visibility)
+        return
+    }
     val t = LocalThemeTokens.current
     GlassOverlayPanel(
         visible, onDismiss, PaddingValues(start = 24.dp, top = 24.dp, end = 12.dp, bottom = 8.dp), text, visibility,
@@ -354,6 +368,10 @@ fun GlassOverlayPanel(
     visibility: MutableTransitionState<Boolean> = rememberOverlayVisibility(visible),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5OverlayPanel(visible, onDismiss, contentPadding, title, visibility, content)
+        return
+    }
     OverlayBackHandler(visibility, onDismiss)
     val reduced = rememberMotionReduced()
     AnimatedVisibility(visibility, enter = EnterTransition.None, exit = ExitTransition.None) {
@@ -390,6 +408,10 @@ fun GlassSheet(
     covered: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5Sheet(visible, onRequestClose, onExited, title, covered, content)
+        return
+    }
     val reduced = rememberMotionReduced()
     val exited by rememberUpdatedState(onExited)
     var entered by rememberSaveable { mutableStateOf(false) }

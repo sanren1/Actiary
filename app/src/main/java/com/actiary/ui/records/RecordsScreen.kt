@@ -59,6 +59,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
@@ -77,6 +80,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
@@ -93,6 +97,7 @@ import com.actiary.data.db.StrengthExerciseEntity
 import com.actiary.data.photo.PhotoStore
 import com.actiary.data.appearance.ChartPalette
 import com.actiary.data.appearance.RecordsView
+import com.actiary.data.appearance.UiStyle
 import com.actiary.domain.Bucket
 import com.actiary.domain.ChartMetric
 import com.actiary.domain.DateRange
@@ -109,10 +114,15 @@ import com.actiary.domain.shiftRange
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassPanel
 import com.actiary.glass.GlassSegmentedPicker
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Surface
 import com.actiary.theme.ChartColors
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.theme.resolveChartColors
+import com.actiary.theme.resolveP5ChartColors
 import com.actiary.ui.calendar.buildStrengthSummaryText
 import com.actiary.ui.common.AnatomyBodyMap
 import com.actiary.ui.common.BodyMapStyle
@@ -180,7 +190,11 @@ fun RecordsScreen(
     onView: (LocalDate) -> Unit,
 ) {
     val t = LocalThemeTokens.current
-    val colors = remember(chartPalette, t) { resolveChartColors(chartPalette, t) }
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val colors = remember(chartPalette, t, isP5, p5) {
+        if (isP5) resolveP5ChartColors(p5) else resolveChartColors(chartPalette, t)
+    }
     val locale = LocalConfiguration.current.locales[0]
     val reduced = rememberMotionReduced()
     var today by remember { mutableStateOf(LocalDate.now()) }
@@ -461,8 +475,10 @@ private fun SummaryCard(
     filter: @Composable () -> Unit,
 ) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
     val secondary = t.neutrals.textSecondary.asColor()
-    GlassPanel(Modifier.fillMaxWidth()) {
+    val content: @Composable () -> Unit = {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             filter()
             val stats = summary.stats
@@ -482,21 +498,51 @@ private fun SummaryCard(
                             byType.forEachIndexed { i, (id, count) ->
                                 val type = typeById[id] ?: return@forEachIndexed
                                 val fraction = count.toFloat() / top
-                                val color = colors.categories[i % colors.categories.size].asColor()
+                                val color = if (isP5) {
+                                    when (i % 3) {
+                                        0 -> p5.brandFill.asColor()
+                                        1 -> p5.highlightBadge.asColor()
+                                        else -> t.accent.accentAction.asColor()
+                                    }
+                                } else {
+                                    colors.categories[i % colors.categories.size].asColor()
+                                }
+                                val rowPrimary = t.neutrals.textPrimary.asColor()
+                                val rowIconTint = if (isP5) rowPrimary.copy(alpha = 0.85f) else secondary
+                                val barTrack = if (t.dark) Color(0xFF25272C) else t.neutrals.surfaceMuted.asColor()
+                                val barBorder = if (t.dark) p5.strokeLight.asColor().copy(alpha = 0.35f) else p5.strokeDark.asColor()
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(exerciseTypeIcon(type), null, Modifier.size(18.dp), tint = secondary)
+                                    Icon(exerciseTypeIcon(type), null, Modifier.size(18.dp), tint = rowIconTint)
                                     BasicText(
                                         exerciseTypeLabel(type), Modifier.width(88.dp),
-                                        style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        style = TextStyle(rowPrimary, 14.sp, if (isP5) FontWeight.Bold else FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
-                                    Canvas(
-                                        Modifier.weight(1f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(t.neutrals.surfaceMuted.asColor()),
-                                    ) {
-                                        val barWidth = size.width * fraction
-                                        val x = if (layoutDirection == LayoutDirection.Rtl) size.width - barWidth else 0f
-                                        drawRoundRect(color, Offset(x, 0f), Size(barWidth, size.height), CornerRadius(size.height / 2f))
+                                    if (isP5) {
+                                        Canvas(
+                                            Modifier
+                                                .weight(1f)
+                                                .height(10.dp)
+                                                .background(barTrack)
+                                                .border(1.dp, barBorder),
+                                        ) {
+                                            val barWidth = size.width * fraction
+                                            val x = if (layoutDirection == LayoutDirection.Rtl) size.width - barWidth else 0f
+                                            drawRect(color, Offset(x, 0f), Size(barWidth, size.height))
+                                        }
+                                    } else {
+                                        Canvas(
+                                            Modifier.weight(1f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(t.neutrals.surfaceMuted.asColor()),
+                                        ) {
+                                            val barWidth = size.width * fraction
+                                            val x = if (layoutDirection == LayoutDirection.Rtl) size.width - barWidth else 0f
+                                            drawRoundRect(color, Offset(x, 0f), Size(barWidth, size.height), CornerRadius(size.height / 2f))
+                                        }
                                     }
-                                    BasicText(count.toString(), Modifier.width(28.dp), style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp, FontWeight.Medium))
+                                    BasicText(
+                                        count.toString(),
+                                        Modifier.width(28.dp),
+                                        style = TextStyle(rowPrimary, 14.sp, if (isP5) FontWeight.Black else FontWeight.Medium),
+                                    )
                                 }
                             }
                         }
@@ -508,14 +554,52 @@ private fun SummaryCard(
                     ChartMetric.entries.map { stringResource(it.label) }, metric.ordinal,
                     { onMetric(ChartMetric.entries[it]) },
                 )
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                        .background(t.neutrals.surface.asColor()).padding(12.dp),
-                ) {
-                    val chart = RecordsChart(summary.range, summary.filter, metric, summary.stats.buckets)
-                    BarChart(chart, colors, reduced, Modifier.fillMaxWidth())
+                val chart = RecordsChart(summary.range, summary.filter, metric, summary.stats.buckets)
+                if (isP5) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .p5Surface(
+                                variant = P5ShapeVariant.CARD,
+                                fillColor = p5.lightCard.asColor(),
+                                strokeColor = p5.strokeDark.asColor(),
+                                shadowColor = p5.shadowColor.asColor(),
+                                strokeWidth = 2.5.dp,
+                                shadowOffset = DpOffset(4.dp, 4.dp),
+                            )
+                            .padding(14.dp),
+                    ) {
+                        BarChart(chart, colors, reduced, Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Box(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .background(t.neutrals.surface.asColor()).padding(12.dp),
+                    ) {
+                        BarChart(chart, colors, reduced, Modifier.fillMaxWidth())
+                    }
                 }
             }
+        }
+    }
+    if (isP5) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .p5Surface(
+                    variant = P5ShapeVariant.PANEL,
+                    fillColor = if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor(),
+                    strokeColor = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor(),
+                    shadowColor = if (t.dark) p5.shadowColor.asColor() else p5.brandFill.asColor(),
+                    strokeWidth = 2.dp,
+                    shadowOffset = DpOffset(4.dp, 4.dp),
+                ),
+        ) {
+            content()
+        }
+    } else {
+        GlassPanel(Modifier.fillMaxWidth()) {
+            content()
         }
     }
 }
@@ -523,15 +607,39 @@ private fun SummaryCard(
 @Composable
 private fun Stat(modifier: Modifier, label: String, value: String?, reduced: Boolean) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
     Column(modifier) {
         RecordsCrossfade(value, reduced) { shown, visibility ->
             if (shown == null) {
-                BasicText(stringResource(R.string.records_none), visibility, style = TextStyle(t.neutrals.textSecondary.asColor(), 16.sp))
+                BasicText(
+                    stringResource(R.string.records_none),
+                    visibility,
+                    style = TextStyle(
+                        color = t.neutrals.textSecondary.asColor().copy(alpha = if (isP5) 0.7f else 1f),
+                        fontSize = if (isP5) 20.sp else 16.sp,
+                        fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
+                    ),
+                )
             } else {
-                BasicText(shown, visibility, style = TextStyle(t.neutrals.textPrimary.asColor(), 22.sp, FontWeight.Bold))
+                BasicText(
+                    shown,
+                    visibility,
+                    style = TextStyle(
+                        color = t.neutrals.textPrimary.asColor(),
+                        fontSize = if (isP5) 28.sp else 22.sp,
+                        fontWeight = if (isP5) FontWeight.Black else FontWeight.Bold,
+                    ),
+                )
             }
         }
-        BasicText(label, style = TextStyle(t.neutrals.textSecondary.asColor(), 13.sp))
+        BasicText(
+            label,
+            style = TextStyle(
+                color = if (isP5) t.accent.accentAction.asColor() else t.neutrals.textSecondary.asColor(),
+                fontSize = 13.sp,
+                fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
+            ),
+        )
     }
 }
 
@@ -545,20 +653,24 @@ private fun metricText(metric: ChartMetric, v: Int): String = when (metric) {
 @Composable
 private fun BarChart(chart: RecordsChart, colors: ChartColors, reduced: Boolean, modifier: Modifier) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val buckets = chart.buckets
     val metric = chart.metric
     val values = buckets.map { it.valueOf(metric) }
     val max = values.filterNotNull().maxOrNull()
-    val secondary = t.neutrals.textSecondary.asColor()
+    val secondary = if (isP5) p5.onLightCardMuted.asColor() else t.neutrals.textSecondary.asColor()
+    val maxLabelColor = if (isP5) p5.onLightCard.asColor() else secondary
     // First bucket reaching the maximum is highlighted; ties keep the earliest bar.
     val maxIndex = maxValueIndex(values)
     val series = colors.series.asColor()
     val highlight = colors.highlight.asColor()
+    val strokeDark = p5.strokeDark.asColor()
     val maxText = if (max == null) stringResource(R.string.records_none) else metricText(metric, max)
     val description = if (max == null) maxText else
         stringResource(R.string.records_chart_desc, stringResource(metric.label), maxText)
-    val slot = t.neutrals.divider.asColor()
+    val slot = if (isP5) p5.onLightCardMuted.asColor().copy(alpha = 0.28f) else t.neutrals.divider.asColor()
     fun label(i: Int) = buckets[i].start.let { if (chart.range.kind == RangeKind.YEAR) it.monthValue else it.dayOfMonth }.toString()
 
     val targetBars = remember(values, maxIndex, rtl) { buildBarSpecs(values, maxIndex, rtl) }
@@ -587,29 +699,70 @@ private fun BarChart(chart: RecordsChart, colors: ChartColors, reduced: Boolean,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         RecordsCrossfade(maxText, reduced) { shownMax, visibility ->
-            BasicText(shownMax, visibility, style = TextStyle(secondary, 12.sp))
+            BasicText(
+                shownMax,
+                visibility,
+                style = TextStyle(
+                    color = maxLabelColor,
+                    fontSize = 12.sp,
+                    fontWeight = if (isP5) FontWeight.Black else FontWeight.Normal,
+                ),
+            )
         }
         Canvas(Modifier.fillMaxWidth().height(96.dp)) {
             val minH = 2.dp.toPx()
+            if (isP5) {
+                val gridColor = secondary.copy(alpha = 0.22f)
+                val gridStroke = 1.dp.toPx()
+                drawLine(gridColor, Offset(0f, size.height * 0.5f), Offset(size.width, size.height * 0.5f), strokeWidth = gridStroke)
+                drawLine(strokeDark.copy(alpha = 0.5f), Offset(0f, size.height - gridStroke / 2f), Offset(size.width, size.height - gridStroke / 2f), strokeWidth = gridStroke)
+            }
             displayedBars.forEach { bar ->
                 if (bar.alpha <= 0.01f) return@forEach
                 val barW = size.width * bar.widthNorm
                 val x = size.width * bar.centerNorm - barW / 2f
                 val h = size.height * bar.fraction
+                val drawnH = h.coerceAtLeast(minH)
+                val topLeft = Offset(x, size.height - drawnH)
+                val barSize = Size(barW, drawnH)
                 val baseColor = if (h < minH) slot else if (bar.isMax) highlight else series
-                drawRoundRect(
-                    baseColor.copy(alpha = baseColor.alpha * bar.alpha),
-                    Offset(x, size.height - h.coerceAtLeast(minH)),
-                    Size(barW, h.coerceAtLeast(minH)),
-                    CornerRadius(barW.coerceAtMost(4.dp.toPx())),
-                )
+                if (isP5) {
+                    drawRect(
+                        color = baseColor.copy(alpha = baseColor.alpha * bar.alpha),
+                        topLeft = topLeft,
+                        size = barSize,
+                    )
+                    if (h >= minH) {
+                        drawRect(
+                            color = strokeDark.copy(alpha = bar.alpha),
+                            topLeft = topLeft,
+                            size = barSize,
+                            style = Stroke(width = 1.dp.toPx(), join = StrokeJoin.Miter),
+                        )
+                    }
+                } else {
+                    drawRoundRect(
+                        baseColor.copy(alpha = baseColor.alpha * bar.alpha),
+                        topLeft,
+                        barSize,
+                        CornerRadius(barW.coerceAtMost(4.dp.toPx())),
+                    )
+                }
             }
         }
         RecordsCrossfade(tickEntries to buckets.size, reduced, Modifier.fillMaxWidth()) { (shownTicks, bucketCount), visibility ->
             Layout(
                 content = {
                     shownTicks.forEach { (_, text) ->
-                        BasicText(text, style = TextStyle(secondary, 12.sp), maxLines = 1)
+                        BasicText(
+                            text,
+                            style = TextStyle(
+                                color = secondary,
+                                fontSize = 12.sp,
+                                fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
+                            ),
+                            maxLines = 1,
+                        )
                     }
                 },
                 modifier = visibility.fillMaxWidth(),
@@ -652,11 +805,16 @@ private fun MuscleDistributionCard(
     modifier: Modifier = Modifier,
 ) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
     val primary = t.neutrals.textPrimary.asColor()
     val secondary = t.neutrals.textSecondary.asColor()
-    val accent = t.accent.accentAction.asColor()
+    val accent = if (isP5) p5.brandFill.asColor() else t.accent.accentAction.asColor()
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val p5Unworked = if (t.dark) Color(0xFF25272C) else Color(0xFFD8D6CE)
+    val p5Level1 = if (t.dark) Color(0xFF7A141A) else p5.brandFill.asColor().copy(alpha = 0.42f)
 
-    GlassPanel(modifier.fillMaxWidth()) {
+    val cardContent: @Composable () -> Unit = {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -666,7 +824,7 @@ private fun MuscleDistributionCard(
                 BasicText(
                     stringResource(R.string.records_muscle_title),
                     Modifier.weight(1f).semantics { heading() },
-                    style = TextStyle(primary, 16.sp, FontWeight.SemiBold),
+                    style = TextStyle(primary, 16.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -685,21 +843,38 @@ private fun MuscleDistributionCard(
                     } else {
                         stringResource(R.string.records_muscle_filtered, muscleName)
                     }
-                    Row(
+                    val chipModifier = if (isP5) {
+                        Modifier
+                            .widthIn(max = 220.dp)
+                            .p5Surface(
+                                variant = P5ShapeVariant.BADGE,
+                                fillColor = p5.brandFill.asColor(),
+                                strokeColor = p5Stroke,
+                                shadowColor = p5.strokeDark.asColor(),
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = DpOffset(2.dp, 2.dp),
+                            )
+                            .clickable(role = Role.Button, onClickLabel = clearLabel, onClick = onClearMuscle)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    } else {
                         Modifier
                             .widthIn(max = 220.dp)
                             .clip(chipShape)
                             .background(t.accent.accentSubtle.asColor())
                             .border(1.dp, t.accent.accentStroke.asColor(), chipShape)
                             .clickable(role = Role.Button, onClickLabel = clearLabel, onClick = onClearMuscle)
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    }
+                    val chipFg = if (isP5) p5.onBrandFill.asColor() else accent
+                    Row(
+                        chipModifier,
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         BasicText(
                             chipLabel,
                             Modifier.weight(1f, fill = false),
-                            style = TextStyle(accent, 12.sp, FontWeight.Medium),
+                            style = TextStyle(chipFg, 12.sp, if (isP5) FontWeight.Bold else FontWeight.Medium),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -707,18 +882,26 @@ private fun MuscleDistributionCard(
                             Icons.Outlined.Close,
                             clearLabel,
                             Modifier.size(14.dp),
-                            tint = accent,
+                            tint = chipFg,
                         )
                     }
                 }
             }
 
             Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(t.neutrals.surface.asColor())
-                    .padding(12.dp),
+                if (isP5) {
+                    Modifier
+                        .fillMaxWidth()
+                        .background(p5.canvas.asColor())
+                        .border(2.dp, if (t.dark) p5.strokeLight.asColor().copy(alpha = 0.5f) else p5.strokeDark.asColor())
+                        .padding(12.dp)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(t.neutrals.surface.asColor())
+                        .padding(12.dp)
+                },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 AnatomyBodyMap(
@@ -741,32 +924,49 @@ private fun MuscleDistributionCard(
                     ) {
                         BasicText(
                             stringResource(R.string.records_muscle_legend_less),
-                            style = TextStyle(secondary, 11.sp),
+                            style = TextStyle(secondary, 11.sp, if (isP5) FontWeight.Bold else FontWeight.Normal),
                         )
-                        val neutralFill = secondary.copy(alpha = if (t.dark) 0.12f else 0.085f)
-                        listOf(
-                            neutralFill,
-                            accent.copy(alpha = 0.28f),
-                            accent.copy(alpha = 0.60f),
-                            accent.copy(alpha = 0.95f),
-                        ).forEach { swatchColor ->
+                        val swatches = if (isP5) {
+                            listOf(
+                                p5Unworked,
+                                p5Level1,
+                                p5.brandFill.asColor(),
+                                p5.highlightBadge.asColor(),
+                            )
+                        } else {
+                            val neutralFill = secondary.copy(alpha = if (t.dark) 0.12f else 0.085f)
+                            listOf(
+                                neutralFill,
+                                accent.copy(alpha = 0.28f),
+                                accent.copy(alpha = 0.60f),
+                                accent.copy(alpha = 0.95f),
+                            )
+                        }
+                        swatches.forEach { swatchColor ->
                             Box(
-                                Modifier
-                                    .size(10.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(swatchColor),
+                                if (isP5) {
+                                    Modifier
+                                        .size(10.dp)
+                                        .background(swatchColor)
+                                        .border(1.dp, if (t.dark) p5.strokeLight.asColor().copy(alpha = 0.55f) else p5.strokeDark.asColor())
+                                } else {
+                                    Modifier
+                                        .size(10.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(swatchColor)
+                                },
                             )
                         }
                         BasicText(
                             stringResource(R.string.records_muscle_legend_more),
-                            style = TextStyle(secondary, 11.sp),
+                            style = TextStyle(secondary, 11.sp, if (isP5) FontWeight.Bold else FontWeight.Normal),
                         )
                     }
                 }
             }
 
             val maxSets = muscleStats.ranked.first().totalSets.coerceAtLeast(1)
-            val barTrack = t.neutrals.surfaceMuted.asColor()
+            val barTrack = if (isP5) p5Unworked else t.neutrals.surfaceMuted.asColor()
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 muscleStats.ranked.chunked(2).forEach { rowStats ->
                     Row(
@@ -777,15 +977,37 @@ private fun MuscleDistributionCard(
                             val isSelected = selectedMuscle == stat.muscle
                             val fraction = (stat.totalSets / maxSets.toFloat()).coerceIn(0f, 1f)
                             val tileShape = RoundedCornerShape(10.dp)
-                            val barColor = when {
-                                isSelected -> accent
-                                stat.heatLevel == 3 -> accent.copy(alpha = 0.95f)
-                                stat.heatLevel == 2 -> accent.copy(alpha = 0.72f)
-                                else -> accent.copy(alpha = 0.45f)
+                            val barColor = if (isP5) {
+                                when {
+                                    isSelected -> p5.highlightBadge.asColor()
+                                    stat.heatLevel == 3 -> p5.highlightBadge.asColor()
+                                    stat.heatLevel == 2 -> p5.brandFill.asColor()
+                                    else -> p5Level1
+                                }
+                            } else {
+                                when {
+                                    isSelected -> accent
+                                    stat.heatLevel == 3 -> accent.copy(alpha = 0.95f)
+                                    stat.heatLevel == 2 -> accent.copy(alpha = 0.72f)
+                                    else -> accent.copy(alpha = 0.45f)
+                                }
                             }
                             val daysText = stringResource(R.string.records_muscle_days, stat.days)
                             val setsText = stringResource(R.string.records_muscle_sets, stat.totalSets)
-                            Column(
+                            val tileModifier = if (isP5) {
+                                Modifier
+                                    .weight(1f)
+                                    .background(
+                                        if (isSelected) t.accent.accentSubtle.asColor()
+                                        else if (t.dark) p5.canvas.asColor() else t.neutrals.surfaceMuted.asColor(),
+                                    )
+                                    .border(
+                                        width = 2.dp,
+                                        color = if (isSelected) p5.brandFill.asColor() else if (t.dark) p5.strokeLight.asColor().copy(alpha = 0.4f) else p5.strokeDark.asColor(),
+                                    )
+                                    .clickable(role = Role.Button) { onToggleMuscle(stat.muscle) }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                            } else {
                                 Modifier
                                     .weight(1f)
                                     .clip(tileShape)
@@ -798,7 +1020,10 @@ private fun MuscleDistributionCard(
                                         else Modifier,
                                     )
                                     .clickable(role = Role.Button) { onToggleMuscle(stat.muscle) }
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                            }
+                            Column(
+                                tileModifier,
                                 verticalArrangement = Arrangement.spacedBy(5.dp),
                             ) {
                                 Row(
@@ -810,9 +1035,9 @@ private fun MuscleDistributionCard(
                                         stringResource(stat.muscle.labelRes()),
                                         Modifier.weight(1f),
                                         style = TextStyle(
-                                            color = if (isSelected) accent else primary,
+                                            color = if (isSelected && !isP5) accent else primary,
                                             fontSize = 13.sp,
-                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                            fontWeight = if (isP5) FontWeight.Black else if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                                         ),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -821,32 +1046,53 @@ private fun MuscleDistributionCard(
                                     if (daysAgo != null) {
                                         BasicText(
                                             formatDaysAgoLabel(daysAgo),
-                                            style = TextStyle(secondary, 11.sp),
+                                            style = TextStyle(
+                                                color = if (isP5) t.accent.accentAction.asColor() else secondary,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
+                                            ),
                                             maxLines = 1,
                                         )
                                     }
                                 }
                                 BasicText(
                                     "$daysText · $setsText",
-                                    style = TextStyle(secondary, 12.sp),
+                                    style = TextStyle(
+                                        color = secondary,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isP5) FontWeight.Medium else FontWeight.Normal,
+                                    ),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
-                                Canvas(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp))
-                                        .background(barTrack),
-                                ) {
-                                    val barWidth = size.width * fraction
-                                    val x = if (layoutDirection == LayoutDirection.Rtl) size.width - barWidth else 0f
-                                    drawRoundRect(
-                                        barColor,
-                                        Offset(x, 0f),
-                                        Size(barWidth, size.height),
-                                        CornerRadius(size.height / 2f),
-                                    )
+                                if (isP5) {
+                                    Canvas(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(5.dp)
+                                            .background(barTrack),
+                                    ) {
+                                        val barWidth = size.width * fraction
+                                        val x = if (layoutDirection == LayoutDirection.Rtl) size.width - barWidth else 0f
+                                        drawRect(barColor, Offset(x, 0f), Size(barWidth, size.height))
+                                    }
+                                } else {
+                                    Canvas(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(barTrack),
+                                    ) {
+                                        val barWidth = size.width * fraction
+                                        val x = if (layoutDirection == LayoutDirection.Rtl) size.width - barWidth else 0f
+                                        drawRoundRect(
+                                            barColor,
+                                            Offset(x, 0f),
+                                            Size(barWidth, size.height),
+                                            CornerRadius(size.height / 2f),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -856,6 +1102,26 @@ private fun MuscleDistributionCard(
                     }
                 }
             }
+        }
+    }
+    if (isP5) {
+        Box(
+            modifier
+                .fillMaxWidth()
+                .p5Surface(
+                    variant = P5ShapeVariant.PANEL,
+                    fillColor = if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor(),
+                    strokeColor = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor(),
+                    shadowColor = if (t.dark) p5.shadowColor.asColor() else p5.brandFill.asColor(),
+                    strokeWidth = 2.dp,
+                    shadowOffset = DpOffset(4.dp, 4.dp),
+                ),
+        ) {
+            cardContent()
+        }
+    } else {
+        GlassPanel(modifier.fillMaxWidth()) {
+            cardContent()
         }
     }
 }
@@ -872,14 +1138,36 @@ private fun DayCard(
     onClick: () -> Unit,
 ) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
     val primary = t.neutrals.textPrimary.asColor()
     val secondary = t.neutrals.textSecondary.asColor()
     val resources = LocalContext.current.resources
     val photo = day.photos.firstOrNull()
     val date = LocalDate.ofEpochDay(day.record.epochDay)
+    val rowModifier = if (isP5) {
+        modifier
+            .fillMaxWidth()
+            .p5Surface(
+                variant = P5ShapeVariant.CARD,
+                fillColor = if (t.dark) p5.darkCard.asColor() else p5.lightCard.asColor(),
+                strokeColor = if (t.dark) p5.strokeLight.asColor().copy(alpha = 0.6f) else p5.strokeDark.asColor(),
+                shadowColor = if (t.dark) p5.shadowColor.asColor() else p5.brandFill.asColor(),
+                strokeWidth = 1.5.dp,
+                shadowOffset = DpOffset(3.dp, 3.dp),
+            )
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(12.dp)
+    } else {
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(t.neutrals.surface.asColor())
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(12.dp)
+    }
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(t.neutrals.surface.asColor())
-            .clickable(role = Role.Button, onClick = onClick).padding(12.dp),
+        rowModifier,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {

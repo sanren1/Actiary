@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -57,12 +59,20 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.actiary.R
+import com.actiary.data.appearance.P5MotionLevel
+import com.actiary.data.appearance.UiStyle
 import com.actiary.domain.DayState
 import com.actiary.glass.LocalGlassProfile
 import com.actiary.glass.glassLayer
 import com.actiary.glass.glassLens
 import com.actiary.glass.rememberGlassLayer
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.P5Tokens
+import com.actiary.p5.buildP5PolygonPath
+import com.actiary.p5.computeP5PolygonPoints
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.motion.rememberMotionReduced
 import com.kizitonwose.calendar.compose.CalendarState
@@ -99,8 +109,11 @@ fun MonthCalendar(
     isEnabled: (LocalDate) -> Boolean = { true },
 ) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
     val profile = LocalGlassProfile.current
     val reducedMotion = rememberMotionReduced()
+    val motionStill = reducedMotion || (isP5 && p5.motionLevel == P5MotionLevel.COMPACT)
     val ltr = LocalLayoutDirection.current == LayoutDirection.Ltr
     val density = LocalDensity.current
     val cell = with(density) { CELL_HEIGHT.toPx() }
@@ -110,7 +123,7 @@ fun MonthCalendar(
     val rows = keptRowIndex(month, month.atEndOfMonth(), state.firstDayOfWeek) + 1
     val kept = keptRowIndex(month, selected, state.firstDayOfWeek)
     val collapseY = if (collapse > 0f) rowOffset(kept, cell, collapse) else 0f
-    val gridBackdrop = rememberGlassLayer()
+    val gridBackdrop = if (isP5) null else rememberGlassLayer()
     val accentColor = t.accent.accentAction.asColor()
 
     var gridWidthPx by remember { mutableFloatStateOf(0f) }
@@ -126,11 +139,11 @@ fun MonthCalendar(
     val showLens = gridWidthPx > 0f && selectedInMonth && !state.isScrollInProgress
     val lensAlpha by animateFloatAsState(
         targetValue = if (showLens) 1f else 0f,
-        animationSpec = if (reducedMotion) snap() else tween(durationMillis = 160),
+        animationSpec = if (motionStill) snap() else tween(durationMillis = 160),
         label = "calendarLensAlpha",
     )
 
-    LaunchedEffect(selected, month, gridWidthPx, ltr, reducedMotion, state.firstDayOfWeek) {
+    LaunchedEffect(selected, month, gridWidthPx, ltr, motionStill, isP5, state.firstDayOfWeek) {
         if (gridWidthPx <= 0f || !selectedInMonth) return@LaunchedEffect
         val colWidth = gridWidthPx / 7f
         val rawCol = ((selected.dayOfWeek.value - state.firstDayOfWeek.value) + 7) % 7
@@ -139,7 +152,7 @@ fun MonthCalendar(
         val targetX = visualCol * colWidth + (colWidth - lensWidthPx) / 2f
         val targetY = row * cell + (cell - lensHeightPx) / 2f
 
-        val shouldSnap = !initialized || lastMonth != month || reducedMotion
+        val shouldSnap = !initialized || lastMonth != month || motionStill
         lastMonth = month
         if (shouldSnap) {
             initialized = true
@@ -153,13 +166,22 @@ fun MonthCalendar(
             if (dist > 0.5f) {
                 travelDirX = abs(dx) / dist
                 travelDirY = abs(dy) / dist
-                val liquidSpring = spring<Float>(dampingRatio = 0.76f, stiffness = 420f)
-                coroutineScope {
-                    launch { lensX.animateTo(targetX, liquidSpring) }
-                    launch { lensY.animateTo(targetY, liquidSpring) }
-                    launch {
-                        travelPulse.animateTo(1f, tween(durationMillis = 90))
-                        travelPulse.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 360f))
+                if (isP5) {
+                    val p5Spring = spring<Float>(dampingRatio = 0.78f, stiffness = 560f)
+                    travelPulse.snapTo(0f)
+                    coroutineScope {
+                        launch { lensX.animateTo(targetX, p5Spring) }
+                        launch { lensY.animateTo(targetY, p5Spring) }
+                    }
+                } else {
+                    val liquidSpring = spring<Float>(dampingRatio = 0.76f, stiffness = 420f)
+                    coroutineScope {
+                        launch { lensX.animateTo(targetX, liquidSpring) }
+                        launch { lensY.animateTo(targetY, liquidSpring) }
+                        launch {
+                            travelPulse.animateTo(1f, tween(durationMillis = 90))
+                            travelPulse.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 360f))
+                        }
                     }
                 }
             } else {
@@ -171,11 +193,13 @@ fun MonthCalendar(
 
     Column {
         Row(Modifier.fillMaxWidth()) {
+            val weekdayColor = if (isP5) p5.onLightCardMuted.asColor() else t.neutrals.textSecondary.asColor()
+            val weekdayWeight = if (isP5) FontWeight.Black else FontWeight.Normal
             for (d in daysOfWeek(firstDayOfWeek = state.firstDayOfWeek)) {
                 BasicText(
                     d.getDisplayName(NameStyle.SHORT, locale),
                     Modifier.weight(1f).padding(vertical = 6.dp),
-                    style = TextStyle(t.neutrals.textSecondary.asColor(), 12.sp, textAlign = TextAlign.Center),
+                    style = TextStyle(weekdayColor, 12.sp, fontWeight = weekdayWeight, textAlign = TextAlign.Center),
                 )
             }
         }
@@ -192,7 +216,9 @@ fun MonthCalendar(
                 }
                 .clipToBounds(),
         ) {
-            Box(Modifier.fillMaxWidth().glassLayer(gridBackdrop)) {
+            Box(
+                if (gridBackdrop != null) Modifier.fillMaxWidth().glassLayer(gridBackdrop) else Modifier.fillMaxWidth(),
+            ) {
                 HorizontalCalendar(
                     modifier = Modifier.wrapContentHeight(Alignment.Top, unbounded = true)
                         .graphicsLayer { translationY = collapseY },
@@ -210,36 +236,160 @@ fun MonthCalendar(
                                 onSelect,
                                 isEnabled(day.date),
                                 hidden,
-                                reducedMotion,
+                                motionStill,
                             )
                         } else Box(Modifier.height(CELL_HEIGHT))
                     },
                 )
             }
             if (gridWidthPx > 0f && lensAlpha > 0.001f) {
-                Box(
-                    Modifier
-                        .align(AbsoluteAlignment.TopLeft)
-                        .graphicsLayer {
-                            translationX = lensX.value
-                            translationY = lensY.value + collapseY
-                        }
-                        .size(CELL_CONTENT_WIDTH, CELL_CONTENT_HEIGHT)
-                        .glassLens(
-                            backdrop = gridBackdrop,
-                            shape = CELL_CONTENT_SHAPE,
-                            profile = profile,
-                            dark = t.dark,
-                            tint = accentColor,
-                            flowPulse = { travelPulse.value },
-                            layerBlock = {
-                                val p = travelPulse.value
-                                val baseLift = 1f + 0.04f * p
-                                scaleX = baseLift * (1f + 0.05f * p * travelDirX - 0.02f * p * travelDirY)
-                                scaleY = baseLift * (1f + 0.05f * p * travelDirY - 0.02f * p * travelDirX)
+                if (isP5) {
+                    P5SelectionFrame(
+                        p5 = p5,
+                        modifier = Modifier
+                            .align(AbsoluteAlignment.TopLeft)
+                            .graphicsLayer {
+                                translationX = lensX.value
+                                translationY = lensY.value + collapseY
                                 alpha = lensAlpha
-                            },
-                        ),
+                            }
+                            .size(CELL_CONTENT_WIDTH, CELL_CONTENT_HEIGHT),
+                    )
+                } else if (gridBackdrop != null) {
+                    Box(
+                        Modifier
+                            .align(AbsoluteAlignment.TopLeft)
+                            .graphicsLayer {
+                                translationX = lensX.value
+                                translationY = lensY.value + collapseY
+                            }
+                            .size(CELL_CONTENT_WIDTH, CELL_CONTENT_HEIGHT)
+                            .glassLens(
+                                backdrop = gridBackdrop,
+                                shape = CELL_CONTENT_SHAPE,
+                                profile = profile,
+                                dark = t.dark,
+                                tint = accentColor,
+                                flowPulse = { travelPulse.value },
+                                layerBlock = {
+                                    val p = travelPulse.value
+                                    val baseLift = 1f + 0.04f * p
+                                    scaleX = baseLift * (1f + 0.05f * p * travelDirX - 0.02f * p * travelDirY)
+                                    scaleY = baseLift * (1f + 0.05f * p * travelDirY - 0.02f * p * travelDirX)
+                                    alpha = lensAlpha
+                                },
+                            ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun P5SelectionFrame(p5: P5Tokens, modifier: Modifier = Modifier) {
+    val outerStroke = p5.strokeDark.asColor()
+    val innerStroke = p5.highlightBadge.asColor()
+    Canvas(modifier) {
+        if (size.width <= 0f || size.height <= 0f) return@Canvas
+        val outerPoints = computeP5PolygonPoints(size.width, size.height, P5ShapeVariant.BADGE)
+        val outerPath = buildP5PolygonPath(outerPoints)
+        drawPath(
+            path = outerPath,
+            color = outerStroke,
+            style = Stroke(width = 3.dp.toPx(), join = StrokeJoin.Miter),
+        )
+        val inset = 1.75.dp.toPx()
+        val innerW = (size.width - inset * 2f).coerceAtLeast(1f)
+        val innerH = (size.height - inset * 2f).coerceAtLeast(1f)
+        val innerPoints = computeP5PolygonPoints(innerW, innerH, P5ShapeVariant.BADGE)
+        val innerPath = buildP5PolygonPath(innerPoints, offsetX = inset, offsetY = inset)
+        drawPath(
+            path = innerPath,
+            color = innerStroke,
+            style = Stroke(width = 1.75.dp.toPx(), join = StrokeJoin.Miter),
+        )
+    }
+}
+
+@Composable
+private fun P5DayCellBadge(
+    state: DayState,
+    today: Boolean,
+    p5: P5Tokens,
+    modifier: Modifier = Modifier,
+) {
+    if (state == DayState.UNRECORDED && !today) return
+    val brandFill = p5.brandFill.asColor()
+    val strokeDark = p5.strokeDark.asColor()
+    val highlight = p5.highlightBadge.asColor()
+    Canvas(modifier) {
+        if (size.width <= 0f || size.height <= 0f) return@Canvas
+        val pad = 2.dp.toPx()
+        val w = (size.width - pad * 2f).coerceAtLeast(1f)
+        val h = (size.height - pad * 2f).coerceAtLeast(1f)
+        when (state) {
+            DayState.EXERCISED -> {
+                // Solid skewed diamond-like rhombus badge with thick dark outline
+                val skew = (w * 0.14f).coerceAtMost(6.dp.toPx())
+                val path = Path().apply {
+                    moveTo(pad + skew, pad)
+                    lineTo(pad + w, pad + 1.5.dp.toPx())
+                    lineTo(pad + w - skew, pad + h)
+                    lineTo(pad, pad + h - 1.5.dp.toPx())
+                    close()
+                }
+                drawPath(path = path, color = brandFill)
+                drawPath(
+                    path = path,
+                    color = strokeDark,
+                    style = Stroke(width = 2.dp.toPx(), join = StrokeJoin.Miter),
+                )
+                if (today) {
+                    val corner = 7.dp.toPx()
+                    val marker = Path().apply {
+                        moveTo(pad + skew, pad)
+                        lineTo(pad + skew + corner, pad)
+                        lineTo(pad + skew - 1.5.dp.toPx(), pad + corner)
+                        close()
+                    }
+                    drawPath(path = marker, color = highlight)
+                }
+            }
+            DayState.REST -> {
+                val points = computeP5PolygonPoints(w, h, P5ShapeVariant.BADGE)
+                val path = buildP5PolygonPath(points, offsetX = pad, offsetY = pad)
+                drawPath(path = path, color = Color(0xFF2B2B30))
+                clipPath(path) {
+                    val step = 5.dp.toPx()
+                    val hatchColor = Color(0xFF4A4A54)
+                    val strokePx = 1.4.dp.toPx()
+                    var x = -h
+                    while (x < w + h) {
+                        drawLine(
+                            color = hatchColor,
+                            start = Offset(pad + x, pad + h),
+                            end = Offset(pad + x + h, pad),
+                            strokeWidth = strokePx,
+                        )
+                        x += step
+                    }
+                }
+                drawPath(
+                    path = path,
+                    color = if (today) highlight else strokeDark,
+                    style = Stroke(width = if (today) 2.dp.toPx() else 1.5.dp.toPx(), join = StrokeJoin.Miter),
+                )
+            }
+            DayState.UNRECORDED -> {
+                // Today unrecorded: high-contrast highlightBadge fill + thick black skewed frame
+                val points = computeP5PolygonPoints(w, h, P5ShapeVariant.BADGE)
+                val path = buildP5PolygonPath(points, offsetX = pad, offsetY = pad)
+                drawPath(path = path, color = highlight)
+                drawPath(
+                    path = path,
+                    color = strokeDark,
+                    style = Stroke(width = 2.dp.toPx(), join = StrokeJoin.Miter),
                 )
             }
         }
@@ -258,6 +408,8 @@ private fun DayCell(
     reducedMotion: Boolean,
 ) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
     val locale = LocalConfiguration.current.locales[0]
     val stateText = stringResource(when (state) {
         DayState.EXERCISED -> R.string.day_state_logged
@@ -273,6 +425,7 @@ private fun DayCell(
     val contentScale by animateFloatAsState(
         targetValue = when {
             !selected -> 1f
+            isP5 -> if (reducedMotion) 1.03f else 1.05f
             reducedMotion -> 1.06f
             else -> 1.09f
         },
@@ -295,6 +448,36 @@ private fun DayCell(
             Modifier.size(CELL_CONTENT_WIDTH, CELL_CONTENT_HEIGHT),
             contentAlignment = Alignment.Center,
         ) {
+            if (isP5) {
+                P5DayCellBadge(
+                    state = state,
+                    today = today,
+                    p5 = p5,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+            val numberColor = if (isP5) {
+                when (state) {
+                    DayState.EXERCISED -> p5.onBrandFill.asColor()
+                    DayState.REST -> Color.White
+                    DayState.UNRECORDED -> if (today) p5.onHighlightBadge.asColor() else p5.onLightCard.asColor()
+                }
+            } else {
+                if (today) accentColor else t.neutrals.textPrimary.asColor()
+            }
+            val numberWeight = if (isP5) {
+                when {
+                    selected || today || state == DayState.EXERCISED -> FontWeight.Black
+                    state == DayState.REST -> FontWeight.Bold
+                    else -> FontWeight.Medium
+                }
+            } else {
+                when {
+                    selected || today -> FontWeight.Bold
+                    state == DayState.EXERCISED -> FontWeight.Medium
+                    else -> FontWeight.Normal
+                }
+            }
             Column(
                 Modifier.graphicsLayer {
                     scaleX = contentScale
@@ -306,19 +489,15 @@ private fun DayCell(
                 BasicText(
                     date.dayOfMonth.toString(),
                     style = TextStyle(
-                        color = if (today) accentColor else t.neutrals.textPrimary.asColor(),
+                        color = numberColor,
                         fontSize = 14.sp,
-                        fontWeight = when {
-                            selected || today -> FontWeight.Bold
-                            state == DayState.EXERCISED -> FontWeight.Medium
-                            else -> FontWeight.Normal
-                        },
+                        fontWeight = numberWeight,
                     ),
                 )
                 Box(Modifier.height(ICON_SLOT_HEIGHT), contentAlignment = Alignment.Center) {
                     when (state) {
-                        DayState.EXERCISED -> ExercisedCheckIcon(accentColor)
-                        DayState.REST -> RestMoonIcon(t.neutrals.textSecondary.asColor())
+                        DayState.EXERCISED -> ExercisedCheckIcon(if (isP5) p5.onBrandFill.asColor() else accentColor)
+                        DayState.REST -> RestMoonIcon(if (isP5) Color.White else t.neutrals.textSecondary.asColor())
                         DayState.UNRECORDED -> {}
                     }
                 }

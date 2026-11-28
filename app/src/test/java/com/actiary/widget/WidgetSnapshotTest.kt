@@ -1,5 +1,8 @@
 package com.actiary.widget
 
+import com.actiary.data.appearance.AppearanceSettings
+import com.actiary.data.appearance.P5Palette
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.DailyRecordEntity
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.DayWithDetails
@@ -7,6 +10,8 @@ import com.actiary.data.db.ExerciseEntryEntity
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.db.PhotoAttachmentEntity
 import com.actiary.domain.DayState
+import com.actiary.theme.contrast
+import com.actiary.theme.resolveTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -159,5 +164,70 @@ class WidgetSnapshotTest {
                 recommendedPlanText = { "推荐：$it" },
             ),
         )
+    }
+
+    @Test
+    fun resolveWidgetVisualStyleLiquidGlassMatchesTokens() {
+        val settings = AppearanceSettings(uiStyle = UiStyle.LIQUID_GLASS)
+        val tokens = resolveTheme(settings, systemDark = false)
+
+        val style = resolveWidgetVisualStyle(settings, tokens)
+
+        assertFalse(style.isPersona5)
+        assertEquals(tokens.neutrals.surface, style.backgroundColor)
+        assertEquals(tokens.neutrals.textPrimary, style.textPrimary)
+        assertEquals(tokens.neutrals.textSecondary, style.textSecondary)
+        assertEquals(tokens.accent.accentAction, style.accentFill)
+        assertEquals(tokens.accent.onAccentAction, style.onAccentFill)
+    }
+
+    @Test
+    fun resolveWidgetVisualStylePersona5CoversAllPalettesWithContrast() {
+        assertEquals(4, P5Palette.entries.size)
+        for (palette in P5Palette.entries) {
+            val settings = AppearanceSettings(
+                uiStyle = UiStyle.PERSONA_5,
+                p5Palette = palette,
+            )
+            val tokens = resolveTheme(settings, systemDark = false)
+
+            val style = resolveWidgetVisualStyle(settings, tokens)
+
+            assertTrue("Expected isPersona5 for $palette", style.isPersona5)
+            assertTrue(
+                "textPrimary contrast failed for $palette",
+                contrast(style.textPrimary, style.backgroundColor) >= 4.5,
+            )
+            assertTrue(
+                "textSecondary contrast failed for $palette",
+                contrast(style.textSecondary, style.backgroundColor) >= 4.5,
+            )
+            assertTrue(
+                "onAccentFill contrast failed for $palette",
+                contrast(style.onAccentFill, style.accentFill) >= 4.5,
+            )
+            assertTrue(
+                "strokeColor contrast failed for $palette",
+                contrast(style.strokeColor, style.backgroundColor) >= 4.5,
+            )
+            if (palette == P5Palette.ROYAL_GOLD) {
+                assertEquals(0xFF0D0D0D.toInt(), style.onAccentFill)
+            }
+            if (palette == P5Palette.CALLING_CARD) {
+                assertTrue(style.isLightSurface)
+                assertEquals(0xFFF7F6F2.toInt(), style.backgroundColor)
+                assertEquals(0xFF0D0D0D.toInt(), style.textPrimary)
+                assertEquals(0xFF45454A.toInt(), style.textSecondary)
+                assertEquals(0xFFD91E26.toInt(), style.accentFill)
+                assertEquals(0xFFFFFFFF.toInt(), style.onAccentFill)
+                assertEquals(0xFF0D0D0D.toInt(), style.strokeColor)
+                assertTrue(
+                    "highlightColor contrast failed for CALLING_CARD",
+                    contrast(style.highlightColor, style.backgroundColor) >= 4.5,
+                )
+            } else {
+                assertFalse("Expected dark surface for $palette", style.isLightSurface)
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.actiary.theme
 
 import com.actiary.data.appearance.ChartPalette
+import com.actiary.p5.P5Tokens
 
 data class ChartColors(val series: Int, val highlight: Int, val categories: List<Int>)
 
@@ -39,4 +40,30 @@ fun resolveChartColors(palette: ChartPalette, t: ThemeTokens): ChartColors {
         ChartPalette.FOLLOW_ACCENT -> ChartColors(accent, accent, List(6) { accent })
         ChartPalette.MUTED_CATEGORIES -> ChartColors(accent, accent, mutedCategories(background, t.dark))
     }
+}
+
+/**
+ * Resolves high-contrast Persona 5 chart colors tailored for rendering on [P5Tokens.lightCard].
+ * Every color slot (series, highlight, and categories) is guaranteed to have contrast >= 3.0:1
+ * against [P5Tokens.lightCard].
+ */
+fun resolveP5ChartColors(p5: P5Tokens): ChartColors {
+    val bg = p5.lightCard
+    val series = stepUntil(p5.onLightCard, dark = false) { contrast(it, bg) >= 3.0 }
+    val highlight = stepUntil(p5.accentChartOnLight, dark = false) { contrast(it, bg) >= 3.0 }
+    val muted = stepUntil(p5.onLightCardMuted, dark = false) { contrast(it, bg) >= 3.0 }
+    val badgeOnLight = stepUntil(p5.highlightBadge, dark = false) { contrast(it, bg) >= 3.0 }
+    val categories = listOf(
+        highlight,
+        series,
+        muted,
+        badgeOnLight,
+        stepUntil(Oklch(0.45, 0.14, 250.0).toArgb(), dark = false) { contrast(it, bg) >= 3.0 },
+        stepUntil(Oklch(0.45, 0.14, 150.0).toArgb(), dark = false) { contrast(it, bg) >= 3.0 },
+    )
+    return ChartColors(
+        series = series,
+        highlight = highlight,
+        categories = categories,
+    )
 }

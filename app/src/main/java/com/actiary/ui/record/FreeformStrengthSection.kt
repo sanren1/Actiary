@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
@@ -60,9 +61,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.actiary.R
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.ExercisePerformanceRow
 import com.actiary.data.db.StrengthExerciseEntity
 import com.actiary.data.db.WorkoutPlanWithItems
@@ -77,7 +80,12 @@ import com.actiary.domain.parseWeightKg
 import com.actiary.domain.recommendNextPlanId
 import com.actiary.glass.GlassOverlayPanel
 import com.actiary.glass.rememberOverlayVisibility
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Shape
+import com.actiary.p5.p5Surface
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.common.AnatomyBodyMap
 import com.actiary.ui.common.BodyMapStyle
@@ -111,6 +119,9 @@ internal fun FreeformStrengthSection(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val isChinese = isChineseLocale()
     val orderedPlans = remember(plans) { plans.sortedBy { it.plan.sortOrder } }
     val selectedPlanIds = remember(entry.planId, entry.strengthItems, orderedPlans) {
@@ -170,11 +181,23 @@ internal fun FreeformStrengthSection(
             onManagePlans = onManagePlans,
         )
 
+        val mapShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
         Column(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(n.surface.asColor())
+                .clip(mapShape)
+                .background(if (isP5) n.surfaceMuted.asColor() else n.surface.asColor())
+                .then(
+                    if (isP5) {
+                        Modifier.border(
+                            1.5.dp,
+                            p5Stroke.copy(alpha = if (t.dark) 0.55f else 0.85f),
+                            mapShape,
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -240,17 +263,40 @@ internal fun FreeformStrengthSection(
                 Modifier
                     .weight(1f)
                     .heightIn(min = 42.dp)
-                    .clip(btnShape)
-                    .background(n.surfaceMuted.asColor())
+                    .then(
+                        if (isP5) {
+                            Modifier.p5Surface(
+                                variant = P5ShapeVariant.PILL,
+                                fillColor = p5.brandFill.asColor(),
+                                strokeColor = p5Stroke,
+                                shadowColor = p5.strokeDark.asColor(),
+                                strokeWidth = 2.dp,
+                                shadowOffset = DpOffset(2.dp, 2.dp),
+                            )
+                        } else {
+                            Modifier
+                                .clip(btnShape)
+                                .background(n.surfaceMuted.asColor())
+                        },
+                    )
                     .clickable(enabled = enabled, role = Role.Button) { onOpenPicker(null) }
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
             ) {
-                Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = a.accentAction.asColor())
+                Icon(
+                    Icons.Outlined.Add,
+                    null,
+                    Modifier.size(18.dp),
+                    tint = if (isP5) p5.onBrandFill.asColor() else a.accentAction.asColor(),
+                )
                 BasicText(
                     stringResource(R.string.strength_add_exercise),
-                    style = TextStyle(a.accentAction.asColor(), 14.sp, FontWeight.Medium),
+                    style = TextStyle(
+                        color = if (isP5) p5.onBrandFill.asColor() else a.accentAction.asColor(),
+                        fontSize = 14.sp,
+                        fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
+                    ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -259,15 +305,33 @@ internal fun FreeformStrengthSection(
                 Box(
                     Modifier
                         .heightIn(min = 42.dp)
-                        .clip(btnShape)
-                        .background(n.surfaceMuted.asColor())
+                        .then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = n.surface.asColor(),
+                                    strokeColor = p5Stroke,
+                                    shadowColor = Color.Transparent,
+                                    strokeWidth = 1.5.dp,
+                                    shadowOffset = DpOffset.Zero,
+                                )
+                            } else {
+                                Modifier
+                                    .clip(btnShape)
+                                    .background(n.surfaceMuted.asColor())
+                            },
+                        )
                         .clickable(enabled = enabled, role = Role.Button, onClick = onSaveAsPlan)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     BasicText(
                         stringResource(R.string.strength_plan_save_current),
-                        style = TextStyle(n.textPrimary.asColor(), 14.sp, FontWeight.Medium),
+                        style = TextStyle(
+                            color = n.textPrimary.asColor(),
+                            fontSize = 14.sp,
+                            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
+                        ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -275,15 +339,33 @@ internal fun FreeformStrengthSection(
                 Box(
                     Modifier
                         .heightIn(min = 42.dp)
-                        .clip(btnShape)
-                        .background(n.surfaceMuted.asColor())
+                        .then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = n.surface.asColor(),
+                                    strokeColor = p5Stroke.copy(alpha = if (t.dark) 0.6f else 0.85f),
+                                    shadowColor = Color.Transparent,
+                                    strokeWidth = 1.5.dp,
+                                    shadowOffset = DpOffset.Zero,
+                                )
+                            } else {
+                                Modifier
+                                    .clip(btnShape)
+                                    .background(n.surfaceMuted.asColor())
+                            },
+                        )
                         .clickable(enabled = enabled, role = Role.Button, onClick = onClearAll)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     BasicText(
                         stringResource(R.string.strength_clear_all),
-                        style = TextStyle(n.textSecondary.asColor(), 14.sp, FontWeight.Medium),
+                        style = TextStyle(
+                            color = if (isP5) n.textPrimary.asColor() else n.textSecondary.asColor(),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -305,6 +387,9 @@ private fun PlanTemplateStrip(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val pillShape = RoundedCornerShape(50)
 
     Row(
@@ -323,11 +408,25 @@ private fun PlanTemplateStrip(
                 Row(
                     Modifier
                         .heightIn(min = 34.dp)
-                        .clip(pillShape)
-                        .background(if (isSelected) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
                         .then(
-                            if (isSelected) Modifier.border(1.dp, a.accentStroke.asColor(), pillShape)
-                            else Modifier
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = if (isSelected) p5.brandFill.asColor() else n.surface.asColor(),
+                                    strokeColor = if (isSelected) p5Stroke else p5Stroke.copy(alpha = if (t.dark) 0.6f else 0.85f),
+                                    shadowColor = if (isSelected) p5.strokeDark.asColor() else Color.Transparent,
+                                    strokeWidth = if (isSelected) 2.dp else 1.5.dp,
+                                    shadowOffset = if (isSelected) DpOffset(2.dp, 2.dp) else DpOffset.Zero,
+                                )
+                            } else {
+                                Modifier
+                                    .clip(pillShape)
+                                    .background(if (isSelected) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
+                                    .then(
+                                        if (isSelected) Modifier.border(1.dp, a.accentStroke.asColor(), pillShape)
+                                        else Modifier
+                                    )
+                            },
                         )
                         .clickable(enabled = enabled, role = Role.Button) { onTogglePlan(plan) }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -339,28 +438,44 @@ private fun PlanTemplateStrip(
                             Icons.Outlined.Check,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = a.accentAction.asColor(),
+                            tint = if (isP5) p5.onBrandFill.asColor() else a.accentAction.asColor(),
                         )
                     }
                     BasicText(
                         workoutPlanLabel(plan.plan),
                         style = TextStyle(
-                            color = if (isSelected) a.accentAction.asColor() else n.textPrimary.asColor(),
+                            color = when {
+                                isP5 && isSelected -> p5.onBrandFill.asColor()
+                                isP5 -> n.textPrimary.asColor()
+                                isSelected -> a.accentAction.asColor()
+                                else -> n.textPrimary.asColor()
+                            },
                             fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            fontWeight = when {
+                                isP5 && isSelected -> FontWeight.Bold
+                                isSelected -> FontWeight.SemiBold
+                                else -> FontWeight.Medium
+                            },
                         ),
                         maxLines = 1,
                     )
                     if (isRecommended) {
                         Box(
                             Modifier
-                                .clip(pillShape)
-                                .background(a.accentAction.asColor().copy(alpha = 0.14f))
+                                .clip(if (isP5) p5Shape(P5ShapeVariant.BADGE) else pillShape)
+                                .background(
+                                    if (isP5) p5.highlightBadge.asColor()
+                                    else a.accentAction.asColor().copy(alpha = 0.14f),
+                                )
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
                         ) {
                             BasicText(
                                 stringResource(R.string.strength_plan_next_badge),
-                                style = TextStyle(a.accentAction.asColor(), 10.sp, FontWeight.SemiBold),
+                                style = TextStyle(
+                                    color = if (isP5) p5.onHighlightBadge.asColor() else a.accentAction.asColor(),
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isP5) FontWeight.Black else FontWeight.SemiBold,
+                                ),
                                 maxLines = 1,
                             )
                         }
@@ -372,15 +487,33 @@ private fun PlanTemplateStrip(
         Box(
             Modifier
                 .heightIn(min = 34.dp)
-                .clip(pillShape)
-                .background(n.surfaceMuted.asColor())
+                .then(
+                    if (isP5) {
+                        Modifier.p5Surface(
+                            variant = P5ShapeVariant.BADGE,
+                            fillColor = n.surface.asColor(),
+                            strokeColor = p5Stroke,
+                            shadowColor = Color.Transparent,
+                            strokeWidth = 1.5.dp,
+                            shadowOffset = DpOffset.Zero,
+                        )
+                    } else {
+                        Modifier
+                            .clip(pillShape)
+                            .background(n.surfaceMuted.asColor())
+                    },
+                )
                 .clickable(enabled = enabled, role = Role.Button, onClick = onManagePlans)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
             BasicText(
                 stringResource(R.string.strength_plan_manage),
-                style = TextStyle(n.textSecondary.asColor(), 12.sp, FontWeight.Medium),
+                style = TextStyle(
+                    color = if (isP5) n.textPrimary.asColor() else n.textSecondary.asColor(),
+                    fontSize = 12.sp,
+                    fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
+                ),
                 maxLines = 1,
             )
         }
@@ -406,6 +539,9 @@ private fun StrengthItemRow(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val haptics = LocalHapticFeedback.current
     val isTimed = exercise?.isTimed == true
     val name = exercise?.let { exerciseDisplayName(it, isChinese) }.orEmpty()
@@ -439,12 +575,24 @@ private fun StrengthItemRow(
     val currentSets = parseStrengthSets(setsText) ?: item.sets
     val currentReps = parseStrengthReps(repsText) ?: item.reps
     val minReps = if (isTimed) 5 else 1
+    val cardShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
 
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(cardShape)
             .background(n.surface.asColor())
+            .then(
+                if (isP5) {
+                    Modifier.border(
+                        1.5.dp,
+                        p5Stroke.copy(alpha = if (t.dark) 0.65f else 0.9f),
+                        cardShape,
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -456,7 +604,7 @@ private fun StrengthItemRow(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 BasicText(
                     name,
-                    style = TextStyle(n.textPrimary.asColor(), 14.sp, FontWeight.Medium),
+                    style = TextStyle(n.textPrimary.asColor(), 14.sp, if (isP5) FontWeight.Bold else FontWeight.Medium),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -479,9 +627,23 @@ private fun StrengthItemRow(
                     val pillShape = RoundedCornerShape(50)
                     Box(
                         Modifier
-                            .clip(pillShape)
-                            .background(a.accentSubtle.asColor())
-                            .border(1.dp, a.accentStroke.asColor().copy(alpha = 0.4f), pillShape)
+                            .then(
+                                if (isP5) {
+                                    Modifier.p5Surface(
+                                        variant = P5ShapeVariant.BADGE,
+                                        fillColor = p5.highlightBadge.asColor(),
+                                        strokeColor = p5.strokeDark.asColor(),
+                                        shadowColor = Color.Transparent,
+                                        strokeWidth = 1.5.dp,
+                                        shadowOffset = DpOffset.Zero,
+                                    )
+                                } else {
+                                    Modifier
+                                        .clip(pillShape)
+                                        .background(a.accentSubtle.asColor())
+                                        .border(1.dp, a.accentStroke.asColor().copy(alpha = 0.4f), pillShape)
+                                },
+                            )
                             .clickable(enabled = enabled, role = Role.Button) {
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 val nextSets = lastPerf.sets.coerceIn(1, 99)
@@ -497,7 +659,11 @@ private fun StrengthItemRow(
                     ) {
                         BasicText(
                             stringResource(R.string.strength_last_perf, formattedLast),
-                            style = TextStyle(a.accentAction.asColor(), 11.sp, FontWeight.Medium),
+                            style = TextStyle(
+                                color = if (isP5) p5.onHighlightBadge.asColor() else a.accentAction.asColor(),
+                                fontSize = 11.sp,
+                                fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
+                            ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -618,17 +784,24 @@ internal fun StrengthRowActionButtons(
     removeContentDescription: String,
 ) {
     val haptics = LocalHapticFeedback.current
-    val n = LocalThemeTokens.current.neutrals
+    val t = LocalThemeTokens.current
+    val n = t.neutrals
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val btnShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(8.dp)
+    val btnBorder = if (isP5) Modifier.border(1.dp, p5Stroke.copy(alpha = if (t.dark) 0.45f else 0.7f), btnShape) else Modifier
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (isP5) 4.dp else 2.dp),
     ) {
         if (showReorder) {
             val upEnabled = enabled && canMoveUp
             Box(
                 Modifier
                     .size(28.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(btnShape)
+                    .then(btnBorder)
                     .alpha(if (upEnabled) 1f else 0.3f)
                     .clickable(enabled = upEnabled, role = Role.Button) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -647,7 +820,8 @@ internal fun StrengthRowActionButtons(
             Box(
                 Modifier
                     .size(28.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(btnShape)
+                    .then(btnBorder)
                     .alpha(if (downEnabled) 1f else 0.3f)
                     .clickable(enabled = downEnabled, role = Role.Button) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -666,7 +840,8 @@ internal fun StrengthRowActionButtons(
         Box(
             Modifier
                 .size(28.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(btnShape)
+                .then(btnBorder)
                 .clickable(enabled = enabled, role = Role.Button, onClick = onRemove),
             contentAlignment = Alignment.Center,
         ) {
@@ -698,14 +873,35 @@ internal fun CompactStrengthStepperField(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val haptics = LocalHapticFeedback.current
-    val shape = RoundedCornerShape(10.dp)
+    val shape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(10.dp)
+    val stepBtnShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(8.dp)
+    val stepBtnMod = if (isP5) {
+        Modifier
+            .background(n.surface.asColor())
+            .border(1.dp, p5Stroke.copy(alpha = if (t.dark) 0.4f else 0.65f), stepBtnShape)
+    } else {
+        Modifier
+    }
     Row(
         modifier
             .heightIn(min = 38.dp)
             .clip(shape)
             .background(n.surfaceMuted.asColor())
-            .then(if (invalid) Modifier.border(1.dp, a.accentStroke.asColor(), shape) else Modifier)
+            .then(
+                when {
+                    isP5 -> Modifier.border(
+                        width = if (invalid) 2.dp else 1.5.dp,
+                        color = if (invalid) p5.brandFill.asColor() else p5Stroke.copy(alpha = if (t.dark) 0.6f else 0.85f),
+                        shape = shape,
+                    )
+                    invalid -> Modifier.border(1.dp, a.accentStroke.asColor(), shape)
+                    else -> Modifier
+                },
+            )
             .padding(horizontal = 2.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -713,7 +909,8 @@ internal fun CompactStrengthStepperField(
         Box(
             Modifier
                 .size(width = 28.dp, height = 34.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(stepBtnShape)
+                .then(stepBtnMod)
                 .alpha(if (decEnabled) 1f else 0.32f)
                 .clickable(enabled = decEnabled, role = Role.Button) {
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -763,7 +960,8 @@ internal fun CompactStrengthStepperField(
         Box(
             Modifier
                 .size(width = 28.dp, height = 34.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(stepBtnShape)
+                .then(stepBtnMod)
                 .alpha(if (incEnabled) 1f else 0.32f)
                 .clickable(enabled = incEnabled, role = Role.Button) {
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -796,13 +994,26 @@ internal fun CompactStrengthField(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
-    val shape = RoundedCornerShape(10.dp)
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val shape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(10.dp)
     Row(
         modifier
             .heightIn(min = 38.dp)
             .clip(shape)
             .background(n.surfaceMuted.asColor())
-            .then(if (invalid) Modifier.border(1.dp, a.accentStroke.asColor(), shape) else Modifier)
+            .then(
+                when {
+                    isP5 -> Modifier.border(
+                        width = if (invalid) 2.dp else 1.5.dp,
+                        color = if (invalid) p5.brandFill.asColor() else p5Stroke.copy(alpha = if (t.dark) 0.6f else 0.85f),
+                        shape = shape,
+                    )
+                    invalid -> Modifier.border(1.dp, a.accentStroke.asColor(), shape)
+                    else -> Modifier
+                },
+            )
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -843,6 +1054,9 @@ internal fun SaveAsPlanDialog(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
     val title = stringResource(R.string.strength_plan_save_current)
@@ -876,14 +1090,16 @@ internal fun SaveAsPlanDialog(
             BasicText(
                 title,
                 Modifier.semantics { heading() },
-                style = TextStyle(n.textPrimary.asColor(), 17.sp, FontWeight.SemiBold),
+                style = TextStyle(n.textPrimary.asColor(), 17.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
             )
+            val inputShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
             Box(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(inputShape)
                     .background(n.surfaceMuted.asColor())
+                    .then(if (isP5) Modifier.border(2.dp, p5Stroke, inputShape) else Modifier)
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
@@ -912,7 +1128,7 @@ internal fun SaveAsPlanDialog(
             }
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(
@@ -926,11 +1142,10 @@ internal fun SaveAsPlanDialog(
                     modifier = Modifier.heightIn(min = 48.dp),
                     colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
                 ) {
-                    Text(stringResource(R.string.record_cancel))
+                    Text(stringResource(R.string.record_cancel), fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal)
                 }
-                TextButton(
-                    onClick = {
-                        if (!canSave) return@TextButton
+                val performSave = {
+                    if (canSave) {
                         focus.clearFocus()
                         saving = true
                         failed = false
@@ -947,12 +1162,40 @@ internal fun SaveAsPlanDialog(
                                 saving = false
                             }
                         }
-                    },
-                    enabled = canSave,
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    colors = ButtonDefaults.textButtonColors(contentColor = a.accentAction.asColor()),
-                ) {
-                    Text(stringResource(R.string.record_save))
+                    }
+                }
+                if (isP5) {
+                    Box(
+                        Modifier
+                            .heightIn(min = 48.dp)
+                            .alpha(if (canSave) 1f else 0.45f)
+                            .p5Surface(
+                                variant = P5ShapeVariant.BADGE,
+                                fillColor = p5.brandFill.asColor(),
+                                strokeColor = p5Stroke,
+                                shadowColor = p5.strokeDark.asColor(),
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = DpOffset(2.dp, 2.dp),
+                            )
+                            .clickable(enabled = canSave, role = Role.Button, onClick = performSave)
+                            .padding(horizontal = 18.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            stringResource(R.string.record_save),
+                            color = p5.onBrandFill.asColor(),
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
+                } else {
+                    TextButton(
+                        onClick = performSave,
+                        enabled = canSave,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = a.accentAction.asColor()),
+                    ) {
+                        Text(stringResource(R.string.record_save))
+                    }
                 }
             }
         }

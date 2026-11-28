@@ -45,7 +45,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.P5Toggle
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.ThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.theme.contrast
@@ -94,6 +97,10 @@ fun GlassToggle(
     label: String,
     labelContent: (@Composable () -> Unit)? = null,
 ) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5Toggle(checked, onCheckedChange, modifier, label, labelContent)
+        return
+    }
     val tokens = LocalThemeTokens.current
     val profile = LocalGlassProfile.current
     val animationsOff = rememberAnimationsOff()

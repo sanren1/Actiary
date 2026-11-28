@@ -47,7 +47,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.P5BottomBar
+import com.actiary.p5.P5FloatingAction
+import com.actiary.p5.P5IconButton
+import com.actiary.p5.P5Segmented
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Surface
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import kotlinx.coroutines.launch
 import com.kyant.backdrop.isRuntimeShaderSupported
@@ -89,6 +98,16 @@ fun Modifier.glassSurface(
     backdrop: GlassBackdrop? = null,
     flat: Boolean = sampling == GlassSampling.Background,
 ): Modifier {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        val p5 = LocalP5Tokens.current
+        val isLight = !LocalThemeTokens.current.dark
+        return this.p5Surface(
+            P5ShapeVariant.CARD,
+            fillColor = if (isLight) p5.lightCard.asColor() else p5.darkCard.asColor(),
+            strokeColor = if (isLight) p5.strokeDark.asColor() else p5.strokeLight.asColor(),
+            shadowColor = if (isLight) p5.brandFill.asColor() else p5.shadowColor.asColor(),
+        )
+    }
     val layers = LocalGlassLayers.current
     val src = backdrop ?: if (sampling == GlassSampling.Background) layers.background else layers.content
     return glass(src, shape, LocalGlassProfile.current, LocalThemeTokens.current.dark, exported, flat = flat)
@@ -118,6 +137,18 @@ fun GlassIconButton(
     glass: Boolean = true,
     iconSize: Dp = 24.dp,
 ) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5IconButton(
+            icon = icon,
+            contentDescription = contentDescription,
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            outlined = glass,
+            iconSize = iconSize,
+        )
+        return
+    }
     Box(
         modifier
             .size(48.dp)
@@ -136,6 +167,10 @@ fun GlassIconButton(
 /** Samples the content layer: place in GlassHost's overlay slot. */
 @Composable
 fun GlassFloatingAction(text: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5FloatingAction(text, icon, onClick, modifier)
+        return
+    }
     val t = LocalThemeTokens.current
     val shape = RoundedCornerShape(50)
     Row(
@@ -390,6 +425,10 @@ internal fun segmentIndexAt(x: Float, widths: List<Float>, ltr: Boolean): Int? {
  */
 @Composable
 fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5BottomBar(tabs, selected, onSelect, modifier)
+        return
+    }
     val t = LocalThemeTokens.current
     val layers = LocalGlassLayers.current
     val profile = LocalGlassProfile.current
@@ -542,6 +581,10 @@ fun GlassSegmentedPicker(
     modifier: Modifier = Modifier,
     scrollable: Boolean = false,
 ) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5Segmented(options, selected, onSelect, modifier, scrollable)
+        return
+    }
     val t = LocalThemeTokens.current
     val profile = LocalGlassProfile.current
     val animationsOff = rememberAnimationsOff()

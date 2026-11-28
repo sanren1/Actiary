@@ -2,6 +2,7 @@ package com.actiary.ui.settings
 
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -58,6 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.actiary.R
 import com.actiary.data.PlanItemInput
 import com.actiary.data.StrengthRepository
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.StrengthExerciseEntity
 import com.actiary.data.db.WorkoutPlanWithItems
 import com.actiary.domain.formatWeightKg
@@ -66,7 +69,9 @@ import com.actiary.glass.GlassDialog
 import com.actiary.glass.GlassSheet
 import com.actiary.glass.overlayPresent
 import com.actiary.glass.rememberOverlayVisibility
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseDisplayName
 import com.actiary.ui.common.isChineseLocale
@@ -384,6 +389,13 @@ private fun PlanEditorSheet(
     val savedName = planName.trim().takeUnless { builtinDefaultName != null && (it.isEmpty() || it == builtinDefaultName) }
     val canSave = !saving && (planName.trim().isNotEmpty() || builtinDefaultName != null)
 
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val sheetPrimary = n.textPrimary.asColor()
+    val sheetSecondary = n.textSecondary.asColor()
+    val sheetAccent = a.accentAction.asColor()
+
     GlassSheet(
         visible = visible,
         onRequestClose = ::close,
@@ -403,30 +415,33 @@ private fun PlanEditorSheet(
                 BasicText(
                     title,
                     Modifier.weight(1f).semantics { heading() },
-                    style = TextStyle(n.textPrimary.asColor(), 20.sp, FontWeight.SemiBold),
+                    style = TextStyle(sheetPrimary, 20.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
                 )
                 TextButton(
                     onClick = { close() },
                     enabled = !saving,
-                    colors = ButtonDefaults.textButtonColors(contentColor = n.textSecondary.asColor()),
+                    colors = ButtonDefaults.textButtonColors(contentColor = sheetSecondary),
                 ) {
-                    Text(stringResource(R.string.record_cancel))
+                    Text(stringResource(R.string.record_cancel), fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal)
                 }
             }
 
             val nameHint = stringResource(R.string.strength_plan_name_hint)
-            val fieldShape = RoundedCornerShape(12.dp)
+            val fieldShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+            val fieldBg = if (isP5 && t.dark) Color(0xFF1F1F24) else n.surfaceMuted.asColor()
+            val fieldBorder = if (isP5) Modifier.border(2.dp, p5Stroke, fieldShape) else Modifier
             Box(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .clip(fieldShape)
-                    .background(n.surfaceMuted.asColor())
+                    .background(fieldBg, fieldShape)
+                    .then(fieldBorder)
                     .padding(horizontal = 12.dp, vertical = 12.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 if (planName.isEmpty()) {
-                    BasicText(nameHint, style = TextStyle(n.textSecondary.asColor(), 16.sp))
+                    BasicText(nameHint, style = TextStyle(sheetSecondary, 16.sp))
                 }
                 BasicTextField(
                     value = planName,
@@ -436,8 +451,8 @@ private fun PlanEditorSheet(
                     },
                     enabled = !saving,
                     singleLine = true,
-                    textStyle = TextStyle(n.textPrimary.asColor(), 16.sp),
-                    cursorBrush = SolidColor(a.accentAction.asColor()),
+                    textStyle = TextStyle(sheetPrimary, 16.sp),
+                    cursorBrush = SolidColor(sheetAccent),
                     modifier = Modifier.fillMaxWidth().semantics { contentDescription = nameHint },
                 )
             }
@@ -473,13 +488,16 @@ private fun PlanEditorSheet(
                 }
             }
 
-            val btnShape = RoundedCornerShape(12.dp)
+            val btnShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+            val addBtnBg = if (isP5 && t.dark) Color(0xFF1F1F24) else n.surfaceMuted.asColor()
+            val addBtnBorder = if (isP5) Modifier.border(2.dp, sheetAccent, btnShape) else Modifier
             Row(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .clip(btnShape)
-                    .background(n.surfaceMuted.asColor())
+                    .background(addBtnBg, btnShape)
+                    .then(addBtnBorder)
                     .clickable(enabled = !saving, role = Role.Button) {
                         focus.clearFocus()
                         onRequestPickExercises()
@@ -488,10 +506,10 @@ private fun PlanEditorSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             ) {
-                Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = a.accentAction.asColor())
+                Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = sheetAccent)
                 BasicText(
                     stringResource(R.string.strength_add_exercise),
-                    style = TextStyle(a.accentAction.asColor(), 15.sp, FontWeight.Medium),
+                    style = TextStyle(sheetAccent, 15.sp, if (isP5) FontWeight.Bold else FontWeight.Medium),
                 )
             }
 
@@ -499,16 +517,36 @@ private fun PlanEditorSheet(
                 BasicText(
                     stringResource(R.string.record_save_failed),
                     Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    style = TextStyle(n.textPrimary.asColor(), 14.sp),
+                    style = TextStyle(sheetPrimary, 14.sp),
                 )
             }
 
+            val saveBtnBg = if (isP5) {
+                if (canSave) p5.brandFill.asColor() else if (t.dark) Color(0xFF26262C) else n.surfaceMuted.asColor()
+            } else {
+                if (canSave) a.accentAction.asColor() else n.surfaceMuted.asColor()
+            }
+            val saveBtnBorder = if (isP5) {
+                Modifier.border(
+                    2.dp,
+                    if (canSave) p5Stroke else p5Stroke.copy(alpha = 0.35f),
+                    btnShape,
+                )
+            } else {
+                Modifier
+            }
+            val saveBtnText = if (isP5) {
+                if (canSave) p5.onBrandFill.asColor() else n.textSecondary.asColor()
+            } else {
+                if (canSave) a.onAccentAction.asColor() else n.textSecondary.asColor()
+            }
             Box(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .clip(btnShape)
-                    .background(if (canSave) a.accentAction.asColor() else n.surfaceMuted.asColor())
+                    .background(saveBtnBg, btnShape)
+                    .then(saveBtnBorder)
                     .clickable(enabled = canSave, role = Role.Button) {
                         focus.clearFocus()
                         saving = true
@@ -545,9 +583,9 @@ private fun PlanEditorSheet(
                 BasicText(
                     stringResource(R.string.record_save),
                     style = TextStyle(
-                        color = if (canSave) a.onAccentAction.asColor() else n.textSecondary.asColor(),
+                        color = saveBtnText,
                         fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = if (isP5) FontWeight.Black else FontWeight.Medium,
                     ),
                 )
             }
@@ -571,7 +609,19 @@ private fun DraftPlanItemRow(
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
-    val shape = RoundedCornerShape(12.dp)
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val shape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+    val cardBg = if (isP5) {
+        if (t.dark) Color(0xFF1B1B20) else p5.lightCard.asColor()
+    } else {
+        n.surface.asColor()
+    }
+    val cardBorder = if (isP5) {
+        Modifier.border(2.dp, if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor(), shape)
+    } else {
+        Modifier
+    }
     val currentSets = parseStrengthSets(item.setsText) ?: 4
     val fallbackReps = if (isTimed) 60 else 10
     val currentReps = parseStrengthReps(item.repsText) ?: fallbackReps
@@ -580,7 +630,8 @@ private fun DraftPlanItemRow(
         Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(n.surface.asColor())
+            .background(cardBg, shape)
+            .then(cardBorder)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

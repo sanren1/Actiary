@@ -37,7 +37,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.actiary.R
 import com.actiary.data.appearance.ChartPalette
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.P5Preview
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.ThemeTokens
 import com.actiary.theme.asColor
 import com.actiary.theme.resolveChartColors
@@ -52,6 +56,10 @@ fun GlassPreview(
     modifier: Modifier = Modifier,
     chartPalette: ChartPalette = ChartPalette.NEUTRAL_FIRST,
 ) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5Preview(LocalP5Tokens.current, modifier)
+        return
+    }
     val bg = rememberGlassLayer()
     val content = rememberGlassLayer()
     val combined = rememberCombinedBackdrop(bg, content)

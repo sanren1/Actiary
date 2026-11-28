@@ -3,6 +3,17 @@
     <string name="app_name">Actiary</string>
     <string name="appearance_title">外观</string>
     <string name="appearance_preview">预览</string>
+    <string name="appearance_ui_style">界面风格</string>
+    <string name="ui_style_liquid_glass">液态玻璃</string>
+    <string name="ui_style_persona_5">Persona 5</string>
+    <string name="appearance_p5_palette">主色调</string>
+    <string name="p5_palette_phantom_red">红黑经典</string>
+    <string name="p5_palette_royal_gold">皇家金黑</string>
+    <string name="p5_palette_velvet_blue">潜行蓝黑</string>
+    <string name="appearance_p5_motion">动效强度</string>
+    <string name="p5_motion_standard">标准</string>
+    <string name="p5_motion_compact">精简</string>
+    <string name="appearance_p5_ransom_title">剪报标题</string>
     <string name="settings_language">语言</string>
     <string name="language_system">跟随系统</string>
     <string name="language_zh">简体中文</string>
@@ -153,6 +164,10 @@
     <string name="nav_back">返回</string>
     <string name="settings_custom_types">运动类型</string>
     <string name="settings_general">通用</string>
+    <string name="settings_section_preferences">偏好</string>
+    <string name="settings_section_training">运动与训练</string>
+    <string name="settings_section_system">数据与关于</string>
+    <string name="appearance_app_icon">应用图标</string>
     <string name="settings_data">数据</string>
     <string name="backup_export">导出备份</string>
     <string name="backup_import">导入备份</string>
@@ -193,7 +208,7 @@
     <string name="settings_week_monday">周一</string>
     <string name="settings_week_sunday">周日</string>
     <string name="settings_reset_appearance">恢复默认外观</string>
-    <string name="settings_reset_appearance_message">恢复默认外观？</string>
+    <string name="settings_reset_appearance_message">重置当前界面风格的外观设置？</string>
     <string name="settings_reset">恢复</string>
     <string name="settings_about_version">版本 %1$s</string>
     <string name="settings_licenses">第三方声明</string>
@@ -208,6 +223,7 @@
     <string name="notice_google_apis_terms">Google API 服务条款</string>
     <string name="notice_backdrop_use">液态玻璃渲染与交互示例</string>
     <string name="notice_glasmio_use">弹簧动效与形变参数参考</string>
+    <string name="notice_persona_im_use">斜切多边形与硬阴影动效模式参考</string>
     <string name="notice_ml_kit_use">离线识别截图中的中文文字</string>
     <string name="notice_calendar_use">月历布局与月份切换</string>
     <string name="notice_coil_use">显示运动记录照片</string>
@@ -418,4 +434,14 @@
     <string name="checkin_milestone_quote_3">稳定的节奏，带来了看得见的积累。</string>
     <string name="checkin_milestone_quote_4">回头看，已经走过这么长一段路。</string>
     <string name="checkin_milestone_quote_5">新的节点已达成，继续按自己的节奏前行。</string>
+    <string name="p5_palette_calling_card">预告信纸白</string>
+    <string name="appearance_reduce_motion">减少应用内动画</string>
+    <string name="app_icon_switch_title">同步切换应用图标</string>
+    <string name="app_icon_switch_to_p5_message">是否同步将桌面图标切换为 Persona 5 风格？部分桌面可能会短暂重启应用。</string>
+    <string name="app_icon_switch_to_glass_message">是否同步将桌面图标切换回液态玻璃风格？部分桌面可能会短暂重启应用。</string>
+    <string name="app_icon_switch_confirm">切换图标</string>
+    <string name="app_icon_switch_keep">保持原样</string>
+    <string name="settings_debug_preview_section">开发调试</string>
+    <string name="settings_debug_preview_checkin">预览今日打卡弹窗</string>
+    <string name="settings_debug_preview_milestone">预览里程碑火焰弹窗</string>
 </resources>

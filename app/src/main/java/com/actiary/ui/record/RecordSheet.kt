@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -62,6 +64,7 @@ import com.actiary.R
 import com.actiary.data.PlanItemInput
 import com.actiary.data.RecordRepository
 import com.actiary.data.StrengthRepository
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.ExercisePerformanceRow
 import com.actiary.data.db.ExerciseTypeEntity
@@ -84,7 +87,11 @@ import com.actiary.glass.GlassSegmentedPicker
 import com.actiary.glass.GlassSheet
 import com.actiary.glass.overlayPresent
 import com.actiary.glass.rememberOverlayVisibility
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Surface
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.common.WorkoutPartIcons
 import com.actiary.ui.common.exerciseTypeIcon
@@ -472,15 +479,19 @@ internal fun RecordSheet(
     ) {
         val primary = t.neutrals.textPrimary.asColor()
         val secondary = t.neutrals.textSecondary.asColor()
+        val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+        val p5 = LocalP5Tokens.current
+        val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+        val p5Shadow = if (t.dark) p5.shadowColor.asColor() else p5.strokeDark.asColor()
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).clickable(enabled = !busy, role = Role.Button) { requestClose() }.padding(horizontal = 8.dp),
                     contentAlignment = Alignment.Center,
-                ) { BasicText(stringResource(R.string.record_cancel), style = TextStyle(primary, 16.sp)) }
+                ) { BasicText(stringResource(R.string.record_cancel), style = TextStyle(primary, 16.sp, if (isP5) FontWeight.Bold else FontWeight.Normal)) }
                 BasicText(
                     stringResource(R.string.record_title), Modifier.weight(1f),
-                    style = TextStyle(primary, 17.sp, FontWeight.SemiBold, textAlign = TextAlign.Center),
+                    style = TextStyle(primary, 17.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold, textAlign = TextAlign.Center),
                 )
                 Spacer(Modifier.width(64.dp)) // balances Cancel so the title stays centered
             }
@@ -489,15 +500,30 @@ internal fun RecordSheet(
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
-                        .background(t.neutrals.surfaceMuted.asColor())
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.PILL,
+                                    fillColor = t.neutrals.surface.asColor(),
+                                    strokeColor = p5Stroke,
+                                    shadowColor = p5Shadow,
+                                    strokeWidth = 2.dp,
+                                    shadowOffset = DpOffset(2.dp, 2.dp),
+                                )
+                            } else {
+                                Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(t.neutrals.surfaceMuted.asColor())
+                            },
+                        )
                         .clickable(enabled = !busy, role = Role.Button) { showDatePicker = true }.padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    BasicText(stringResource(R.string.record_date), Modifier.weight(1f), style = TextStyle(secondary, 15.sp))
+                    BasicText(stringResource(R.string.record_date), Modifier.weight(1f), style = TextStyle(secondary, 15.sp, if (isP5) FontWeight.Bold else FontWeight.Normal))
                     BasicText(
                         current.date.format(DateTimeFormatter.ofPattern(stringResource(R.string.day_title_pattern), locale)),
-                        style = TextStyle(primary, 15.sp, FontWeight.Medium),
+                        style = TextStyle(primary, 15.sp, if (isP5) FontWeight.Bold else FontWeight.Medium),
                     )
                 }
                 GlassSegmentedPicker(
@@ -588,11 +614,14 @@ internal fun RecordSheet(
                     }
                 }
                 Section(R.string.record_note) {
+                    val noteShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
                     BasicTextField(
                         value = current.note,
                         onValueChange = { v -> update { it.withNote(v) } },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp).clip(RoundedCornerShape(12.dp))
-                            .background(t.neutrals.surfaceMuted.asColor()).padding(12.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp).clip(noteShape)
+                            .background(t.neutrals.surfaceMuted.asColor())
+                            .then(if (isP5) Modifier.border(2.dp, p5Stroke, noteShape) else Modifier)
+                            .padding(12.dp),
                         textStyle = TextStyle(primary, 15.sp),
                         cursorBrush = SolidColor(t.accent.accentAction.asColor()),
                     )
@@ -625,11 +654,34 @@ internal fun RecordSheet(
                     )
                 }
                 if (existing) {
-                    BasicText(
-                        stringResource(R.string.record_clear),
-                        Modifier.heightIn(min = 48.dp).clickable(enabled = !busy, role = Role.Button) { showClear = true },
-                        style = TextStyle(t.accent.accentStroke.asColor(), 15.sp, FontWeight.Medium),
-                    )
+                    if (isP5) {
+                        Box(
+                            Modifier
+                                .heightIn(min = 44.dp)
+                                .p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = t.neutrals.surface.asColor(),
+                                    strokeColor = p5.brandFill.asColor(),
+                                    shadowColor = p5Shadow,
+                                    strokeWidth = 2.dp,
+                                    shadowOffset = DpOffset(2.dp, 2.dp),
+                                )
+                                .clickable(enabled = !busy, role = Role.Button) { showClear = true }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            BasicText(
+                                stringResource(R.string.record_clear),
+                                style = TextStyle(t.accent.accentStroke.asColor(), 15.sp, FontWeight.Bold),
+                            )
+                        }
+                    } else {
+                        BasicText(
+                            stringResource(R.string.record_clear),
+                            Modifier.heightIn(min = 48.dp).clickable(enabled = !busy, role = Role.Button) { showClear = true },
+                            style = TextStyle(t.accent.accentStroke.asColor(), 15.sp, FontWeight.Medium),
+                        )
+                    }
                 }
             }
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -664,8 +716,23 @@ internal fun RecordSheet(
                 val canSave = current != null && !busy && visible && remaining >= 0 &&
                     (!waitingForType || current.status == DayStatus.REST)
                 Box(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(if (canSave) 1f else 0.5f).clip(RoundedCornerShape(50))
-                        .background(t.accent.accentAction.asColor())
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(if (canSave) 1f else 0.5f)
+                        .then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.PILL,
+                                    fillColor = p5.brandFill.asColor(),
+                                    strokeColor = p5Stroke,
+                                    shadowColor = p5.strokeDark.asColor(),
+                                    strokeWidth = 2.dp,
+                                    shadowOffset = DpOffset(3.dp, 3.dp),
+                                )
+                            } else {
+                                Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(t.accent.accentAction.asColor())
+                            },
+                        )
                         .clickable(enabled = canSave, role = Role.Button) {
                             current?.let { d ->
                                 if (d.entries.any { it.id in invalidEntryIds }) {
@@ -684,7 +751,16 @@ internal fun RecordSheet(
                             }
                         },
                     contentAlignment = Alignment.Center,
-                ) { BasicText(stringResource(R.string.record_save), style = TextStyle(t.accent.onAccentAction.asColor(), 16.sp, FontWeight.SemiBold)) }
+                ) {
+                    BasicText(
+                        stringResource(R.string.record_save),
+                        style = TextStyle(
+                            color = if (isP5) p5.onBrandFill.asColor() else t.accent.onAccentAction.asColor(),
+                            fontSize = 16.sp,
+                            fontWeight = if (isP5) FontWeight.Black else FontWeight.SemiBold,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -810,9 +886,14 @@ internal fun RecordSheet(
 @Composable
 private fun Section(title: Int, counter: String? = null, content: @Composable () -> Unit) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth()) {
-            BasicText(stringResource(title), Modifier.weight(1f), style = TextStyle(t.neutrals.textSecondary.asColor(), 13.sp, FontWeight.Medium))
+            BasicText(
+                stringResource(title),
+                Modifier.weight(1f),
+                style = TextStyle(t.neutrals.textSecondary.asColor(), 13.sp, if (isP5) FontWeight.Bold else FontWeight.Medium),
+            )
             if (counter != null) BasicText(counter, style = TextStyle(t.neutrals.textSecondary.asColor(), 12.sp))
         }
         content()
@@ -822,20 +903,53 @@ private fun Section(title: Int, counter: String? = null, content: @Composable ()
 @Composable
 private fun TypeCell(type: ExerciseTypeEntity, selected: Boolean, enabled: Boolean, modifier: Modifier, onToggle: () -> Unit) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val shape = RoundedCornerShape(12.dp)
+    val contentTint = if (isP5 && selected) p5.onBrandFill.asColor() else t.neutrals.textPrimary.asColor()
     Box(
-        modifier.heightIn(min = 72.dp).clip(shape)
-            .background(if (selected) t.accent.accentSubtle.asColor() else t.neutrals.surfaceMuted.asColor())
-            .then(if (selected) Modifier.border(1.dp, t.accent.accentStroke.asColor(), shape) else Modifier)
+        modifier.heightIn(min = 72.dp)
+            .then(
+                if (isP5) {
+                    Modifier.p5Surface(
+                        variant = P5ShapeVariant.BADGE,
+                        fillColor = if (selected) p5.brandFill.asColor() else t.neutrals.surface.asColor(),
+                        strokeColor = if (selected) p5Stroke else p5Stroke.copy(alpha = if (t.dark) 0.55f else 0.85f),
+                        shadowColor = if (selected) p5.strokeDark.asColor() else Color.Transparent,
+                        strokeWidth = if (selected) 2.dp else 1.5.dp,
+                        shadowOffset = if (selected) DpOffset(2.dp, 2.dp) else DpOffset.Zero,
+                    )
+                } else {
+                    Modifier
+                        .clip(shape)
+                        .background(if (selected) t.accent.accentSubtle.asColor() else t.neutrals.surfaceMuted.asColor())
+                        .then(if (selected) Modifier.border(1.dp, t.accent.accentStroke.asColor(), shape) else Modifier)
+                },
+            )
             .toggleable(selected, enabled = enabled, role = Role.Checkbox) { onToggle() }
             .padding(4.dp),
     ) {
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(exerciseTypeIcon(type), null, Modifier.size(24.dp), tint = t.neutrals.textPrimary.asColor())
-            BasicText(exerciseTypeLabel(type), style = TextStyle(t.neutrals.textPrimary.asColor(), 12.sp, textAlign = TextAlign.Center), maxLines = 1)
+            Icon(exerciseTypeIcon(type), null, Modifier.size(24.dp), tint = contentTint)
+            BasicText(
+                exerciseTypeLabel(type),
+                style = TextStyle(
+                    color = contentTint,
+                    fontSize = 12.sp,
+                    fontWeight = if (isP5 && selected) FontWeight.Bold else FontWeight.Normal,
+                    textAlign = TextAlign.Center,
+                ),
+                maxLines = 1,
+            )
         }
         if (selected) {
-            Icon(Icons.Outlined.Check, null, Modifier.align(Alignment.TopEnd).size(14.dp), tint = t.accent.accentStroke.asColor())
+            Icon(
+                Icons.Outlined.Check,
+                null,
+                Modifier.align(Alignment.TopEnd).size(14.dp),
+                tint = if (isP5) p5.onBrandFill.asColor() else t.accent.accentStroke.asColor(),
+            )
         }
     }
 }
@@ -881,6 +995,10 @@ private fun EntryFields(
     strengthContent: (@Composable (onValidityChange: (Boolean) -> Unit) -> Unit)? = null,
 ) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val p5Shadow = if (t.dark) p5.shadowColor.asColor() else p5.strokeDark.asColor()
     val hasDistance = type.hasDistance
     val swimming = type.builtinKey == "swimming"
     var minutes by rememberSaveable { mutableStateOf(formatMinutes(entry.durationMinutes)) }
@@ -983,8 +1101,22 @@ private fun EntryFields(
 
     Column(
         Modifier.fillMaxWidth().padding(top = 12.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(t.neutrals.surface.asColor().copy(alpha = 0.55f))
+            .then(
+                if (isP5) {
+                    Modifier.p5Surface(
+                        variant = P5ShapeVariant.CARD,
+                        fillColor = t.neutrals.surface.asColor(),
+                        strokeColor = p5Stroke,
+                        shadowColor = p5Shadow,
+                        strokeWidth = 2.dp,
+                        shadowOffset = DpOffset(3.dp, 3.dp),
+                    )
+                } else {
+                    Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(t.neutrals.surface.asColor().copy(alpha = 0.55f))
+                },
+            )
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -997,7 +1129,7 @@ private fun EntryFields(
             BasicText(
                 exerciseTypeLabel(type),
                 Modifier.weight(1f),
-                style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp, FontWeight.SemiBold),
+                style = TextStyle(t.neutrals.textPrimary.asColor(), 14.sp, if (isP5) FontWeight.Bold else FontWeight.SemiBold),
                 maxLines = 1,
             )
             if (onRemove != null) {
@@ -1026,6 +1158,10 @@ private fun EntryFields(
 @Composable
 private fun NumberField(label: String, value: String, modifier: Modifier, keyboard: KeyboardType, onChange: (String) -> Unit) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val fieldShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(10.dp)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         BasicText(label, style = TextStyle(t.neutrals.textSecondary.asColor(), 11.sp))
         BasicTextField(
@@ -1033,8 +1169,20 @@ private fun NumberField(label: String, value: String, modifier: Modifier, keyboa
             keyboardOptions = KeyboardOptions(keyboardType = keyboard),
             textStyle = TextStyle(t.neutrals.textPrimary.asColor(), 15.sp),
             cursorBrush = SolidColor(t.accent.accentAction.asColor()),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(10.dp))
-                .background(t.neutrals.surfaceMuted.asColor()).padding(horizontal = 12.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(fieldShape)
+                .background(t.neutrals.surfaceMuted.asColor())
+                .then(
+                    if (isP5) {
+                        Modifier.border(
+                            1.5.dp,
+                            p5Stroke.copy(alpha = if (t.dark) 0.65f else 0.85f),
+                            fieldShape,
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(horizontal = 12.dp, vertical = 12.dp),
         )
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
@@ -65,12 +66,14 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.actiary.R
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.photo.PhotoStore
 import com.actiary.domain.DayDraft
 import com.actiary.domain.DraftPhoto
@@ -81,7 +84,11 @@ import com.actiary.glass.overlayFadeIn
 import com.actiary.glass.overlayFadeOut
 import com.actiary.glass.overlayInteraction
 import com.actiary.glass.rememberOverlayVisibility
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Surface
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.motion.rememberMotionReduced
 import kotlin.math.roundToInt
@@ -113,6 +120,9 @@ fun PhotoRow(
     editingEnabled: Boolean = true,
 ) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -197,10 +207,12 @@ fun PhotoRow(
                             } else Modifier,
                         ),
                     ) {
+                        val photoShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
                         AsyncImage(
                             model(photos[index], photoStore), stringResource(R.string.day_photo, position + 1),
-                            Modifier.size(80.dp).align(Alignment.BottomStart).clip(RoundedCornerShape(12.dp))
+                            Modifier.size(80.dp).align(Alignment.BottomStart).clip(photoShape)
                                 .background(t.neutrals.surfaceMuted.asColor())
+                                .then(if (isP5) Modifier.border(2.dp, p5Stroke, photoShape) else Modifier)
                                 .clickable(enabled = holding == null, role = Role.Button) { onView(index) }
                                 .semantics {
                                     if (editingEnabled && holding == null) {
@@ -213,33 +225,57 @@ fun PhotoRow(
                             contentScale = ContentScale.Crop,
                         )
                         Box(
-                            Modifier.align(Alignment.TopEnd).size(48.dp).clip(CircleShape)
+                            Modifier.align(Alignment.TopEnd).size(48.dp)
+                                .clip(if (isP5) RoundedCornerShape(2.dp) else CircleShape)
                                 .clickable(enabled = editingEnabled && holding == null, role = Role.Button) { onRemove(index) },
                             contentAlignment = Alignment.TopEnd,
                         ) {
                             Box(
                                 Modifier.padding(top = 4.dp, end = 4.dp).size(24.dp)
-                                    .background(t.neutrals.surface.asColor(), CircleShape),
+                                    .then(
+                                        if (isP5) {
+                                            Modifier.p5Surface(
+                                                variant = P5ShapeVariant.BADGE,
+                                                fillColor = p5.brandFill.asColor(),
+                                                strokeColor = p5Stroke,
+                                                shadowColor = p5.strokeDark.asColor(),
+                                                strokeWidth = 1.5.dp,
+                                                shadowOffset = DpOffset(1.dp, 1.dp),
+                                            )
+                                        } else {
+                                            Modifier.background(t.neutrals.surface.asColor(), CircleShape)
+                                        },
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(Icons.Outlined.Close, stringResource(R.string.record_remove_photo), Modifier.size(16.dp), tint = t.neutrals.textPrimary.asColor())
+                                Icon(
+                                    Icons.Outlined.Close,
+                                    stringResource(R.string.record_remove_photo),
+                                    Modifier.size(16.dp),
+                                    tint = if (isP5) p5.onBrandFill.asColor() else t.neutrals.textPrimary.asColor(),
+                                )
                             }
                         }
                     }
                 }
             }
             if (photos.size < DayDraft.PHOTO_LIMIT) {
+                val actionShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
+                val actionBg = if (isP5) t.neutrals.surface.asColor() else t.neutrals.surfaceMuted.asColor()
+                val actionBorder = if (isP5) Modifier.border(2.dp, p5Stroke, actionShape) else Modifier
                 Box(
-                    Modifier.padding(top = 8.dp).size(80.dp).clip(RoundedCornerShape(12.dp))
-                        .background(t.neutrals.surfaceMuted.asColor())
+                    Modifier.padding(top = 8.dp).size(80.dp).clip(actionShape)
+                        .background(actionBg)
+                        .then(actionBorder)
                         .clickable(enabled = editingEnabled && holding == null, role = Role.Button, onClick = onCapture),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Outlined.PhotoCamera, stringResource(R.string.record_take_photo), tint = t.neutrals.textPrimary.asColor())
                 }
                 Box(
-                    Modifier.padding(top = 8.dp).size(80.dp).clip(RoundedCornerShape(12.dp))
-                        .background(t.neutrals.surfaceMuted.asColor())
+                    Modifier.padding(top = 8.dp).size(80.dp).clip(actionShape)
+                        .background(actionBg)
+                        .then(actionBorder)
                         .clickable(enabled = editingEnabled && holding == null, role = Role.Button, onClick = onAdd),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -300,16 +336,36 @@ fun PhotoViewer(
                                     contentScale = ContentScale.Fit,
                                 )
                             }
+                            val isP5Viewer = LocalUiStyle.current == UiStyle.PERSONA_5
+                            val p5Viewer = LocalP5Tokens.current
                             BasicText(
                                 "${pagerState.currentPage + 1} / ${shownPhotos.size}",
                                 Modifier
                                     .align(Alignment.BottomCenter)
                                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
                                     .padding(bottom = 20.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(Color.Black.copy(alpha = 0.55f))
+                                    .then(
+                                        if (isP5Viewer) {
+                                            Modifier.p5Surface(
+                                                variant = P5ShapeVariant.BADGE,
+                                                fillColor = p5Viewer.darkCard.asColor(),
+                                                strokeColor = p5Viewer.strokeLight.asColor(),
+                                                shadowColor = p5Viewer.shadowColor.asColor(),
+                                                strokeWidth = 1.5.dp,
+                                                shadowOffset = DpOffset(2.dp, 2.dp),
+                                            )
+                                        } else {
+                                            Modifier
+                                                .clip(RoundedCornerShape(50))
+                                                .background(Color.Black.copy(alpha = 0.55f))
+                                        },
+                                    )
                                     .padding(horizontal = 12.dp, vertical = 6.dp),
-                                style = TextStyle(Color.White, 13.sp, FontWeight.Medium),
+                                style = TextStyle(
+                                    color = if (isP5Viewer) p5Viewer.strokeLight.asColor() else Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isP5Viewer) FontWeight.Bold else FontWeight.Medium,
+                                ),
                             )
                         }
                     }

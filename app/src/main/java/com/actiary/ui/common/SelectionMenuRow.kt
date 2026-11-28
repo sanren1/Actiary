@@ -1,6 +1,7 @@
 package com.actiary.ui.common
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,11 +29,15 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.actiary.data.appearance.UiStyle
 import com.actiary.glass.GlassAnchoredMenuItem
 import com.actiary.glass.LocalGlassAnchoredMenu
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 
 @Composable
@@ -49,6 +54,53 @@ internal fun <T> SelectionMenuRow(
     val neutral = tokens.neutrals
     val primary = neutral.textPrimary.asColor()
     val secondary = neutral.textSecondary.asColor()
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    if (isP5) {
+        val p5 = LocalP5Tokens.current
+        val rowShape = RoundedCornerShape(2.dp)
+        val fillColor = if (tokens.dark) p5.darkCard.asColor() else p5.lightCard.asColor()
+        val strokeColor = if (tokens.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+        val badgeFill = if (tokens.dark) p5.brandFill.asColor().copy(alpha = 0.22f) else neutral.surfaceMuted.asColor()
+        val badgeStroke = if (tokens.dark) p5.strokeLight.asColor().copy(alpha = 0.55f) else p5.strokeDark.asColor()
+        val arrowTint = if (tokens.dark) p5.accentOnDark.asColor() else tokens.accent.accentAction.asColor()
+        Row(
+            modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .clip(rowShape)
+                .background(fillColor, rowShape)
+                .border(2.dp, strokeColor, rowShape)
+                .clickable(interactionSource = null, indication = ripple(color = primary), role = Role.Button) {
+                    anchor?.let { target ->
+                        menu.show(target, options.map { (option, text) ->
+                            GlassAnchoredMenuItem(text, selected = option == selected) { onSelect(option) }
+                        })
+                    }
+                }.padding(horizontal = 14.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BasicText(label, Modifier.weight(1f).padding(vertical = 4.dp), TextStyle(primary, 16.sp, FontWeight.Bold))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                Row(
+                    Modifier
+                        .onGloballyPositioned { anchor = it.boundsInRoot() }
+                        .clip(rowShape)
+                        .background(badgeFill, rowShape)
+                        .border(1.5.dp, badgeStroke, rowShape)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BasicText(
+                        options.firstOrNull { it.first == selected }?.second.orEmpty(),
+                        Modifier.weight(1f, fill = false),
+                        TextStyle(primary, 13.sp, FontWeight.Bold),
+                    )
+                    Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp), tint = arrowTint)
+                }
+            }
+        }
+        return
+    }
     Row(
         modifier.fillMaxWidth().heightIn(min = 48.dp)
             .clip(RoundedCornerShape(16.dp))

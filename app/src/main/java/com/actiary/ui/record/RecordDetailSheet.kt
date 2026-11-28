@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -48,6 +49,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +57,7 @@ import coil3.compose.AsyncImage
 import com.actiary.R
 import com.actiary.data.RecordRepository
 import com.actiary.data.StrengthRepository
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.DayStatus
 import com.actiary.data.db.ExerciseTypeEntity
 import com.actiary.data.photo.PhotoStore
@@ -66,7 +69,11 @@ import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassSheet
 import com.actiary.glass.overlayPresent
 import com.actiary.glass.rememberOverlayVisibility
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Surface
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.common.AnatomyBodyMap
 import com.actiary.ui.common.BodyMapStyle
@@ -134,6 +141,10 @@ internal fun RecordDetailSheet(
         title = title,
         covered = photoVisibility.overlayPresent || historyOpen || historyPresent,
     ) {
+        val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+        val p5 = LocalP5Tokens.current
+        val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+        val p5Shadow = if (t.dark) p5.shadowColor.asColor() else p5.strokeDark.asColor()
         Column(
             Modifier.align(Alignment.CenterHorizontally).widthIn(max = 560.dp).fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
@@ -142,7 +153,7 @@ internal fun RecordDetailSheet(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     title, Modifier.weight(1f).semantics { heading() },
-                    color = primary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                    color = primary, fontSize = 20.sp, fontWeight = if (isP5) FontWeight.Black else FontWeight.SemiBold,
                 )
                 GlassIconButton(
                     Icons.Outlined.Edit, stringResource(R.string.record_detail_edit),
@@ -157,9 +168,31 @@ internal fun RecordDetailSheet(
             ) {
                 if (detail != null) {
                     val rest = detail.status == DayStatus.REST
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(if (rest) Icons.Outlined.Bedtime else Icons.Outlined.CheckCircle, null, Modifier.size(20.dp), tint = primary)
-                        Text(stringResource(if (rest) R.string.day_rest else R.string.day_state_logged), color = primary)
+                    val statusTint = if (isP5 && !rest) p5.onBrandFill.asColor() else primary
+                    Row(
+                        Modifier.then(
+                            if (isP5) {
+                                Modifier.p5Surface(
+                                    variant = P5ShapeVariant.BADGE,
+                                    fillColor = if (rest) t.neutrals.surface.asColor() else p5.brandFill.asColor(),
+                                    strokeColor = p5Stroke,
+                                    shadowColor = p5Shadow,
+                                    strokeWidth = 1.5.dp,
+                                    shadowOffset = DpOffset(2.dp, 2.dp),
+                                ).padding(horizontal = 10.dp, vertical = 5.dp)
+                            } else {
+                                Modifier
+                            },
+                        ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(if (rest) Icons.Outlined.Bedtime else Icons.Outlined.CheckCircle, null, Modifier.size(20.dp), tint = statusTint)
+                        Text(
+                            stringResource(if (rest) R.string.day_rest else R.string.day_state_logged),
+                            color = statusTint,
+                            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
+                        )
                     }
                     val focusLabels = freeformFocusLabels()
                     val detectedFocus = remember(detail.note, focusLabels) {
@@ -186,8 +219,30 @@ internal fun RecordDetailSheet(
                     }
                     if (detail.empty) Text(stringResource(R.string.record_detail_empty), color = secondary)
                     if (detail.note.isNotBlank()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(stringResource(R.string.record_note), Modifier.semantics { heading() }, color = secondary, fontSize = 14.sp)
+                        Column(
+                            Modifier.then(
+                                if (isP5) {
+                                    Modifier.fillMaxWidth().p5Surface(
+                                        variant = P5ShapeVariant.CARD,
+                                        fillColor = t.neutrals.surface.asColor(),
+                                        strokeColor = p5Stroke,
+                                        shadowColor = p5Shadow,
+                                        strokeWidth = 2.dp,
+                                        shadowOffset = DpOffset(2.dp, 2.dp),
+                                    ).padding(12.dp)
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.record_note),
+                                Modifier.semantics { heading() },
+                                color = secondary,
+                                fontSize = 14.sp,
+                                fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
+                            )
                             Text(detail.note, color = primary, fontSize = 16.sp)
                         }
                     }
@@ -232,26 +287,62 @@ private fun DetailSession(
     onExerciseClick: (Long) -> Unit = {},
 ) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val p5Shadow = if (t.dark) p5.shadowColor.asColor() else p5.strokeDark.asColor()
     val primary = t.neutrals.textPrimary.asColor()
     val secondary = t.neutrals.textSecondary.asColor()
     val accent = t.accent.accentAction.asColor()
     Column(
-        Modifier.fillMaxWidth().background(t.neutrals.surface.asColor(), RoundedCornerShape(12.dp)).padding(12.dp),
+        Modifier.fillMaxWidth()
+            .then(
+                if (isP5) {
+                    Modifier.p5Surface(
+                        variant = P5ShapeVariant.CARD,
+                        fillColor = t.neutrals.surface.asColor(),
+                        strokeColor = p5Stroke,
+                        shadowColor = p5Shadow,
+                        strokeWidth = 2.dp,
+                        shadowOffset = DpOffset(3.dp, 3.dp),
+                    )
+                } else {
+                    Modifier.background(t.neutrals.surface.asColor(), RoundedCornerShape(12.dp))
+                },
+            )
+            .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(exerciseTypeIcon(type), null, Modifier.size(20.dp), tint = primary)
-            Text(exerciseTypeLabel(type), Modifier.semantics { heading() }, color = primary, fontWeight = FontWeight.Medium)
+            Text(
+                exerciseTypeLabel(type),
+                Modifier.semantics { heading() },
+                color = primary,
+                fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
+            )
         }
         if (entry.strengthItems.isNotEmpty()) {
             val primaryMuscles = remember(entry.muscleActivations) {
                 entry.muscleActivations.filterValues { it == MuscleActivation.PRIMARY }.keys.toList()
             }
+            val mapShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(10.dp)
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(mapShape)
                     .background(t.neutrals.surfaceMuted.asColor())
+                    .then(
+                        if (isP5) {
+                            Modifier.border(
+                                1.5.dp,
+                                p5Stroke.copy(alpha = if (t.dark) 0.55f else 0.85f),
+                                mapShape,
+                            )
+                        } else {
+                            Modifier
+                        },
+                    )
                     .padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -273,6 +364,7 @@ private fun DetailSession(
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val itemShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(8.dp)
                 entry.strengthItems.forEach { item ->
                     val itemMetrics = formatStrengthItemMetrics(
                         sets = item.sets,
@@ -283,8 +375,19 @@ private fun DetailSession(
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(itemShape)
                             .background(t.neutrals.surfaceMuted.asColor())
+                            .then(
+                                if (isP5) {
+                                    Modifier.border(
+                                        1.5.dp,
+                                        p5Stroke.copy(alpha = if (t.dark) 0.55f else 0.85f),
+                                        itemShape,
+                                    )
+                                } else {
+                                    Modifier
+                                },
+                            )
                             .clickable(enabled = item.exerciseId > 0L, role = Role.Button) {
                                 onExerciseClick(item.exerciseId)
                             }
@@ -297,7 +400,7 @@ private fun DetailSession(
                             Modifier.weight(1f),
                             color = primary,
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -321,19 +424,39 @@ private fun DetailSession(
                 val pillShape = RoundedCornerShape(8.dp)
                 focusParts.forEach { part ->
                     Row(
-                        Modifier.clip(pillShape)
-                            .background(accent.copy(alpha = 0.14f))
-                            .border(1.dp, accent.copy(alpha = 0.45f), pillShape)
+                        Modifier
+                            .then(
+                                if (isP5) {
+                                    Modifier.p5Surface(
+                                        variant = P5ShapeVariant.BADGE,
+                                        fillColor = p5.brandFill.asColor(),
+                                        strokeColor = p5Stroke,
+                                        shadowColor = Color.Transparent,
+                                        strokeWidth = 1.5.dp,
+                                        shadowOffset = DpOffset.Zero,
+                                    )
+                                } else {
+                                    Modifier
+                                        .clip(pillShape)
+                                        .background(accent.copy(alpha = 0.14f))
+                                        .border(1.dp, accent.copy(alpha = 0.45f), pillShape)
+                                },
+                            )
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Icon(freeformFocusPartIcon(part), null, Modifier.size(16.dp), tint = accent)
+                        Icon(
+                            freeformFocusPartIcon(part),
+                            null,
+                            Modifier.size(16.dp),
+                            tint = if (isP5) p5.onBrandFill.asColor() else accent,
+                        )
                         Text(
                             focusLabels[part].orEmpty(),
-                            color = accent,
+                            color = if (isP5) p5.onBrandFill.asColor() else accent,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
                         )
                     }
                 }
@@ -342,7 +465,7 @@ private fun DetailSession(
         entry.metrics.forEach { (label, value) ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(label), Modifier.weight(1f), color = secondary, fontSize = 14.sp)
-                Text(value, color = primary, fontSize = 14.sp)
+                Text(value, color = primary, fontSize = 14.sp, fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal)
             }
         }
     }
@@ -351,11 +474,16 @@ private fun DetailSession(
 @Composable
 private fun DetailPhotos(photos: List<String>, photoStore: PhotoStore, enabled: Boolean, onView: (Int) -> Unit) {
     val t = LocalThemeTokens.current
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val photoShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
     val columns = 3
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             stringResource(R.string.record_photos), Modifier.semantics { heading() },
             color = t.neutrals.textSecondary.asColor(), fontSize = 14.sp,
+            fontWeight = if (isP5) FontWeight.Bold else FontWeight.Normal,
         )
         photos.chunked(columns).forEachIndexed { row, thumbnails ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -363,8 +491,9 @@ private fun DetailPhotos(photos: List<String>, photoStore: PhotoStore, enabled: 
                     val index = row * columns + column
                     AsyncImage(
                         photoStore.file(fileName), stringResource(R.string.day_photo, index + 1),
-                        Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(12.dp))
+                        Modifier.weight(1f).aspectRatio(1f).clip(photoShape)
                             .background(t.neutrals.surfaceMuted.asColor())
+                            .then(if (isP5) Modifier.border(2.dp, p5Stroke, photoShape) else Modifier)
                             .clickable(enabled = enabled, role = Role.Button) { onView(index) },
                         contentScale = ContentScale.Crop,
                     )

@@ -3,6 +3,17 @@
     <string name="app_name">Actiary</string>
     <string name="appearance_title">Appearance</string>
     <string name="appearance_preview">Preview</string>
+    <string name="appearance_ui_style">UI style</string>
+    <string name="ui_style_liquid_glass">Liquid Glass</string>
+    <string name="ui_style_persona_5">Persona 5</string>
+    <string name="appearance_p5_palette">Palette</string>
+    <string name="p5_palette_phantom_red">Phantom Red</string>
+    <string name="p5_palette_royal_gold">Royal Gold</string>
+    <string name="p5_palette_velvet_blue">Velvet Blue</string>
+    <string name="appearance_p5_motion">Motion</string>
+    <string name="p5_motion_standard">Standard</string>
+    <string name="p5_motion_compact">Compact</string>
+    <string name="appearance_p5_ransom_title">Ransom title</string>
     <string name="settings_language">Language</string>
     <string name="language_system">Follow system</string>
     <string name="language_zh">简体中文</string>
@@ -153,6 +164,10 @@
     <string name="nav_back">Back</string>
     <string name="settings_custom_types">Workout types</string>
     <string name="settings_general">General</string>
+    <string name="settings_section_preferences">Preferences</string>
+    <string name="settings_section_training">Workouts</string>
+    <string name="settings_section_system">Data &amp; About</string>
+    <string name="appearance_app_icon">App icon</string>
     <string name="settings_data">Data</string>
     <string name="backup_export">Export backup</string>
     <string name="backup_import">Import backup</string>
@@ -196,7 +211,7 @@
     <string name="settings_week_monday">Monday</string>
     <string name="settings_week_sunday">Sunday</string>
     <string name="settings_reset_appearance">Restore default appearance</string>
-    <string name="settings_reset_appearance_message">Restore default appearance?</string>
+    <string name="settings_reset_appearance_message">Reset appearance settings for the current UI style?</string>
     <string name="settings_reset">Restore</string>
     <string name="settings_about_version">Version %1$s</string>
     <string name="settings_licenses">Third-party notices</string>
@@ -211,6 +226,7 @@
     <string name="notice_google_apis_terms">Google APIs Terms of Service</string>
     <string name="notice_backdrop_use">Liquid Glass rendering and interaction examples</string>
     <string name="notice_glasmio_use">Reference for spring motion and deformation settings</string>
+    <string name="notice_persona_im_use">Reference for skewed polygon and hard-shadow motion patterns</string>
     <string name="notice_ml_kit_use">On-device recognition of Chinese text in screenshots</string>
     <string name="notice_calendar_use">Month layout and navigation</string>
     <string name="notice_coil_use">Displays workout photos</string>
@@ -421,4 +437,14 @@
     <string name="checkin_milestone_quote_3">A steady pace has turned into lasting momentum.</string>
     <string name="checkin_milestone_quote_4">Look back at how far you’ve come.</string>
     <string name="checkin_milestone_quote_5">A new mark reached. Keep moving at your own pace.</string>
+    <string name="p5_palette_calling_card">Calling Card</string>
+    <string name="appearance_reduce_motion">Reduce in-app motion</string>
+    <string name="app_icon_switch_title">Switch app icon</string>
+    <string name="app_icon_switch_to_p5_message">Switch the launcher icon to Persona 5 style? Some launchers may briefly restart the app.</string>
+    <string name="app_icon_switch_to_glass_message">Switch the launcher icon back to Liquid Glass style? Some launchers may briefly restart the app.</string>
+    <string name="app_icon_switch_confirm">Switch</string>
+    <string name="app_icon_switch_keep">Keep current</string>
+    <string name="settings_debug_preview_section">Debug preview</string>
+    <string name="settings_debug_preview_checkin">Preview daily check-in dialog</string>
+    <string name="settings_debug_preview_milestone">Preview milestone flame dialog</string>
 </resources>

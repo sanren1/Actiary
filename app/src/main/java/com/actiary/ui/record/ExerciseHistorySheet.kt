@@ -1,6 +1,7 @@
 package com.actiary.ui.record
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -35,16 +37,22 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.actiary.R
 import com.actiary.data.StrengthRepository
+import com.actiary.data.appearance.UiStyle
 import com.actiary.data.db.ExercisePerformanceRow
 import com.actiary.data.db.StrengthExerciseEntity
 import com.actiary.domain.formatWeightKg
 import com.actiary.glass.GlassIconButton
 import com.actiary.glass.GlassSheet
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Surface
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.common.exerciseDisplayName
 import com.actiary.ui.common.formatStrengthItemMetrics
@@ -63,6 +71,10 @@ internal fun ExerciseHistorySheet(
 ) {
     val t = LocalThemeTokens.current
     val n = t.neutrals
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
+    val p5Shadow = if (t.dark) p5.shadowColor.asColor() else p5.strokeDark.asColor()
     val focus = LocalFocusManager.current
     val isChinese = isChineseLocale()
     val locale = LocalConfiguration.current.locales[0]
@@ -116,7 +128,7 @@ internal fun ExerciseHistorySheet(
                     BasicText(
                         title,
                         Modifier.semantics { heading() },
-                        style = TextStyle(n.textPrimary.asColor(), 19.sp, FontWeight.SemiBold),
+                        style = TextStyle(n.textPrimary.asColor(), 19.sp, if (isP5) FontWeight.Black else FontWeight.SemiBold),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -141,8 +153,22 @@ internal fun ExerciseHistorySheet(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(n.surface.asColor())
+                            .then(
+                                if (isP5) {
+                                    Modifier.p5Surface(
+                                        variant = P5ShapeVariant.CARD,
+                                        fillColor = n.surface.asColor(),
+                                        strokeColor = p5Stroke,
+                                        shadowColor = p5Shadow,
+                                        strokeWidth = 2.dp,
+                                        shadowOffset = DpOffset(2.dp, 2.dp),
+                                    )
+                                } else {
+                                    Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(n.surface.asColor())
+                                },
+                            )
                             .padding(horizontal = 14.dp, vertical = 18.dp),
                     ) {
                         BasicText(
@@ -197,11 +223,23 @@ internal fun ExerciseHistorySheet(
                                 weightKg = row.weightKg,
                                 isTimed = shownExercise.isTimed,
                             )
+                            val rowShape = if (isP5) RoundedCornerShape(2.dp) else RoundedCornerShape(12.dp)
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(rowShape)
                                     .background(n.surface.asColor())
+                                    .then(
+                                        if (isP5) {
+                                            Modifier.border(
+                                                1.5.dp,
+                                                p5Stroke.copy(alpha = if (t.dark) 0.6f else 0.85f),
+                                                rowShape,
+                                            )
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
                                     .padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -215,7 +253,7 @@ internal fun ExerciseHistorySheet(
                                 )
                                 BasicText(
                                     metricsText,
-                                    style = TextStyle(n.textPrimary.asColor(), 14.sp, FontWeight.Medium),
+                                    style = TextStyle(n.textPrimary.asColor(), 14.sp, if (isP5) FontWeight.Bold else FontWeight.Medium),
                                     maxLines = 1,
                                 )
                             }
@@ -235,20 +273,42 @@ private fun HistorySummaryPill(
     val t = LocalThemeTokens.current
     val n = t.neutrals
     val a = t.accent
+    val isP5 = LocalUiStyle.current == UiStyle.PERSONA_5
+    val p5 = LocalP5Tokens.current
+    val p5Stroke = if (t.dark) p5.strokeLight.asColor() else p5.strokeDark.asColor()
     val shape = RoundedCornerShape(50)
     Box(
         Modifier
-            .clip(shape)
-            .background(if (highlighted) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
+            .then(
+                if (isP5) {
+                    Modifier.p5Surface(
+                        variant = P5ShapeVariant.BADGE,
+                        fillColor = if (highlighted) p5.brandFill.asColor() else n.surface.asColor(),
+                        strokeColor = p5Stroke,
+                        shadowColor = if (highlighted) p5.strokeDark.asColor() else Color.Transparent,
+                        strokeWidth = if (highlighted) 2.dp else 1.5.dp,
+                        shadowOffset = if (highlighted) DpOffset(2.dp, 2.dp) else DpOffset.Zero,
+                    )
+                } else {
+                    Modifier
+                        .clip(shape)
+                        .background(if (highlighted) a.accentSubtle.asColor() else n.surfaceMuted.asColor())
+                },
+            )
             .padding(horizontal = 10.dp, vertical = 5.dp),
         contentAlignment = Alignment.Center,
     ) {
         BasicText(
             text,
             style = TextStyle(
-                color = if (highlighted) a.accentAction.asColor() else n.textPrimary.asColor(),
+                color = when {
+                    isP5 && highlighted -> p5.onBrandFill.asColor()
+                    isP5 -> n.textPrimary.asColor()
+                    highlighted -> a.accentAction.asColor()
+                    else -> n.textPrimary.asColor()
+                },
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = if (isP5) FontWeight.Bold else FontWeight.Medium,
             ),
             maxLines = 1,
         )

@@ -1,6 +1,7 @@
 package com.actiary.ui.record
 
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,7 +30,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.P5ShapeVariant
+import com.actiary.p5.p5Surface
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.asColor
 import com.actiary.ui.calendar.MonthCalendar
 import com.actiary.ui.calendar.isFuture
@@ -81,6 +87,25 @@ fun DatePickerDialog(
                 { scope.launch { state.animateScrollToMonth(month.plusMonths(1)) } }, enabled = month < state.endMonth, glass = false,
             )
         }
-        MonthCalendar(state, emptyMap(), selected, today, locale, onSelect) { !isFuture(it, today) }
+        if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+            val p5 = LocalP5Tokens.current
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .p5Surface(
+                        variant = P5ShapeVariant.PANEL,
+                        fillColor = p5.lightCard.asColor(),
+                        strokeColor = p5.strokeDark.asColor(),
+                        shadowColor = p5.shadowColor.asColor(),
+                        strokeWidth = 2.dp,
+                    )
+                    .padding(8.dp),
+            ) {
+                MonthCalendar(state, emptyMap(), selected, today, locale, onSelect) { !isFuture(it, today) }
+            }
+        } else {
+            MonthCalendar(state, emptyMap(), selected, today, locale, onSelect) { !isFuture(it, today) }
+        }
     }
 }

@@ -1,6 +1,8 @@
 package com.actiary.data.backup
 
 import com.actiary.data.appearance.AMBIENT_BACKGROUND
+import com.actiary.data.appearance.P5_RANSOM_TITLE
+import com.actiary.data.appearance.REDUCE_IN_APP_MOTION
 import com.actiary.data.appearance.backupAppearanceStringKeys
 import com.actiary.data.db.ActiaryDatabase
 import com.actiary.data.db.DayStatus
@@ -31,6 +33,8 @@ fun BackupData.toJson(): String = obj(
     "appearance" to JSONObject().apply {
         for (key in backupAppearanceStringKeys) appearance[key.name]?.let { put(key.name, it) }
         appearance[AMBIENT_BACKGROUND.name]?.let { put(AMBIENT_BACKGROUND.name, it.toBooleanStrict()) }
+        appearance[P5_RANSOM_TITLE.name]?.let { put(P5_RANSOM_TITLE.name, it.toBooleanStrict()) }
+        appearance[REDUCE_IN_APP_MOTION.name]?.let { put(REDUCE_IN_APP_MOTION.name, it.toBooleanStrict()) }
     },
     "types" to types.encode {
         obj("id" to it.id, "builtinKey" to it.builtinKey, "name" to it.name, "sortOrder" to it.sortOrder,
@@ -280,6 +284,10 @@ fun parseBackup(json: String): BackupData {
             for (key in backupAppearanceStringKeys) appearance.optionalString(key.name)?.let { put(key.name, it) }
             val ambient = AMBIENT_BACKGROUND.name
             if (!appearance.isNull(ambient)) put(ambient, appearance.bool(ambient).toString())
+            val p5RansomTitle = P5_RANSOM_TITLE.name
+            if (!appearance.isNull(p5RansomTitle)) put(p5RansomTitle, appearance.bool(p5RansomTitle).toString())
+            val reduceInAppMotion = REDUCE_IN_APP_MOTION.name
+            if (!appearance.isNull(reduceInAppMotion)) put(reduceInAppMotion, appearance.bool(reduceInAppMotion).toString())
         }
         val version = root.string("appVersion")
         if (version.isBlank()) invalid("Missing app version")

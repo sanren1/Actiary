@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Centered within the 108dp adaptive icon safe zone -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.70"
+        android:scaleY="0.70">
+
+        <!-- Hard-offset ink-black comic drop shadow -->
+        <path
+            android:fillColor="#FF0D0D0D"
+            android:pathData="M24,25L89,19L84,88L19,84Z" />
+
+        <!-- Skewed calling-card paper body -->
+        <path
+            android:fillColor="#FFF7F6F2"
+            android:strokeColor="#FF0D0D0D"
+            android:strokeWidth="3.6"
+            android:strokeLineJoin="miter"
+            android:pathData="M19,20L84,14L79,83L14,79Z" />
+
+        <!-- Crimson angled header band -->
+        <path
+            android:fillColor="#FFD91E26"
+            android:pathData="M19,20L84,14L82.5,33L17.5,38Z" />
+
+        <!-- Crisp black header separator -->
+        <path
+            android:pathData="M17.5,38L82.5,33"
+            android:strokeColor="#FF0D0D0D"
+            android:strokeWidth="3.0"
+            android:strokeLineCap="square" />
+
+        <!-- Sharp angular Actiary pulse / bolt polyline -->
+        <path
+            android:pathData="M24,59L37,58L45,42L54,71L62,51L67,57L74,56"
+            android:strokeColor="#FF0D0D0D"
+            android:strokeWidth="5.4"
+            android:strokeLineCap="square"
+            android:strokeLineJoin="miter" />
+
+        <!-- Bright yellow comic highlight diamond badge -->
+        <path
+            android:fillColor="#FFFFE600"
+            android:strokeColor="#FF0D0D0D"
+            android:strokeWidth="3.0"
+            android:strokeLineJoin="miter"
+            android:pathData="M78,61L94,74L80,91L64,78Z" />
+
+        <!-- Inner crimson star/dot accent -->
+        <path
+            android:fillColor="#FFD91E26"
+            android:pathData="M78.5,70L85,75L79.5,82L73,77Z" />
+    </group>
+</vector>

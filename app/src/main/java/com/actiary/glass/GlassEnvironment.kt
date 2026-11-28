@@ -13,7 +13,14 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.actiary.data.appearance.AppearanceSettings
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.P5Background
+import com.actiary.p5.P5Tokens
+import com.actiary.p5.resolveP5Tokens
+import com.actiary.theme.LocalP5Tokens
 import com.actiary.theme.LocalThemeTokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.ThemeTokens
 import com.actiary.ui.motion.rememberMotionReduced
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -61,20 +68,42 @@ fun rememberGlassDegraded(): Boolean = rememberMotionReduced()
 fun GlassHost(
     tokens: ThemeTokens,
     profile: GlassProfile,
+    uiStyle: UiStyle = UiStyle.LIQUID_GLASS,
+    p5Tokens: P5Tokens = resolveP5Tokens(AppearanceSettings()),
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable () -> Unit,
 ) {
+    val menu = remember { GlassAnchoredMenuState() }
+    val menuVisibility = rememberOverlayVisibility(menu.request != null)
+    menu.present = menuVisibility.overlayPresent
+    if (uiStyle == UiStyle.PERSONA_5) {
+        CompositionLocalProvider(
+            LocalThemeTokens provides tokens,
+            LocalGlassProfile provides profile,
+            LocalUiStyle provides uiStyle,
+            LocalP5Tokens provides p5Tokens,
+            LocalGlassAnchoredMenu provides menu,
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                P5Background(p5Tokens, Modifier.fillMaxSize())
+                val inputEnabled = !menuVisibility.overlayPresent
+                Box(Modifier.fillMaxSize().overlayInteraction(inputEnabled)) { content() }
+                Box(Modifier.matchParentSize().overlayInteraction(inputEnabled)) { overlay() }
+                GlassAnchoredMenu(menu, menuVisibility)
+            }
+        }
+        return
+    }
     val bg = rememberGlassLayer()
     val contentLayer = rememberGlassLayer()
     // Overlays sample ambient + content, so transparent page areas still show the background.
     val combined = rememberCombinedBackdrop(bg, contentLayer)
     val layers = remember(bg, combined) { GlassLayers(background = bg, content = combined) }
-    val menu = remember { GlassAnchoredMenuState() }
-    val menuVisibility = rememberOverlayVisibility(menu.request != null)
-    menu.present = menuVisibility.overlayPresent
     CompositionLocalProvider(
         LocalThemeTokens provides tokens,
         LocalGlassProfile provides profile,
+        LocalUiStyle provides uiStyle,
+        LocalP5Tokens provides p5Tokens,
         LocalGlassLayers provides layers,
         LocalGlassAnchoredMenu provides menu,
     ) {

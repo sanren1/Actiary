@@ -3,7 +3,10 @@ package com.actiary.theme
 import com.actiary.data.appearance.AccentPreset
 import com.actiary.data.appearance.AppearanceSettings
 import com.actiary.data.appearance.ChartPalette
+import com.actiary.data.appearance.P5Palette
 import com.actiary.data.appearance.ThemeMode
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.resolveP5Tokens
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -113,6 +116,35 @@ class ChartColorsTest {
             val muted = resolveChartColors(ChartPalette.MUTED_CATEGORIES, t)
             assertEquals(t.accent.accentChart, muted.series)
             assertEquals(t.accent.accentChart, muted.highlight)
+        }
+    }
+
+    @Test fun p5ChartColorsMeetContrastOnLightCard() {
+        assertTrue(P5Palette.CALLING_CARD in P5Palette.entries)
+        for (palette in P5Palette.entries) {
+            val p5 = resolveP5Tokens(AppearanceSettings(uiStyle = UiStyle.PERSONA_5, p5Palette = palette))
+            val colors = resolveP5ChartColors(p5)
+            val seriesContrast = contrast(colors.series, p5.lightCard)
+            assertTrue(
+                "palette=$palette series contrast=$seriesContrast < 3.0",
+                seriesContrast >= 3.0,
+            )
+            val highlightContrast = contrast(colors.highlight, p5.lightCard)
+            assertTrue(
+                "palette=$palette highlight contrast=$highlightContrast < 3.0",
+                highlightContrast >= 3.0,
+            )
+            assertTrue(
+                "palette=$palette categories size=${colors.categories.size} < 6",
+                colors.categories.size >= 6,
+            )
+            colors.categories.forEachIndexed { i, cat ->
+                val c = contrast(cat, p5.lightCard)
+                assertTrue(
+                    "palette=$palette category[$i] contrast=$c < 3.0",
+                    c >= 3.0,
+                )
+            }
         }
     }
 }

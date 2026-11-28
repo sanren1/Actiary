@@ -268,6 +268,123 @@ class AppearancePreferencesTest {
         assertEquals(false, r.settings.first().amoledBlack)
         assertEquals(AccentPreset.SLATE_BLUE, r.settings.first().accentPreset)
     }
+
+    @Test fun defaultsIncludeLiquidGlassAndP5Defaults() {
+        val defaults = AppearanceSettings()
+        assertEquals(UiStyle.LIQUID_GLASS, defaults.uiStyle)
+        assertEquals(P5Palette.PHANTOM_RED, defaults.p5Palette)
+        assertEquals(true, defaults.p5RansomTitle)
+        assertEquals(P5MotionLevel.STANDARD, defaults.p5MotionLevel)
+        assertEquals(defaults, emptyPreferences().toAppearanceSettings())
+    }
+
+    @Test fun switchingUiStylePreservesOtherStyleSettings() = runBlocking {
+        val r = repo()
+        r.setThemeMode(ThemeMode.DARK)
+        r.setAccentPreset(AccentPreset.SAGE)
+        r.setGlassLevel(GlassLevel.CLEAR)
+
+        r.setUiStyle(UiStyle.PERSONA_5)
+        r.setP5Palette(P5Palette.ROYAL_GOLD)
+        r.setP5RansomTitle(false)
+        r.setP5MotionLevel(P5MotionLevel.COMPACT)
+
+        r.setUiStyle(UiStyle.LIQUID_GLASS)
+
+        val s = r.settings.first()
+        assertEquals(UiStyle.LIQUID_GLASS, s.uiStyle)
+        assertEquals(ThemeMode.DARK, s.themeMode)
+        assertEquals(AccentPreset.SAGE, s.accentPreset)
+        assertEquals(GlassLevel.CLEAR, s.glassLevel)
+        assertEquals(P5Palette.ROYAL_GOLD, s.p5Palette)
+        assertEquals(false, s.p5RansomTitle)
+        assertEquals(P5MotionLevel.COMPACT, s.p5MotionLevel)
+    }
+
+    @Test fun resetAppearanceOnlyResetsActiveStyle() = runBlocking {
+        val r = repo()
+        r.setThemeMode(ThemeMode.DARK)
+        r.setAccentPreset(AccentPreset.SAGE)
+        r.setGlassLevel(GlassLevel.CLEAR)
+
+        r.setUiStyle(UiStyle.PERSONA_5)
+        r.setP5Palette(P5Palette.ROYAL_GOLD)
+        r.setP5RansomTitle(false)
+        r.setP5MotionLevel(P5MotionLevel.COMPACT)
+
+        r.resetAppearance()
+        val afterP5Reset = r.settings.first()
+        assertEquals(UiStyle.PERSONA_5, afterP5Reset.uiStyle)
+        assertEquals(P5Palette.PHANTOM_RED, afterP5Reset.p5Palette)
+        assertEquals(true, afterP5Reset.p5RansomTitle)
+        assertEquals(P5MotionLevel.STANDARD, afterP5Reset.p5MotionLevel)
+        assertEquals(ThemeMode.DARK, afterP5Reset.themeMode)
+        assertEquals(AccentPreset.SAGE, afterP5Reset.accentPreset)
+        assertEquals(GlassLevel.CLEAR, afterP5Reset.glassLevel)
+
+        r.setP5Palette(P5Palette.VELVET_BLUE)
+        r.setP5RansomTitle(false)
+        r.setP5MotionLevel(P5MotionLevel.COMPACT)
+
+        r.setUiStyle(UiStyle.LIQUID_GLASS)
+        r.resetAppearance()
+        val afterGlassReset = r.settings.first()
+        val defaults = AppearanceSettings()
+        assertEquals(UiStyle.LIQUID_GLASS, afterGlassReset.uiStyle)
+        assertEquals(defaults.themeMode, afterGlassReset.themeMode)
+        assertEquals(defaults.accentPreset, afterGlassReset.accentPreset)
+        assertEquals(defaults.glassLevel, afterGlassReset.glassLevel)
+        assertEquals(P5Palette.VELVET_BLUE, afterGlassReset.p5Palette)
+        assertEquals(false, afterGlassReset.p5RansomTitle)
+        assertEquals(P5MotionLevel.COMPACT, afterGlassReset.p5MotionLevel)
+    }
+
+    @Test fun invalidP5EnumValuesFallbackToDefaults() = runBlocking {
+        val store = inMemoryPreferencesStore()
+        store.updateData {
+            mutablePreferencesOf(
+                stringPreferencesKey("ui_style") to "INVALID_STYLE",
+                stringPreferencesKey("p5_palette") to "INVALID_PALETTE",
+                stringPreferencesKey("p5_motion_level") to "INVALID_MOTION",
+            )
+        }
+        val s = AppearanceRepository(store).settings.first()
+        assertEquals(UiStyle.LIQUID_GLASS, s.uiStyle)
+        assertEquals(P5Palette.PHANTOM_RED, s.p5Palette)
+        assertEquals(P5MotionLevel.STANDARD, s.p5MotionLevel)
+    }
+
+    @Test fun reduceInAppMotionAndCallingCardRoundTripAndSurviveStyleReset() = runBlocking {
+        val r = repo()
+        assertEquals(false, r.settings.first().reduceInAppMotion)
+
+        r.setReduceInAppMotion(true)
+        r.setUiStyle(UiStyle.PERSONA_5)
+        r.setP5Palette(P5Palette.CALLING_CARD)
+        val updated = r.settings.first()
+        assertEquals(true, updated.reduceInAppMotion)
+        assertEquals(P5Palette.CALLING_CARD, updated.p5Palette)
+
+        val exported = r.exportAppearance()
+        assertEquals("true", exported["reduce_in_app_motion"])
+        assertEquals("CALLING_CARD", exported["p5_palette"])
+
+        val dst = repo()
+        dst.importAppearance(exported, replace = true)
+        assertEquals(true, dst.settings.first().reduceInAppMotion)
+        assertEquals(P5Palette.CALLING_CARD, dst.settings.first().p5Palette)
+
+        // resetAppearance resets only style-specific appearance keys, preserving reduceInAppMotion.
+        r.resetAppearance()
+        assertEquals(P5Palette.PHANTOM_RED, r.settings.first().p5Palette)
+        assertEquals(true, r.settings.first().reduceInAppMotion)
+
+        r.setUiStyle(UiStyle.LIQUID_GLASS)
+        r.setThemeMode(ThemeMode.DARK)
+        r.resetAppearance()
+        assertEquals(ThemeMode.LIGHT, r.settings.first().themeMode)
+        assertEquals(true, r.settings.first().reduceInAppMotion)
+    }
 }
 
 // The file-based DataStore fails its tmp-file rename over an existing file on Windows JVM.

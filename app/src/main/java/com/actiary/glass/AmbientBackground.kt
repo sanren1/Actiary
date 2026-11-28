@@ -8,11 +8,19 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.actiary.data.appearance.UiStyle
+import com.actiary.p5.P5Background
+import com.actiary.theme.LocalP5Tokens
+import com.actiary.theme.LocalUiStyle
 import com.actiary.theme.ThemeTokens
 import com.actiary.theme.asColor
 
 @Composable
 fun AmbientBackground(tokens: ThemeTokens, modifier: Modifier = Modifier) {
+    if (LocalUiStyle.current == UiStyle.PERSONA_5) {
+        P5Background(LocalP5Tokens.current, modifier)
+        return
+    }
     if (!tokens.ambientEnabled) {
         Box(modifier.background(tokens.neutrals.background.asColor()))
         return

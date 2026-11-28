@@ -33,6 +33,13 @@
 - Project: <https://github.com/NEORUAA/Glasmio>
 - Source: <https://github.com/NEORUAA/Glasmio/blob/main/LICENSE>
 
+## Persona-IM
+
+- Architecture and skewed polygon / hard-shadow motion patterns reference `chris-horner/Persona-IM` (Apache-2.0); design pattern reference only, no source code copied.
+- License: Apache-2.0 (full text below)
+- Project: <https://github.com/chris-horner/Persona-IM>
+- Source: <https://github.com/chris-horner/Persona-IM/blob/main/LICENSE>
+
 ## Google ML Kit Text Recognition v2
 
 - Version: `com.google.mlkit:text-recognition-chinese:16.0.1`
