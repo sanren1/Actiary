@@ -3,7 +3,10 @@ package com.actiary.data.update
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -120,23 +123,40 @@ object AppUpdater {
         }
     }
 
+    internal fun safeApkFileName(version: String): String {
+        val safeVersion = version.replace(Regex("[^0-9A-Za-z._-]"), "_")
+        return "Actiary-$safeVersion.apk"
+    }
+
+    fun cachedApkFile(context: Context, version: String): File? {
+        val file = File(File(context.cacheDir, "updates"), safeApkFileName(version))
+        return file.takeIf { it.isFile && it.length() > 0L }
+    }
+
     suspend fun downloadApk(
         context: Context,
         apkUrl: String,
         version: String,
         onProgress: (Float?) -> Unit,
     ): Result<File> = withContext(Dispatchers.IO) {
-        runCatching {
-            val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-            dir.listFiles()?.forEach { it.delete() }
-            val safeVersion = version.replace(Regex("[^0-9A-Za-z._-]"), "_")
-            val partFile = File(dir, "Actiary-$safeVersion.apk.part")
-            val finalFile = File(dir, "Actiary-$safeVersion.apk")
+        val dir = File(context.cacheDir, "updates").apply { mkdirs() }
+        val fileName = safeApkFileName(version)
+        val partFile = File(dir, "$fileName.part")
+        val finalFile = File(dir, fileName)
+        try {
+            currentCoroutineContext().ensureActive()
+            dir.listFiles()?.forEach { file ->
+                if (file.name != partFile.name && file.name != finalFile.name) {
+                    file.delete()
+                }
+            }
+            if (partFile.exists()) partFile.delete()
 
             var urlStr = apkUrl
             var redirects = 0
             var conn: HttpURLConnection
             while (true) {
+                currentCoroutineContext().ensureActive()
                 conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
                     connectTimeout = CONNECT_TIMEOUT_MS
@@ -166,6 +186,7 @@ object AppUpdater {
                         var copied = 0L
                         var lastReported = -1
                         while (true) {
+                            currentCoroutineContext().ensureActive()
                             val read = input.read(buffer)
                             if (read <= 0) break
                             output.write(buffer, 0, read)
@@ -180,25 +201,36 @@ object AppUpdater {
                         }
                     }
                 }
+                currentCoroutineContext().ensureActive()
                 if (finalFile.exists()) finalFile.delete()
                 if (!partFile.renameTo(finalFile)) {
                     partFile.copyTo(finalFile, overwrite = true)
                     partFile.delete()
                 }
                 onProgress(1f)
-                finalFile
+                Result.success(finalFile)
             } finally {
                 conn.disconnect()
             }
+        } catch (e: CancellationException) {
+            partFile.delete()
+            throw e
+        } catch (t: Throwable) {
+            partFile.delete()
+            Result.failure(t)
         }
     }
 
-    fun installApk(context: Context, apkFile: File): Boolean = runCatching {
+    fun createInstallIntent(context: Context, apkFile: File): Intent? = runCatching {
         val uri = FileProvider.getUriForFile(context, FILE_PROVIDER_AUTHORITY, apkFile)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
+        Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+    }.getOrNull()
+
+    fun installApk(context: Context, apkFile: File): Boolean = runCatching {
+        val intent = createInstallIntent(context, apkFile) ?: return@runCatching false
         context.startActivity(intent)
         true
     }.getOrDefault(false)
